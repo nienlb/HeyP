@@ -23,6 +23,12 @@
 export const ORDER_TYPES = ["order_ho", "nhap_kho", "ban_tu_kho"] as const;
 export type OrderType = (typeof ORDER_TYPES)[number];
 
+export const ORDER_TYPE_LABELS: Record<OrderType, string> = {
+  order_ho: "Order hộ",
+  nhap_kho: "Nhập kho",
+  ban_tu_kho: "Bán từ kho",
+};
+
 export const MAIN_CHAIN = [
   "cho_bao_gia",
   "da_bao_gia",

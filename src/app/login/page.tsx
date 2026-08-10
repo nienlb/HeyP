@@ -24,7 +24,7 @@ export default async function LoginPage({
       <div className="card" style={{ width: "100%", maxWidth: 380 }}>
         <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>HeyP</h1>
         <p style={{ margin: "0 0 20px", color: "var(--muted)", fontSize: 14 }}>
-          Quản lý đơn order hộ — đăng nhập để tiếp tục
+          HeyP chào bạn
         </p>
 
         {error ? (
