@@ -17,7 +17,12 @@ export default async function NewOrderPage() {
         </div>
         <h1>Tạo đơn nhanh</h1>
         <NewOrderForm
-          customers={customers.map((c) => ({ id: c.id, name: c.name }))}
+          customers={customers.map((c) => ({
+            id: c.id,
+            name: c.name,
+            warningFlag: c.warningFlag,
+            warningReason: c.warningReason,
+          }))}
           defaultExchangeRate={3600}
         />
       </main>

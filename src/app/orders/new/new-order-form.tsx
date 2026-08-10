@@ -27,7 +27,12 @@ export function NewOrderForm({
   customers,
   defaultExchangeRate,
 }: {
-  customers: { id: number; name: string }[];
+  customers: {
+    id: number;
+    name: string;
+    warningFlag: boolean;
+    warningReason: string | null;
+  }[];
   defaultExchangeRate: number;
 }) {
   const [state, formAction, pending] = useActionState<
@@ -73,10 +78,11 @@ export function NewOrderForm({
     deposit: num(deposit),
   });
 
+  const selectedCustomer = customers.find((c) => String(c.id) === customerId);
   const customerName =
     customerMode === "new"
       ? newCustomerName
-      : (customers.find((c) => String(c.id) === customerId)?.name ?? "");
+      : (selectedCustomer?.name ?? "");
 
   const quote = buildQuoteText({
     customerName,
@@ -146,10 +152,20 @@ export function NewOrderForm({
               >
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
+                    {c.warningFlag ? "⚠️ " : ""}
                     {c.name}
                   </option>
                 ))}
               </select>
+              {selectedCustomer?.warningFlag && (
+                <div className="warn-flag" style={{ marginTop: 8 }}>
+                  ⚠️ Khách có cờ cảnh báo
+                  {selectedCustomer.warningReason
+                    ? `: ${selectedCustomer.warningReason}`
+                    : ""}
+                  . Cân nhắc yêu cầu cọc cao hơn.
+                </div>
+              )}
             </div>
           ) : (
             <>

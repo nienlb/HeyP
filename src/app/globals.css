@@ -526,12 +526,111 @@ a {
   cursor: not-allowed;
 }
 
+/* ---------- Khách hàng / cờ ---------- */
+.flag {
+  cursor: help;
+}
+.flag-reason {
+  font-size: 12px;
+  color: #b54708;
+  margin-top: 2px;
+}
+
+/* ---------- Lãi/lỗ ---------- */
+.pos {
+  color: #027a48;
+}
+.neg {
+  color: var(--brand);
+}
+
+/* ---------- Dòng đã tách ---------- */
+.line-removed td:not(:last-child) {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+/* ---------- Tồn kho ---------- */
+.inv-item {
+  padding: 0;
+}
+.inv-item > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+.inv-item > summary::-webkit-details-marker {
+  display: none;
+}
+.inv-name {
+  font-weight: 600;
+  flex: 1;
+}
+.inv-qty {
+  font-size: 14px;
+}
+.inv-cost {
+  font-size: 13px;
+  color: var(--muted);
+  min-width: 130px;
+  text-align: right;
+}
+.inv-sell-hint {
+  color: var(--brand);
+  font-weight: 600;
+  font-size: 13px;
+}
+.inv-item[open] > summary .inv-sell-hint {
+  visibility: hidden;
+}
+.sell-form {
+  border-top: 1px solid var(--border);
+  padding: 14px;
+}
+.sell-grid {
+  display: grid;
+  grid-template-columns: 80px 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.sell-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.sell-grid input {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 14px;
+  background: #fff;
+  color: var(--text);
+  min-width: 0;
+}
+.sell-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sell-profit {
+  font-size: 14px;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 720px) {
   .two-col {
     grid-template-columns: 1fr;
   }
   .item-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .sell-grid {
     grid-template-columns: 1fr 1fr;
   }
   .search input {

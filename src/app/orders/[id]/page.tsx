@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
 import { AppHeader } from "../../_components/app-header";
 import { CopyButton } from "../../_components/copy-button";
-import { changeStatusAction } from "../actions";
+import { changeStatusAction, lineExceptionAction } from "../actions";
 import { getOrderDetail } from "@/db/queries";
 import { computeOrderMoney } from "@/lib/money";
 import { buildQuoteText, formatCny, formatDateTime, formatVnd } from "@/lib/format";
@@ -38,6 +38,16 @@ export default async function OrderDetailPage({
     deposit: order.deposit,
   });
   const nextStatuses = allowedNextStatuses(order.orderType, order.status);
+  const isStockSale = order.orderType === "ban_tu_kho";
+  const saleProfit = money.goodsTotalVnd - (order.saleCost ?? 0);
+  // Khi nào cho tách dòng: lỗi NCC ở khâu lưu thông, đổi/trả sau khi giao.
+  const canDefect = (
+    ["da_mua_tq", "ve_kho_tq", "dang_van_chuyen_vn", "ve_kho_vn"] as const
+  ).includes(order.status as never);
+  const canReturn = (["da_giao_khach", "hoan_tat"] as const).includes(
+    order.status as never,
+  );
+  const showLineActions = !isStockSale && (canDefect || canReturn);
   const quote = buildQuoteText({
     customerName: customer?.name ?? "",
     items: items.map((it) => ({
@@ -132,36 +142,66 @@ export default async function OrderDetailPage({
             <h2 className="card-title" style={{ marginTop: 20 }}>
               Khối tiền
             </h2>
-            <div className="kv">
-              <span>Tiền hàng</span>
-              <span>
-                {formatCny(order.goodsTotalCny)} × {order.exchangeRate.toLocaleString("vi-VN")} ={" "}
-                {formatVnd(money.goodsTotalVnd)}
-              </span>
-            </div>
-            <div className="kv">
-              <span>Phí dịch vụ</span>
-              <span>{formatVnd(order.serviceFee)}</span>
-            </div>
-            <div className="kv">
-              <span>Phí ship</span>
-              <span>{formatVnd(order.shippingFee)}</span>
-            </div>
-            <div className="kv">
-              <span>Tạm tính</span>
-              <span>{formatVnd(money.subtotalVnd)}</span>
-            </div>
-            <div className="kv">
-              <span>Đã cọc</span>
-              <span>−{formatVnd(order.deposit)}</span>
-            </div>
-            <div className="kv kv-total">
-              <span>Còn phải thu</span>
-              <strong>{formatVnd(money.amountDue)}</strong>
-            </div>
-            <div style={{ marginTop: 14 }}>
-              <CopyButton text={quote} />
-            </div>
+            {isStockSale ? (
+              <>
+                <div className="kv">
+                  <span>Giá bán</span>
+                  <span>{formatVnd(money.goodsTotalVnd)}</span>
+                </div>
+                <div className="kv">
+                  <span>Giá vốn</span>
+                  <span>{formatVnd(order.saleCost ?? 0)}</span>
+                </div>
+                <div className="kv">
+                  <span>{saleProfit >= 0 ? "Lãi" : "Lỗ"}</span>
+                  <strong className={saleProfit >= 0 ? "pos" : "neg"}>
+                    {formatVnd(Math.abs(saleProfit))}
+                  </strong>
+                </div>
+                <div className="kv">
+                  <span>Đã cọc</span>
+                  <span>−{formatVnd(order.deposit)}</span>
+                </div>
+                <div className="kv kv-total">
+                  <span>Còn phải thu</span>
+                  <strong>{formatVnd(money.amountDue)}</strong>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="kv">
+                  <span>Tiền hàng</span>
+                  <span>
+                    {formatCny(order.goodsTotalCny)} ×{" "}
+                    {order.exchangeRate.toLocaleString("vi-VN")} ={" "}
+                    {formatVnd(money.goodsTotalVnd)}
+                  </span>
+                </div>
+                <div className="kv">
+                  <span>Phí dịch vụ</span>
+                  <span>{formatVnd(order.serviceFee)}</span>
+                </div>
+                <div className="kv">
+                  <span>Phí ship</span>
+                  <span>{formatVnd(order.shippingFee)}</span>
+                </div>
+                <div className="kv">
+                  <span>Tạm tính</span>
+                  <span>{formatVnd(money.subtotalVnd)}</span>
+                </div>
+                <div className="kv">
+                  <span>Đã cọc</span>
+                  <span>−{formatVnd(order.deposit)}</span>
+                </div>
+                <div className="kv kv-total">
+                  <span>Còn phải thu</span>
+                  <strong>{formatVnd(money.amountDue)}</strong>
+                </div>
+                <div style={{ marginTop: 14 }}>
+                  <CopyButton text={quote} />
+                </div>
+              </>
+            )}
           </section>
 
           {/* Timeline */}
@@ -198,28 +238,69 @@ export default async function OrderDetailPage({
                   <th className="num">SL</th>
                   <th className="num">Đơn giá</th>
                   <th className="num">Thành tiền</th>
+                  {showLineActions && <th></th>}
                 </tr>
               </thead>
               <tbody>
-                {items.map((it) => (
-                  <tr key={it.id}>
-                    <td>
-                      {it.productUrl ? (
-                        <a href={it.productUrl} target="_blank" rel="noreferrer">
-                          {it.name}
-                        </a>
-                      ) : (
-                        it.name
+                {items.map((it) => {
+                  const money2 = (n: number) =>
+                    isStockSale ? formatVnd(n) : formatCny(n);
+                  return (
+                    <tr
+                      key={it.id}
+                      className={
+                        it.lineStatus !== "normal" ? "line-removed" : undefined
+                      }
+                    >
+                      <td>
+                        {it.productUrl ? (
+                          <a
+                            href={it.productUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {it.name}
+                          </a>
+                        ) : (
+                          it.name
+                        )}
+                      </td>
+                      <td>{it.attributes ?? "—"}</td>
+                      <td className="num">{it.quantity}</td>
+                      <td className="num">{money2(it.unitPriceCny)}</td>
+                      <td className="num">
+                        {money2(it.quantity * it.unitPriceCny)}
+                      </td>
+                      {showLineActions && (
+                        <td>
+                          {it.lineStatus === "supplier_defect" ? (
+                            <span className="badge status-su_co">Lỗi NCC</span>
+                          ) : it.lineStatus === "returned" ? (
+                            <span className="badge status-huy">Đã trả</span>
+                          ) : canDefect ? (
+                            <form action={lineExceptionAction}>
+                              <input type="hidden" name="orderId" value={order.id} />
+                              <input type="hidden" name="itemId" value={it.id} />
+                              <input type="hidden" name="kind" value="defect" />
+                              <button className="btn btn-warn btn-sm" type="submit">
+                                Lỗi NCC
+                              </button>
+                            </form>
+                          ) : canReturn ? (
+                            <form action={lineExceptionAction}>
+                              <input type="hidden" name="orderId" value={order.id} />
+                              <input type="hidden" name="itemId" value={it.id} />
+                              <input type="hidden" name="kind" value="return" />
+                              <button className="btn btn-warn btn-sm" type="submit">
+                                Đổi/trả
+                              </button>
+                            </form>
+                          ) : null}
+                        </td>
                       )}
-                    </td>
-                    <td>{it.attributes ?? "—"}</td>
-                    <td className="num">{it.quantity}</td>
-                    <td className="num">{formatCny(it.unitPriceCny)}</td>
-                    <td className="num">
-                      {formatCny(it.quantity * it.unitPriceCny)}
-                    </td>
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

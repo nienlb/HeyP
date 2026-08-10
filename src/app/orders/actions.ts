@@ -6,6 +6,8 @@ import { getSession } from "@/lib/auth";
 import {
   changeOrderStatus,
   createOrder,
+  markLineDefect,
+  returnLine,
   type NewOrderItemInput,
 } from "@/db/queries";
 import { validateLineItem, validateOrderMoney } from "@/lib/money";
@@ -143,5 +145,31 @@ export async function changeStatusAction(formData: FormData): Promise<void> {
 
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
+  redirect(`/orders/${orderId}`);
+}
+
+/** Ngoại lệ theo dòng: đánh lỗi NCC / đổi trả → tách khỏi đơn + nhập kho. */
+export async function lineExceptionAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = Number(formData.get("orderId"));
+  const itemId = Number(formData.get("itemId"));
+  const kind = String(formData.get("kind") ?? "");
+  if (!orderId || !itemId) redirect(`/orders/${orderId}`);
+
+  const result =
+    kind === "defect"
+      ? markLineDefect(orderId, itemId)
+      : kind === "return"
+        ? returnLine(orderId, itemId)
+        : ({ ok: false, reason: "Loại thao tác không hợp lệ" } as const);
+
+  if (!result.ok) {
+    redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  }
+
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/inventory");
   redirect(`/orders/${orderId}`);
 }

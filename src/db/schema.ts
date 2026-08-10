@@ -66,6 +66,8 @@ export const orders = sqliteTable("orders", {
   shippingFee: integer("shipping_fee").notNull().default(0),
   deposit: integer("deposit").notNull().default(0),
   amountDue: integer("amount_due").notNull().default(0),
+  // Snapshot giá vốn khi bán từ kho (chỉ đơn ban_tu_kho) → tính lãi/lỗ.
+  saleCost: integer("sale_cost"),
   note: text("note"),
   createdAt: createdAt(),
   statusChangedAt: integer("status_changed_at", { mode: "timestamp" })

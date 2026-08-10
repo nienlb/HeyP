@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { db, sqlite } from "./index";
 import {
   customers,
+  inventory,
   orderItems,
   orderStatusHistory,
   orders,
@@ -14,6 +15,13 @@ import {
   type OrderStatus,
   type OrderType,
 } from "@/lib/order-status";
+import {
+  applyStockIn,
+  applyStockOut,
+  bomCostBasis,
+  unitGoodsCostVnd,
+  type InventorySource,
+} from "@/lib/inventory";
 import { config } from "@/lib/config";
 import { ageInDays } from "@/lib/format";
 
@@ -152,7 +160,85 @@ export async function getOrderDetail(id: number) {
   return { order, customer, items, history };
 }
 
-// ---------- Đổi trạng thái ----------
+// ---------- Helper tồn kho (raw, KHÔNG tự mở transaction) ----------
+
+type OrderItemRow = {
+  id: number;
+  name: string;
+  quantity: number;
+  unit_price_cny: number;
+  line_status: string;
+};
+
+/** Cộng hàng vào kho, gộp theo (tên, nguồn) với giá vốn bình quân. */
+function _addStock(
+  name: string,
+  source: InventorySource,
+  qty: number,
+  unitCost: number,
+): void {
+  const row = sqlite
+    .prepare(
+      "SELECT id, quantity, avg_cost FROM inventory WHERE product_name = ? AND source = ?",
+    )
+    .get(name, source) as
+    | { id: number; quantity: number; avg_cost: number }
+    | undefined;
+  if (row) {
+    const after = applyStockIn(
+      { quantity: row.quantity, avgCost: row.avg_cost },
+      qty,
+      unitCost,
+    );
+    sqlite
+      .prepare(
+        "UPDATE inventory SET quantity = ?, avg_cost = ?, last_imported_at = unixepoch() WHERE id = ?",
+      )
+      .run(after.quantity, after.avgCost, row.id);
+  } else {
+    sqlite
+      .prepare(
+        `INSERT INTO inventory(product_name, quantity, avg_cost, source, last_imported_at)
+         VALUES (?, ?, ?, ?, unixepoch())`,
+      )
+      .run(name, qty, unitCost, source);
+  }
+}
+
+/** Tính lại tiền đơn từ các dòng còn "normal" (loại bỏ dòng lỗi/đã trả). */
+function _recomputeOrderMoney(orderId: number): void {
+  const order = sqlite
+    .prepare(
+      "SELECT exchange_rate, service_fee, shipping_fee, deposit FROM orders WHERE id = ?",
+    )
+    .get(orderId) as {
+    exchange_rate: number;
+    service_fee: number;
+    shipping_fee: number;
+    deposit: number;
+  };
+  const rows = sqlite
+    .prepare(
+      "SELECT quantity, unit_price_cny FROM order_items WHERE order_id = ? AND line_status = 'normal'",
+    )
+    .all(orderId) as { quantity: number; unit_price_cny: number }[];
+  const goodsTotalCny = rows.reduce(
+    (s, r) => s + r.quantity * r.unit_price_cny,
+    0,
+  );
+  const money = computeOrderMoney({
+    goodsTotalCny,
+    exchangeRate: order.exchange_rate,
+    serviceFee: order.service_fee,
+    shippingFee: order.shipping_fee,
+    deposit: order.deposit,
+  });
+  sqlite
+    .prepare("UPDATE orders SET goods_total_cny = ?, amount_due = ? WHERE id = ?")
+    .run(goodsTotalCny, money.amountDue, orderId);
+}
+
+// ---------- Đổi trạng thái (kèm side-effect tồn kho) ----------
 
 export type ChangeStatusResult =
   | { ok: true }
@@ -165,8 +251,22 @@ export function changeOrderStatus(
   note?: string | null,
 ): ChangeStatusResult {
   const order = sqlite
-    .prepare("SELECT order_type, status FROM orders WHERE id = ?")
-    .get(id) as { order_type: OrderType; status: OrderStatus } | undefined;
+    .prepare(
+      `SELECT order_type, status, exchange_rate, goods_total_cny,
+              shipping_fee, deposit, customer_id
+         FROM orders WHERE id = ?`,
+    )
+    .get(id) as
+    | {
+        order_type: OrderType;
+        status: OrderStatus;
+        exchange_rate: number;
+        goods_total_cny: number;
+        shipping_fee: number;
+        deposit: number;
+        customer_id: number;
+      }
+    | undefined;
   if (!order) return { ok: false, reason: "Không tìm thấy đơn" };
 
   const result = transition(order.order_type, order.status, to);
@@ -186,6 +286,104 @@ export function changeOrderStatus(
          VALUES (?, ?, ?, ?, ?)`,
       )
       .run(id, order.status, to, changedBy ?? null, note ?? null);
+
+    const normalItems = sqlite
+      .prepare(
+        "SELECT id, name, quantity, unit_price_cny, line_status FROM order_items WHERE order_id = ? AND line_status = 'normal'",
+      )
+      .all(id) as OrderItemRow[];
+
+    // Đơn Nhập kho về tới kho VN → cộng tồn (nguồn Nhập chủ động).
+    if (to === "ve_kho_vn" && order.order_type === "nhap_kho") {
+      for (const it of normalItems) {
+        _addStock(
+          it.name,
+          "active",
+          it.quantity,
+          unitGoodsCostVnd(it.unit_price_cny, order.exchange_rate),
+        );
+      }
+    }
+
+    // Khách bom → toàn bộ hàng vào kho (nguồn Hàng bom) + gắn cờ khách.
+    if (to === "khach_bom") {
+      const goodsVnd = Math.round(order.goods_total_cny * order.exchange_rate);
+      const basis = bomCostBasis(goodsVnd, order.shipping_fee, order.deposit);
+      const totalQty = normalItems.reduce((s, it) => s + it.quantity, 0);
+      const perUnit = totalQty > 0 ? Math.round(basis / totalQty) : basis;
+      for (const it of normalItems) {
+        _addStock(it.name, "bom", it.quantity, perUnit);
+      }
+      sqlite
+        .prepare(
+          `UPDATE customers
+             SET warning_flag = 1,
+                 warning_reason = COALESCE(warning_reason, ?)
+           WHERE id = ?`,
+        )
+        .run(`Từng bom hàng (đơn #${id})`, order.customer_id);
+    }
+
+    sqlite.exec("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    throw err;
+  }
+}
+
+// ---------- Ba luồng ngoại lệ theo dòng sản phẩm ----------
+
+export type LineActionResult = { ok: true } | { ok: false; reason: string };
+
+/** Đánh dấu 1 dòng "lỗi NCC": tách khỏi đơn, nhập kho nhãn Lỗi NCC. */
+export function markLineDefect(
+  orderId: number,
+  itemId: number,
+): LineActionResult {
+  return _returnLineToStock(orderId, itemId, "supplier_defect");
+}
+
+/** Khách đổi/trả 1 dòng: tách khỏi đơn (hoàn/trừ tiền), nhập kho nhãn Đổi trả. */
+export function returnLine(
+  orderId: number,
+  itemId: number,
+): LineActionResult {
+  return _returnLineToStock(orderId, itemId, "exchange_return");
+}
+
+function _returnLineToStock(
+  orderId: number,
+  itemId: number,
+  source: Extract<InventorySource, "supplier_defect" | "exchange_return">,
+): LineActionResult {
+  const item = sqlite
+    .prepare(
+      "SELECT id, name, quantity, unit_price_cny, line_status FROM order_items WHERE id = ? AND order_id = ?",
+    )
+    .get(itemId, orderId) as OrderItemRow | undefined;
+  if (!item) return { ok: false, reason: "Không tìm thấy dòng sản phẩm" };
+  if (item.line_status !== "normal")
+    return { ok: false, reason: "Dòng này đã được tách trước đó" };
+
+  const order = sqlite
+    .prepare("SELECT exchange_rate FROM orders WHERE id = ?")
+    .get(orderId) as { exchange_rate: number } | undefined;
+  if (!order) return { ok: false, reason: "Không tìm thấy đơn" };
+
+  sqlite.exec("BEGIN");
+  try {
+    const newStatus = source === "supplier_defect" ? "supplier_defect" : "returned";
+    sqlite
+      .prepare("UPDATE order_items SET line_status = ? WHERE id = ?")
+      .run(newStatus, itemId);
+    _addStock(
+      item.name,
+      source,
+      item.quantity,
+      unitGoodsCostVnd(item.unit_price_cny, order.exchange_rate),
+    );
+    _recomputeOrderMoney(orderId);
     sqlite.exec("COMMIT");
     return { ok: true };
   } catch (err) {
@@ -250,4 +448,172 @@ export async function listOrders(query?: string): Promise<OrderListRow[]> {
         needsAttention: isIncident || isStale,
       };
     });
+}
+
+// ---------- Khách hàng (danh sách + công nợ) ----------
+
+export type CustomerListRow = {
+  id: number;
+  name: string;
+  phone: string | null;
+  warningFlag: boolean;
+  warningReason: string | null;
+  outstanding: number;
+  orderCount: number;
+};
+
+export function listCustomersWithTotals(): CustomerListRow[] {
+  const rows = sqlite
+    .prepare(
+      `SELECT c.id, c.name, c.phone, c.warning_flag, c.warning_reason,
+              COALESCE(SUM(CASE WHEN o.status NOT IN ('hoan_tat','huy','khach_bom')
+                                THEN o.amount_due ELSE 0 END), 0) AS outstanding,
+              COUNT(o.id) AS order_count
+         FROM customers c
+         LEFT JOIN orders o ON o.customer_id = c.id
+        GROUP BY c.id
+        ORDER BY outstanding DESC, c.name`,
+    )
+    .all() as {
+    id: number;
+    name: string;
+    phone: string | null;
+    warning_flag: number;
+    warning_reason: string | null;
+    outstanding: number;
+    order_count: number;
+  }[];
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    phone: r.phone,
+    warningFlag: r.warning_flag === 1,
+    warningReason: r.warning_reason,
+    outstanding: r.outstanding,
+    orderCount: r.order_count,
+  }));
+}
+
+// ---------- Tồn kho ----------
+
+export async function listInventory() {
+  return db
+    .select()
+    .from(inventory)
+    .orderBy(inventory.source, inventory.productName);
+}
+
+export function getInventoryItem(id: number) {
+  return sqlite
+    .prepare(
+      "SELECT id, product_name, quantity, avg_cost, source FROM inventory WHERE id = ?",
+    )
+    .get(id) as
+    | {
+        id: number;
+        product_name: string;
+        quantity: number;
+        avg_cost: number;
+        source: string;
+      }
+    | undefined;
+}
+
+export type SellFromStockInput = {
+  inventoryId: number;
+  quantity: number;
+  salePriceVnd: number; // tổng giá bán (VND) khách trả
+  deposit: number;
+  customerId?: number | null;
+  newCustomer?: { name: string; phone?: string } | null;
+  changedBy?: string | null;
+};
+
+export type SellResult =
+  | { ok: true; orderId: number }
+  | { ok: false; reason: string };
+
+/** Bán từ kho: trừ tồn, tạo đơn ban_tu_kho (đã giao khách), snapshot giá vốn. */
+export function sellFromStock(input: SellFromStockInput): SellResult {
+  const inv = getInventoryItem(input.inventoryId);
+  if (!inv) return { ok: false, reason: "Không tìm thấy hàng trong kho" };
+  if (input.quantity <= 0) return { ok: false, reason: "Số lượng phải > 0" };
+  if (input.quantity > inv.quantity)
+    return {
+      ok: false,
+      reason: `Không đủ tồn: còn ${inv.quantity}, muốn bán ${input.quantity}`,
+    };
+
+  const saleCost = input.quantity * inv.avg_cost;
+  const amountDue = Math.round(input.salePriceVnd) - Math.round(input.deposit);
+  const unitPrice = Math.round(input.salePriceVnd / input.quantity);
+
+  sqlite.exec("BEGIN");
+  try {
+    // Khách: có sẵn / mới / khách lẻ.
+    let customerId = input.customerId ?? null;
+    if (!customerId && input.newCustomer?.name) {
+      customerId = Number(
+        sqlite
+          .prepare("INSERT INTO customers(name, phone) VALUES(?, ?)")
+          .run(input.newCustomer.name, input.newCustomer.phone ?? null)
+          .lastInsertRowid,
+      );
+    }
+    if (!customerId) {
+      const walkin = sqlite
+        .prepare("SELECT id FROM customers WHERE name = 'Khách lẻ'")
+        .get() as { id: number } | undefined;
+      customerId =
+        walkin?.id ??
+        Number(
+          sqlite
+            .prepare("INSERT INTO customers(name) VALUES('Khách lẻ')")
+            .run().lastInsertRowid,
+        );
+    }
+
+    const after = applyStockOut(
+      { quantity: inv.quantity, avgCost: inv.avg_cost },
+      input.quantity,
+    );
+    sqlite
+      .prepare("UPDATE inventory SET quantity = ? WHERE id = ?")
+      .run(after.quantity, inv.id);
+
+    const orderId = Number(
+      sqlite
+        .prepare(
+          `INSERT INTO orders
+             (customer_id, order_type, status, exchange_rate, goods_total_cny,
+              service_fee, shipping_fee, deposit, amount_due, sale_cost, status_changed_at)
+           VALUES (?, 'ban_tu_kho', 'da_giao_khach', 1, ?, 0, 0, ?, ?, ?, unixepoch())`,
+        )
+        .run(
+          customerId,
+          input.salePriceVnd,
+          input.deposit,
+          amountDue,
+          saleCost,
+        ).lastInsertRowid,
+    );
+    sqlite
+      .prepare(
+        `INSERT INTO order_items(order_id, name, quantity, unit_price_cny)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(orderId, inv.product_name, input.quantity, unitPrice);
+    sqlite
+      .prepare(
+        `INSERT INTO order_status_history(order_id, to_status, changed_by, note)
+         VALUES (?, 'da_giao_khach', ?, 'Bán từ kho')`,
+      )
+      .run(orderId, input.changedBy ?? null);
+
+    sqlite.exec("COMMIT");
+    return { ok: true, orderId };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    throw err;
+  }
 }
