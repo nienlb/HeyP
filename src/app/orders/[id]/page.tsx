@@ -175,9 +175,9 @@ export default async function OrderDetailPage({
                 <div className="kv">
                   <span>Tiền hàng</span>
                   <span>
-                    {formatCny(order.goodsTotalCny)} ×{" "}
-                    {order.exchangeRate.toLocaleString("vi-VN")} ={" "}
-                    {formatVnd(money.goodsTotalVnd)}
+                    {order.exchangeRate === 1
+                      ? formatVnd(money.goodsTotalVnd)
+                      : `${formatCny(order.goodsTotalCny)} × ${order.exchangeRate.toLocaleString("vi-VN")} = ${formatVnd(money.goodsTotalVnd)}`}
                   </span>
                 </div>
                 <div className="kv">

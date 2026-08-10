@@ -6,6 +6,7 @@ import { getSession } from "@/lib/auth";
 import {
   changeOrderStatus,
   createOrder,
+  linkPhotoToOrder,
   markLineDefect,
   returnLine,
   type NewOrderItemInput,
@@ -117,6 +118,16 @@ export async function createOrderAction(
     });
   } catch (err) {
     return { error: `Không tạo được đơn: ${(err as Error).message}` };
+  }
+
+  // Gắn ảnh chốt đơn Zalo (nếu tạo đơn từ ảnh) vào đơn vừa tạo.
+  const zaloPhotoId = Number(formData.get("zaloPhotoId"));
+  if (zaloPhotoId > 0) {
+    try {
+      linkPhotoToOrder(zaloPhotoId, orderId);
+    } catch {
+      // không chặn tạo đơn nếu gắn ảnh lỗi
+    }
   }
 
   revalidatePath("/orders");

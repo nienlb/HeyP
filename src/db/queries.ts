@@ -196,6 +196,15 @@ export function addPhoto(input: {
   return Number(info.lastInsertRowid);
 }
 
+/** Gắn ảnh (đang chưa thuộc đơn nào) vào một đơn — dùng cho ảnh chốt đơn Zalo. */
+export function linkPhotoToOrder(photoId: number, orderId: number): void {
+  sqlite
+    .prepare(
+      "UPDATE photos SET order_id = ? WHERE id = ? AND order_id IS NULL",
+    )
+    .run(orderId, photoId);
+}
+
 export function getPhoto(
   id: number,
 ): { id: number; file_path: string } | undefined {

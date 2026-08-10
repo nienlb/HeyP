@@ -28,7 +28,9 @@ export const config = {
   accounts: parseAccounts(process.env.APP_ACCOUNTS),
   sessionSecret: process.env.SESSION_SECRET ?? "insecure-dev-secret-doi-di",
   staleOrderDays: Number(process.env.STALE_ORDER_DAYS ?? "7"),
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  // Phase 5 — đọc ảnh chốt đơn Zalo bằng Gemini (Google AI Studio).
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  geminiModel: process.env.GEMINI_MODEL ?? "gemini-flash-latest",
 } as const;
 
 export function findAccount(username: string, password: string): Account | null {

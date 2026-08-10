@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useRef, useState } from "react";
 import { createOrderAction, type CreateOrderState } from "../actions";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import { buildQuoteText, formatVnd } from "@/lib/format";
 import { ORDER_TYPES, ORDER_TYPE_LABELS } from "@/lib/order-status";
+import { itemAttributes, type ZaloExtract } from "@/lib/zalo-extract";
 import { CopyButton } from "../../_components/copy-button";
 
 type ItemRow = {
@@ -53,8 +54,86 @@ export function NewOrderForm({
     customers[0] ? String(customers[0].id) : "",
   );
   const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [newCustomerAddress, setNewCustomerAddress] = useState("");
+
+  // Đọc ảnh chốt đơn Zalo (Gemini)
+  const zaloInputRef = useRef<HTMLInputElement>(null);
+  const [zaloPhotoId, setZaloPhotoId] = useState("");
+  const [zaloBusy, setZaloBusy] = useState(false);
+  const [zaloError, setZaloError] = useState<string | null>(null);
+  const [zaloInfo, setZaloInfo] = useState<string | null>(null);
+  const [zaloDragOver, setZaloDragOver] = useState(false);
 
   const num = (s: string) => Number(String(s).replace(/[,\s]/g, "")) || 0;
+
+  function applyExtract(d: ZaloExtract) {
+    setCustomerMode("new");
+    setNewCustomerName(d.customerName ?? "");
+    setNewCustomerPhone(d.customerPhone ?? "");
+    setNewCustomerAddress(d.customerAddress ?? "");
+    // Giá đã là VND (mẫu Zalo dùng Total VND) → tỷ giá = 1, không dùng phí dịch vụ riêng.
+    setExchangeRate("1");
+    setServiceFee("");
+    setDeposit(d.depositVnd != null ? String(d.depositVnd) : "");
+    // "+ ship" chưa rõ → để trống cho người nhập; freeship → 0; có số → số đó.
+    setShippingFee(
+      d.shipUnknown
+        ? ""
+        : d.shipVnd != null
+          ? String(d.shipVnd)
+          : d.shipFree
+            ? "0"
+            : "",
+    );
+    const rows: ItemRow[] = d.items.length
+      ? d.items.map((it) => ({
+          name: it.name,
+          productUrl: "",
+          attributes: itemAttributes(it),
+          quantity: String(it.quantity || 1),
+          unitPriceCny:
+            d.items.length === 1 && d.totalVnd != null
+              ? String(Math.round(d.totalVnd / (it.quantity || 1)))
+              : "",
+        }))
+      : [{ ...emptyItem }];
+    setItems(rows);
+    const names = d.items.map((i) => i.name).join(", ");
+    setZaloInfo(
+      `Đã đọc: ${names || "(không rõ sản phẩm)"}${
+        d.totalVnd != null
+          ? ` · Total ${d.totalVnd.toLocaleString("vi-VN")}₫`
+          : ""
+      }`,
+    );
+  }
+
+  async function readZalo(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    setZaloBusy(true);
+    setZaloError(null);
+    setZaloInfo(null);
+    const fd = new FormData();
+    fd.set("file", file);
+    try {
+      const res = await fetch("/api/read-zalo", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (data.photoId) setZaloPhotoId(String(data.photoId));
+      if (!res.ok || !data.ok) {
+        setZaloError(
+          (data.error ?? "Đọc ảnh thất bại") + " — bạn nhập tay giúp nhé.",
+        );
+      } else {
+        applyExtract(data.data as ZaloExtract);
+      }
+    } catch {
+      setZaloError("Lỗi mạng khi đọc ảnh — bạn nhập tay giúp nhé.");
+    } finally {
+      setZaloBusy(false);
+      if (zaloInputRef.current) zaloInputRef.current.value = "";
+    }
+  }
 
   const parsedItems = useMemo(
     () =>
@@ -80,9 +159,7 @@ export function NewOrderForm({
 
   const selectedCustomer = customers.find((c) => String(c.id) === customerId);
   const customerName =
-    customerMode === "new"
-      ? newCustomerName
-      : (selectedCustomer?.name ?? "");
+    customerMode === "new" ? newCustomerName : (selectedCustomer?.name ?? "");
 
   const quote = buildQuoteText({
     customerName,
@@ -117,9 +194,55 @@ export function NewOrderForm({
     <form action={formAction} className="order-form">
       {state.error && <div className="error">{state.error}</div>}
 
-      {/* Hidden: dữ liệu sản phẩm dạng JSON để server đọc */}
       <input type="hidden" name="items" value={JSON.stringify(parsedItems)} />
       <input type="hidden" name="customerMode" value={customerMode} />
+      <input type="hidden" name="zaloPhotoId" value={zaloPhotoId} />
+
+      {/* Đọc ảnh chốt đơn Zalo bằng AI */}
+      <section className="card zalo-reader">
+        <h2 className="card-title">🤖 Đọc ảnh chốt đơn Zalo</h2>
+        <p className="muted" style={{ margin: "0 0 10px" }}>
+          Kéo-thả ảnh chụp tin nhắn chốt đơn — AI điền sẵn form, bạn kiểm tra
+          rồi lưu. Ảnh tự đính vào đơn.
+        </p>
+        <div
+          className={`dropzone${zaloDragOver ? " over" : ""}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setZaloDragOver(true);
+          }}
+          onDragLeave={() => setZaloDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setZaloDragOver(false);
+            if (e.dataTransfer.files[0]) readZalo(e.dataTransfer.files[0]);
+          }}
+          onClick={() => zaloInputRef.current?.click()}
+          role="button"
+          tabIndex={0}
+        >
+          {zaloBusy
+            ? "🤖 Đang đọc ảnh…"
+            : "Kéo-thả ảnh chốt đơn vào đây, hoặc bấm để chọn ảnh"}
+        </div>
+        {zaloError && (
+          <div className="error" style={{ marginTop: 10 }}>
+            {zaloError}
+          </div>
+        )}
+        {zaloInfo && (
+          <div className="zalo-info" style={{ marginTop: 10 }}>
+            ✓ {zaloInfo} — kiểm tra lại bên dưới nhé.
+          </div>
+        )}
+        <input
+          ref={zaloInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => e.target.files?.[0] && readZalo(e.target.files[0])}
+        />
+      </section>
 
       <div className="two-col">
         <section className="card">
@@ -180,11 +303,20 @@ export function NewOrderForm({
               </div>
               <div className="field">
                 <label>SĐT / Zalo</label>
-                <input name="newCustomerPhone" placeholder="09..." />
+                <input
+                  name="newCustomerPhone"
+                  value={newCustomerPhone}
+                  onChange={(e) => setNewCustomerPhone(e.target.value)}
+                  placeholder="09..."
+                />
               </div>
               <div className="field">
                 <label>Địa chỉ giao</label>
-                <input name="newCustomerAddress" />
+                <input
+                  name="newCustomerAddress"
+                  value={newCustomerAddress}
+                  onChange={(e) => setNewCustomerAddress(e.target.value)}
+                />
               </div>
             </>
           )}
@@ -233,6 +365,7 @@ export function NewOrderForm({
                 inputMode="numeric"
                 value={shippingFee}
                 onChange={(e) => setShippingFee(e.target.value)}
+                placeholder="tính sau khi hàng về"
               />
             </div>
           </div>
@@ -294,7 +427,7 @@ export function NewOrderForm({
                 className="it-qty"
               />
               <input
-                placeholder="Giá tệ"
+                placeholder="Đơn giá"
                 inputMode="decimal"
                 value={it.unitPriceCny}
                 onChange={(e) => updateItem(i, { unitPriceCny: e.target.value })}
@@ -327,11 +460,7 @@ export function NewOrderForm({
           label="Copy báo giá gửi Zalo"
           className="btn btn-ghost"
         />
-        <button
-          type="submit"
-          className="btn"
-          disabled={!canSubmit || pending}
-        >
+        <button type="submit" className="btn" disabled={!canSubmit || pending}>
           {pending ? "Đang lưu…" : "Lưu đơn"}
         </button>
       </div>
