@@ -6,7 +6,7 @@ import { CopyButton } from "../../_components/copy-button";
 import { PhotoUpload } from "../../_components/photo-upload";
 import { PhotoGallery } from "../../_components/photo-gallery";
 import { changeStatusAction, lineExceptionAction } from "../actions";
-import { getOrderDetail } from "@/db/queries";
+import { getOrderDetail, getPackagesForOrder } from "@/db/queries";
 import { computeOrderMoney } from "@/lib/money";
 import { buildQuoteText, formatCny, formatDateTime, formatVnd } from "@/lib/format";
 import {
@@ -32,6 +32,7 @@ export default async function OrderDetailPage({
   if (!detail || !detail.order) notFound();
 
   const { order, customer, items, history, photos } = detail;
+  const orderPackages = getPackagesForOrder(orderId);
   const money = computeOrderMoney({
     goodsTotalCny: order.goodsTotalCny,
     exchangeRate: order.exchangeRate,
@@ -307,6 +308,28 @@ export default async function OrderDetailPage({
             </table>
           </div>
           {order.note && <p className="order-note">Ghi chú: {order.note}</p>}
+        </section>
+
+        {/* Kiện vận chuyển */}
+        <section className="card">
+          <h2 className="card-title">Kiện vận chuyển ({orderPackages.length})</h2>
+          {orderPackages.length === 0 ? (
+            <p className="muted">
+              Chưa gắn kiện nào.{" "}
+              <Link href="/tracking">Thêm ở màn Tracking →</Link>
+            </p>
+          ) : (
+            <ul className="pkg-list-mini">
+              {orderPackages.map((p) => (
+                <li key={p.id}>
+                  <strong>{p.trackingCode}</strong>
+                  {p.carrier ? ` · ${p.carrier}` : ""} —{" "}
+                  {p.trackingStatus ?? "chưa có trạng thái"}
+                  {p.needsManualCheck && " ⚠️"}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* Ảnh đính kèm */}

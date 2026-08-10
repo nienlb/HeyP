@@ -12,6 +12,7 @@ export function AppHeader({ username }: { username: string }) {
           <Link href="/orders">Đơn hàng</Link>
           <Link href="/customers">Khách hàng</Link>
           <Link href="/inventory">Tồn kho</Link>
+          <Link href="/tracking">Tracking</Link>
           <Link href="/orders/new" className="btn btn-sm">
             + Tạo đơn
           </Link>

@@ -92,10 +92,14 @@ export const orderItems = sqliteTable("order_items", {
 export const packages = sqliteTable("packages", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   trackingCode: text("tracking_code").notNull(),
+  carrier: text("carrier"),
   weightKg: real("weight_kg"),
   trackingStatus: text("tracking_status"),
   lastCheckedAt: integer("last_checked_at", { mode: "timestamp" }),
   mode: text("mode", { enum: PACKAGE_MODES }).notNull().default("manual"),
+  needsManualCheck: integer("needs_manual_check", { mode: "boolean" })
+    .notNull()
+    .default(false),
   createdAt: createdAt(),
 });
 

@@ -5,11 +5,14 @@ import {
   customers,
   inventory,
   orderItems,
+  orderPackages,
   orderStatusHistory,
   orders,
+  packages,
   photos,
 } from "./schema";
 import type { PhotoLabel } from "@/lib/photos";
+import { getAdapter } from "@/lib/tracking";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import {
   isTerminal,
@@ -215,6 +218,165 @@ export async function listPhotosForInventory(inventoryId: number) {
     .from(photos)
     .where(eq(photos.inventoryId, inventoryId))
     .orderBy(photos.id);
+}
+
+// ---------- Tracking / Kiện vận chuyển ----------
+
+export type PackageRow = {
+  id: number;
+  trackingCode: string;
+  carrier: string | null;
+  weightKg: number | null;
+  trackingStatus: string | null;
+  lastCheckedAt: number | null;
+  mode: "auto" | "manual";
+  needsManualCheck: boolean;
+  orderIds: number[];
+};
+
+export function listPackages(): PackageRow[] {
+  const rows = sqlite
+    .prepare(
+      `SELECT p.id, p.tracking_code, p.carrier, p.weight_kg, p.tracking_status,
+              p.last_checked_at, p.mode, p.needs_manual_check,
+              GROUP_CONCAT(op.order_id) AS order_ids
+         FROM packages p
+         LEFT JOIN order_packages op ON op.package_id = p.id
+        GROUP BY p.id
+        ORDER BY p.needs_manual_check DESC, p.created_at DESC`,
+    )
+    .all() as {
+    id: number;
+    tracking_code: string;
+    carrier: string | null;
+    weight_kg: number | null;
+    tracking_status: string | null;
+    last_checked_at: number | null;
+    mode: "auto" | "manual";
+    needs_manual_check: number;
+    order_ids: string | null;
+  }[];
+  return rows.map((r) => ({
+    id: r.id,
+    trackingCode: r.tracking_code,
+    carrier: r.carrier,
+    weightKg: r.weight_kg,
+    trackingStatus: r.tracking_status,
+    lastCheckedAt: r.last_checked_at,
+    mode: r.mode,
+    needsManualCheck: r.needs_manual_check === 1,
+    orderIds: r.order_ids
+      ? r.order_ids.split(",").map((s) => Number(s))
+      : [],
+  }));
+}
+
+export function getPackagesForOrder(orderId: number): PackageRow[] {
+  return listPackages().filter((p) => p.orderIds.includes(orderId));
+}
+
+export type CreatePackageInput = {
+  trackingCode: string;
+  carrier?: string | null;
+  weightKg?: number | null;
+  mode: "auto" | "manual";
+  orderIds: number[];
+};
+
+export type PackageResult =
+  | { ok: true; id: number }
+  | { ok: false; reason: string };
+
+export function createPackage(input: CreatePackageInput): PackageResult {
+  const code = input.trackingCode.trim();
+  if (!code) return { ok: false, reason: "Thiếu mã vận đơn" };
+
+  sqlite.exec("BEGIN");
+  try {
+    const id = Number(
+      sqlite
+        .prepare(
+          `INSERT INTO packages(tracking_code, carrier, weight_kg, mode)
+           VALUES (?, ?, ?, ?)`,
+        )
+        .run(code, input.carrier ?? null, input.weightKg ?? null, input.mode)
+        .lastInsertRowid,
+    );
+    const linkStmt = sqlite.prepare(
+      "INSERT OR IGNORE INTO order_packages(order_id, package_id) VALUES (?, ?)",
+    );
+    for (const orderId of input.orderIds) {
+      const exists = sqlite
+        .prepare("SELECT 1 FROM orders WHERE id = ?")
+        .get(orderId);
+      if (exists) linkStmt.run(orderId, id);
+    }
+    sqlite.exec("COMMIT");
+    return { ok: true, id };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    throw err;
+  }
+}
+
+/** Cập nhật trạng thái kiện bằng tay (xoá cờ tra tay). */
+export function updatePackageStatusManual(id: number, status: string): void {
+  sqlite
+    .prepare(
+      `UPDATE packages
+          SET tracking_status = ?, last_checked_at = unixepoch(),
+              needs_manual_check = 0
+        WHERE id = ?`,
+    )
+    .run(status.trim(), id);
+}
+
+export type SweepResult = { checked: number; updated: number; flagged: number };
+
+/**
+ * Job tra tự động: quét các kiện mode "auto", gọi adapter theo carrier.
+ * Không có adapter / tra lỗi → gắn cờ "tra tay". Chạy được cả từ job nền lẫn nút bấm.
+ */
+export async function runTrackingSweep(): Promise<SweepResult> {
+  const pkgs = sqlite
+    .prepare(
+      "SELECT id, tracking_code, carrier FROM packages WHERE mode = 'auto'",
+    )
+    .all() as { id: number; tracking_code: string; carrier: string | null }[];
+
+  const flag = sqlite.prepare(
+    "UPDATE packages SET needs_manual_check = 1, last_checked_at = unixepoch() WHERE id = ?",
+  );
+  const save = sqlite.prepare(
+    "UPDATE packages SET tracking_status = ?, last_checked_at = unixepoch(), needs_manual_check = 0 WHERE id = ?",
+  );
+
+  let checked = 0;
+  let updated = 0;
+  let flagged = 0;
+  for (const p of pkgs) {
+    checked++;
+    const adapter = getAdapter(p.carrier);
+    if (!adapter) {
+      flag.run(p.id);
+      flagged++;
+      continue;
+    }
+    try {
+      const r = await adapter.lookup(p.tracking_code);
+      if (r.ok) {
+        save.run(r.status, p.id);
+        updated++;
+      } else {
+        flag.run(p.id);
+        flagged++;
+      }
+    } catch {
+      flag.run(p.id);
+      flagged++;
+    }
+  }
+  return { checked, updated, flagged };
 }
 
 // ---------- Helper tồn kho (raw, KHÔNG tự mở transaction) ----------

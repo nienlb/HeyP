@@ -694,6 +694,76 @@ a {
   padding: 14px;
 }
 
+/* ---------- Tracking / Kiện ---------- */
+.pkg-form .pkg-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 0.8fr 1fr;
+  gap: 12px;
+}
+.pkg-form .pkg-orders {
+  grid-column: 1 / -1;
+}
+.pkg-form input,
+.pkg-form select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 14px;
+  background: #fff;
+  color: var(--text);
+  width: 100%;
+}
+.pkg-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pkg-item.pkg-flag {
+  border-color: #fecdca;
+  background: #fffbfa;
+}
+.pkg-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pkg-code {
+  font-weight: 700;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.pkg-meta {
+  font-size: 14px;
+}
+.pkg-orders-line {
+  font-size: 14px;
+  color: var(--muted);
+}
+.pkg-order-link {
+  margin-right: 6px;
+  text-decoration: none;
+  font-weight: 600;
+}
+.pkg-update {
+  display: flex;
+  gap: 8px;
+}
+.pkg-update input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-size: 14px;
+  background: #fff;
+  color: var(--text);
+}
+.pkg-list-mini {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 720px) {
   .two-col {
@@ -703,6 +773,9 @@ a {
     grid-template-columns: 1fr 1fr;
   }
   .sell-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .pkg-form .pkg-grid {
     grid-template-columns: 1fr 1fr;
   }
   .search input {
