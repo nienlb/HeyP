@@ -1,7 +1,7 @@
 ---
 title: Thiết kế hệ thống quản lý đơn order hộ Trung Quốc
 type: design-spec
-project: china-order-system
+project: heyp-system
 owner: Niên
 created: 2026-08-10
 status: da-duyet-2026-08-10

@@ -1,17 +1,17 @@
 ---
 title: Implementation plan — hệ thống order hộ Trung Quốc (MVP)
 type: implementation-plan
-project: china-order-system
+project: heyp-system
 owner: Niên
 created: 2026-08-10
 status: san-sang-thuc-thi
-spec: "[[2026-08-10-china-order-system-design]]"
+spec: "[[2026-08-10-heyp-system-design]]"
 tags: [plan, order-ho, trung-quoc, mvp]
 ---
 
 # Implementation plan — MVP hệ thống order hộ TQ
 
-> Thực thi theo spec đã duyệt: [[2026-08-10-china-order-system-design]]. Build bằng Claude Code trong **repo code riêng ngoài vault** (đề xuất: `~/Projects/china-order-system`). Mỗi phase kết thúc bằng tiêu chí nghiệm thu kiểm chứng được; xong phase nào chạy được phase đó — không chờ xong hết mới dùng.
+> Thực thi theo spec đã duyệt: [[2026-08-10-heyp-system-design]]. Build bằng Claude Code trong **repo code riêng ngoài vault** (đề xuất: `~/Projects/heyp-system`). Mỗi phase kết thúc bằng tiêu chí nghiệm thu kiểm chứng được; xong phase nào chạy được phase đó — không chờ xong hết mới dùng.
 
 ## Nguyên tắc thực thi
 
@@ -22,7 +22,7 @@ tags: [plan, order-ho, trung-quoc, mvp]
 
 ## Phase 0 — Dựng khung repo (nửa buổi)
 
-- Tạo repo `china-order-system`, git init, copy spec + plan này vào `docs/`.
+- Tạo repo `heyp-system`, git init, copy spec + plan này vào `docs/`.
 - Next.js + TypeScript + SQLite (qua Drizzle hoặc Prisma), cấu trúc thư mục, biến môi trường mẫu (`.env.example`).
 - Đăng nhập đơn giản: 2 tài khoản cố định trong config.
 - **Nghiệm thu:** `npm run dev` mở được app trống có trang đăng nhập trên localhost.

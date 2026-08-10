@@ -1,7 +1,7 @@
 ---
 title: Mẫu tin nhắn chốt đơn HeyP (tham chiếu thật)
 type: reference
-project: china-order-system
+project: heyp-system
 created: 2026-08-10
 source: ảnh chụp Zalo Niên gửi 2026-08-10
 tags: [reference, bao-gia, chot-don, zalo]
