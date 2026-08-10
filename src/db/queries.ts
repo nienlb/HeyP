@@ -7,7 +7,9 @@ import {
   orderItems,
   orderStatusHistory,
   orders,
+  photos,
 } from "./schema";
+import type { PhotoLabel } from "@/lib/photos";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import {
   isTerminal,
@@ -157,7 +159,62 @@ export async function getOrderDetail(id: number) {
     .from(orderStatusHistory)
     .where(eq(orderStatusHistory.orderId, id))
     .orderBy(desc(orderStatusHistory.changedAt), desc(orderStatusHistory.id));
-  return { order, customer, items, history };
+  const orderPhotos = await listPhotosForOrder(id);
+  return { order, customer, items, history, photos: orderPhotos };
+}
+
+// ---------- Ảnh ----------
+
+export type PhotoRow = {
+  id: number;
+  filePath: string;
+  label: PhotoLabel;
+  orderId: number | null;
+  inventoryId: number | null;
+  uploadedAt: Date;
+};
+
+export function addPhoto(input: {
+  filePath: string;
+  label: PhotoLabel;
+  orderId?: number | null;
+  inventoryId?: number | null;
+}): number {
+  const info = sqlite
+    .prepare(
+      "INSERT INTO photos(file_path, label, order_id, inventory_id) VALUES(?, ?, ?, ?)",
+    )
+    .run(
+      input.filePath,
+      input.label,
+      input.orderId ?? null,
+      input.inventoryId ?? null,
+    );
+  return Number(info.lastInsertRowid);
+}
+
+export function getPhoto(
+  id: number,
+): { id: number; file_path: string } | undefined {
+  return sqlite
+    .prepare("SELECT id, file_path FROM photos WHERE id = ?")
+    .get(id) as { id: number; file_path: string } | undefined;
+}
+
+export async function listPhotosForOrder(orderId: number) {
+  return db
+    .select()
+    .from(photos)
+    .where(eq(photos.orderId, orderId))
+    .orderBy(photos.id);
+}
+
+export async function listPhotosForInventory(inventoryId: number) {
+  return db
+    .select()
+    .from(photos)
+    .where(eq(photos.inventoryId, inventoryId))
+    .orderBy(photos.id);
 }
 
 // ---------- Helper tồn kho (raw, KHÔNG tự mở transaction) ----------

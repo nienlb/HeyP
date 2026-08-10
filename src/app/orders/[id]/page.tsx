@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
 import { AppHeader } from "../../_components/app-header";
 import { CopyButton } from "../../_components/copy-button";
+import { PhotoUpload } from "../../_components/photo-upload";
+import { PhotoGallery } from "../../_components/photo-gallery";
 import { changeStatusAction, lineExceptionAction } from "../actions";
 import { getOrderDetail } from "@/db/queries";
 import { computeOrderMoney } from "@/lib/money";
@@ -29,7 +31,7 @@ export default async function OrderDetailPage({
   const detail = await getOrderDetail(orderId);
   if (!detail || !detail.order) notFound();
 
-  const { order, customer, items, history } = detail;
+  const { order, customer, items, history, photos } = detail;
   const money = computeOrderMoney({
     goodsTotalCny: order.goodsTotalCny,
     exchangeRate: order.exchangeRate,
@@ -305,6 +307,17 @@ export default async function OrderDetailPage({
             </table>
           </div>
           {order.note && <p className="order-note">Ghi chú: {order.note}</p>}
+        </section>
+
+        {/* Ảnh đính kèm */}
+        <section className="card">
+          <h2 className="card-title">Ảnh ({photos.length})</h2>
+          <PhotoUpload orderId={order.id} defaultLabel="zalo_confirm" />
+          <div style={{ marginTop: 14 }}>
+            <PhotoGallery
+              photos={photos.map((p) => ({ id: p.id, label: p.label }))}
+            />
+          </div>
         </section>
       </main>
     </>

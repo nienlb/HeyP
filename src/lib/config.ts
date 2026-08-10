@@ -24,6 +24,7 @@ function parseAccounts(raw: string | undefined): Account[] {
 
 export const config = {
   databasePath: process.env.DATABASE_PATH ?? "./data/app.sqlite",
+  uploadsPath: process.env.UPLOADS_PATH ?? "./uploads",
   accounts: parseAccounts(process.env.APP_ACCOUNTS),
   sessionSecret: process.env.SESSION_SECRET ?? "insecure-dev-secret-doi-di",
   staleOrderDays: Number(process.env.STALE_ORDER_DAYS ?? "7"),

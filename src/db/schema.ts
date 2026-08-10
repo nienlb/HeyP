@@ -14,6 +14,7 @@ import {
   text,
 } from "drizzle-orm/sqlite-core";
 import { ORDER_STATUSES, ORDER_TYPES } from "@/lib/order-status";
+import { PHOTO_LABELS } from "@/lib/photos";
 
 export const LINE_STATUSES = ["normal", "supplier_defect", "returned"] as const;
 export const PACKAGE_MODES = ["auto", "manual"] as const;
@@ -22,12 +23,6 @@ export const INVENTORY_SOURCES = [
   "supplier_defect", // Lỗi NCC
   "exchange_return", // Đổi trả
   "bom", // Hàng bom
-] as const;
-export const PHOTO_LABELS = [
-  "product", // Ảnh sản phẩm
-  "zalo_confirm", // Ảnh chốt đơn Zalo
-  "actual", // Ảnh thực tế
-  "listing", // Ảnh đăng bán
 ] as const;
 
 const createdAt = () =>

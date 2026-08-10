@@ -1,18 +1,28 @@
 import { requireAuth } from "@/lib/auth";
 import { AppHeader } from "../_components/app-header";
-import { listInventory } from "@/db/queries";
+import { listInventory, listPhotosForInventory } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import {
   INVENTORY_SOURCES,
   INVENTORY_SOURCE_LABELS,
   type InventorySource,
 } from "@/lib/inventory";
+import { PhotoUpload } from "../_components/photo-upload";
+import { PhotoGallery } from "../_components/photo-gallery";
 import { SellForm } from "./sell-form";
 
 export default async function InventoryPage() {
   const session = await requireAuth();
   const rows = await listInventory();
   const inStock = rows.filter((r) => r.quantity > 0);
+  const photosByItem = new Map(
+    await Promise.all(
+      inStock.map(
+        async (it) =>
+          [it.id, await listPhotosForInventory(it.id)] as const,
+      ),
+    ),
+  );
 
   const groups = INVENTORY_SOURCES.map((source) => ({
     source,
@@ -54,6 +64,18 @@ export default async function InventoryPage() {
                       quantity={it.quantity}
                       avgCost={it.avgCost}
                     />
+                    <div className="inv-photos">
+                      <PhotoUpload inventoryId={it.id} defaultLabel="listing" />
+                      <div style={{ marginTop: 12 }}>
+                        <PhotoGallery
+                          photos={(photosByItem.get(it.id) ?? []).map((p) => ({
+                            id: p.id,
+                            label: p.label,
+                          }))}
+                          copy
+                        />
+                      </div>
+                    </div>
                   </details>
                 ))}
               </div>
