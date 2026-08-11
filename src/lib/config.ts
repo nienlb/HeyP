@@ -31,6 +31,10 @@ export const config = {
   // Phase 5 — đọc ảnh chốt đơn Zalo bằng Gemini (Google AI Studio).
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL ?? "gemini-flash-latest",
+  // Phase 7 — sao lưu.
+  backupPath: process.env.BACKUP_PATH ?? "./backups",
+  backupKeep: Number(process.env.BACKUP_KEEP ?? "30"),
+  backupMinHours: Number(process.env.BACKUP_MIN_HOURS ?? "20"),
 } as const;
 
 export function findAccount(username: string, password: string): Account | null {

@@ -11,6 +11,8 @@
     "test": "node --test 'tests/**/*.test.ts'",
     "db:migrate": "node --env-file-if-exists=.env scripts/migrate.ts",
     "db:seed-demo": "node --env-file-if-exists=.env scripts/seed-demo.ts",
+    "db:backup": "node --env-file-if-exists=.env scripts/backup.ts",
+    "db:restore": "node --env-file-if-exists=.env scripts/restore.ts",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio"
   },
