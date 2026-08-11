@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { getLogoUrl } from "@/lib/logo";
 import { loginAction } from "./actions";
 
 export default async function LoginPage({
@@ -11,21 +12,18 @@ export default async function LoginPage({
   if (await getSession()) redirect("/");
 
   const { error } = await searchParams;
+  const logoUrl = getLogoUrl();
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-      }}
-    >
-      <div className="card" style={{ width: "100%", maxWidth: 380 }}>
-        <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>HeyP</h1>
-        <p style={{ margin: "0 0 20px", color: "var(--muted)", fontSize: 14 }}>
-          HeyP chào bạn
-        </p>
+    <div className="login-page">
+      <div className="card login-card">
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt="HeyP" className="login-logo-img" />
+        ) : (
+          <h1 className="login-brand">HeyP</h1>
+        )}
+        <p className="login-tagline">HeyP chào bạn</p>
 
         {error ? (
           <div className="error">Sai tài khoản hoặc mật khẩu.</div>

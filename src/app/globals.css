@@ -844,6 +844,43 @@ a {
   font-size: 14px;
 }
 
+/* ---------- Đăng nhập ---------- */
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--bg);
+}
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+}
+.login-brand {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 34px;
+  color: var(--brand);
+  margin: 4px 0 2px;
+}
+.login-logo-img {
+  height: 72px;
+  width: 72px;
+  border-radius: 50%;
+  margin: 0 auto 8px;
+  display: block;
+}
+.login-tagline {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.login-card .field {
+  text-align: left;
+}
+
 /* ---------- AppShell: Sidebar (desktop) ---------- */
 .app-main {
   padding-top: 24px;
@@ -872,6 +909,8 @@ a {
   z-index: 20;
 }
 .sidebar-brand {
+  display: flex;
+  align-items: center;
   font-family: var(--font-display);
   font-style: italic;
   font-weight: 700;
@@ -879,6 +918,11 @@ a {
   color: #fff;
   text-decoration: none;
   padding: 4px 8px;
+}
+.sidebar-logo-img {
+  height: 40px;
+  width: auto;
+  border-radius: 50%;
 }
 .sidebar-cta {
   background: #fff;
@@ -960,12 +1004,19 @@ a {
     z-index: 20;
   }
   .mobile-brand {
+    display: flex;
+    align-items: center;
     font-family: var(--font-display);
     font-style: italic;
     font-weight: 700;
     font-size: 20px;
     color: var(--brand);
     text-decoration: none;
+  }
+  .mobile-logo-img {
+    height: 30px;
+    width: auto;
+    border-radius: 50%;
   }
   .tabbar {
     display: flex;

@@ -131,12 +131,12 @@ Reskin theo tông navy: nền nhạt, thẻ trắng giữa màn, logo trên, nú
 
 ## 8. Tiêu chí nghiệm thu
 
-- [ ] Toàn app dùng palette navy; đỏ chỉ xuất hiện ở ngữ nghĩa (sự cố/hủy/lỗi).
-- [ ] Desktop: sidebar trái navy cố định, mục active rõ, "+ Tạo đơn" nổi bật; nội dung không bị che.
-- [ ] Mobile (<768px): bottom tab 5 mục + FAB "+" + sheet "Thêm" hoạt động; không cuộn ngang toàn trang; bảng thành thẻ xếp dọc.
-- [ ] Màn Tổng quan là trang chủ, hiển thị 4 thẻ đúng số liệu thật (đối chiếu vài đơn).
-- [ ] Mọi luồng nghiệp vụ (tạo đơn, chuyển trạng thái, 3 luồng ngoại lệ, AI đọc ảnh, tracking, backup) **vẫn chạy y như trước** — 38/38 unit test vẫn xanh, typecheck sạch.
-- [ ] Kiểm tra tay trên khổ điện thoại (~375px) và desktop.
+- [x] Toàn app dùng palette navy; đỏ chỉ xuất hiện ở ngữ nghĩa (sự cố/hủy/lỗi).
+- [x] Desktop: sidebar trái navy cố định, mục active rõ, "+ Tạo đơn" nổi bật; nội dung không bị che.
+- [x] Mobile (<768px): bottom tab 5 mục + FAB "+" + sheet "Thêm" hoạt động; không cuộn ngang toàn trang; bảng thành thẻ xếp dọc.
+- [x] Màn Tổng quan là trang chủ, hiển thị 4 thẻ đúng số liệu thật (đối chiếu vài đơn).
+- [x] Mọi luồng nghiệp vụ (tạo đơn, chuyển trạng thái, 3 luồng ngoại lệ, AI đọc ảnh, tracking, backup) **vẫn chạy y như trước** — 38/38 unit test vẫn xanh, typecheck sạch.
+- [x] Kiểm tra tay trên khổ điện thoại (~375px) và desktop.
 
 ## 9. Ghi chú triển khai
 

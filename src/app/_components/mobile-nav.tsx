@@ -7,13 +7,24 @@ import { NavLinks } from "./nav-links";
 import { NAV_ITEMS, MORE_ITEMS } from "./nav-config";
 import { Icon } from "./icons";
 
-export function MobileNav({ username }: { username: string }) {
+export function MobileNav({
+  username,
+  logoUrl,
+}: {
+  username: string;
+  logoUrl: string | null;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <header className="mobile-top">
         <Link href="/" className="mobile-brand">
-          HeyP
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="HeyP" className="mobile-logo-img" />
+          ) : (
+            "HeyP"
+          )}
         </Link>
       </header>
 

@@ -2,7 +2,7 @@
 
 Ứng dụng nội bộ (2 người dùng) quản lý dịch vụ **order hộ hàng Trung Quốc** cho shop HeyP (bán giày/dép/thời trang): báo giá → chốt đơn → mua hộ → gom kho → vận chuyển về VN → giao khách → thu tiền. Kèm bán hàng tồn kho và đọc ảnh chốt đơn Zalo bằng AI.
 
-**Trạng thái:** MVP xong (Phase 0–7). Đang chuẩn bị **v2** — thiết kế lại giao diện (sidebar + mobile). Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`.
+**Trạng thái:** MVP xong (Phase 0–7). **v2 xong** — giao diện "Boutique atelier" (navy + giấy ấm + camel + serif), sidebar (desktop) / bottom tab+FAB+sheet (mobile), màn Tổng quan. Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`. Logo: chưa có `public/logo.png` → đang dùng wordmark serif fallback (`src/lib/logo.ts` tự chuyển sang ảnh khi có file, không cần sửa code).
 
 ## Stack
 
@@ -33,6 +33,7 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
 - **`src/db/schema.ts` dùng alias `@/`** → chỉ Next/tsc nạp được. Script chạy bằng `node` KHÔNG import được schema → phải viết SQL thô.
 - **Test import module bằng đuôi `.ts` tường minh** (vd `../src/lib/money.ts`); `tsconfig` đã bật `allowImportingTsExtensions`. Module thuần dùng cho test không được import file khác có alias `@/`.
 - **Job nền / instrumentation:** code dùng `node:*` phải nằm trong `src/instrumentation-node.ts` và chỉ import khi `NEXT_RUNTIME==='nodejs'` — nếu để trong `instrumentation.ts` sẽ vỡ build **edge** (webpack không xử lý `node:fs`).
+- **Điều hướng (v2):** mọi trang có đăng nhập bọc bằng `<AppShell username={...}>` (`src/app/_components/app-shell.tsx`), KHÔNG dùng `AppHeader` nữa (đã xoá). Sidebar/bottom-tab đọc mục điều hướng từ `nav-config.ts` — thêm màn mới thì sửa 1 chỗ đó, không sửa từng component.
 - **KHÔNG `rm data/app.sqlite` để reset** — DB đang có **dữ liệu thật** của Niên. Chỉ xoá chọn lọc bằng SQL.
 - **`.env` gitignored** (chứa `GEMINI_API_KEY`, `SESSION_SECRET`). Mọi cấu hình đọc từ env qua `src/lib/config.ts`. Mẫu ở `.env.example`.
 - **Backups & uploads** gitignored (`/backups/`, `/uploads/`).
