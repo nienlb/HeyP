@@ -2,21 +2,32 @@
   /* Thương hiệu — navy từ logo HeyP */
   --brand: #0e5a87;
   --brand-strong: #0a4468;
+  --brand-deep: #0a3d5c; /* sidebar sâu */
   --brand-hover: #0a4468; /* alias tương thích code cũ */
   --brand-tint: #e8f1f7;
   --brand-tint-2: #d3e5f1;
   --on-brand: #ffffff;
 
-  /* Trung tính (xám mát hợp navy) */
-  --bg: #f6f8fa;
+  /* Điểm nhấn camel (lấy từ da giày) — dùng cực tiết chế */
+  --accent: #b07a4b;
+  --accent-strong: #92603a;
+  --accent-tint: #f3ebe1;
+
+  /* Trung tính ấm (giấy — hợp boutique) */
+  --bg: #f6f3ec;
   --surface: #ffffff;
   --card: #ffffff; /* alias tương thích */
-  --surface-2: #f1f4f7;
-  --border: #e2e8ef;
-  --border-strong: #cfd8e2;
-  --text: #16202b;
-  --muted: #5a6b7b;
-  --text-subtle: #8a98a6;
+  --surface-2: #f1ece3;
+  --border: #e7e0d5;
+  --border-strong: #d8cfc0;
+  --text: #1e2530;
+  --muted: #5f6b6a;
+  --text-subtle: #8a8c86;
+
+  /* Chữ — serif tiêu đề PHẢI hỗ trợ tiếng Việt (dấu móc ơ/ư).
+     Georgia hỗ trợ đầy đủ tiếng Việt trên gần như mọi nền tảng. */
+  --font-display: Georgia, "Palatino Linotype", Palatino, "Times New Roman",
+    serif;
 
   /* Ngữ nghĩa */
   --danger: #dc2a25;
@@ -175,8 +186,10 @@ a {
   gap: 16px;
 }
 .app-header .brand {
-  font-weight: 800;
-  font-size: 18px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 20px;
   color: var(--brand);
   text-decoration: none;
 }
@@ -224,7 +237,10 @@ a {
   margin: 6px 0 18px;
 }
 .page-head h1 {
-  font-size: 22px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   margin: 0;
   display: flex;
   align-items: center;
@@ -379,7 +395,9 @@ a {
 
 /* ---------- Cards & detail ---------- */
 .card-title {
-  font-size: 15px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
   margin: 0 0 14px;
 }
 .two-col {

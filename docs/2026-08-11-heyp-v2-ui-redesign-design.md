@@ -31,20 +31,25 @@ tags: [design, ui, redesign, v2, mobile]
 
 **Nền tảng kỹ thuật:** CSS thuần nâng cấp thành **design-token system** (không thêm dependency, không đổi build). Icon dùng **SVG nội tuyến** (bộ nhỏ tự nhúng). Skill dùng khi code: **frontend-design**.
 
-## 2. Hệ màu & token
+## 2. Hệ màu & token — hướng "Boutique atelier"
 
-Định nghĩa trong `:root` ở `globals.css`. Đỏ chỉ còn vai trò ngữ nghĩa (sự cố/hủy/lỗi), KHÔNG còn là màu thương hiệu.
+Định hướng thẩm mỹ (qua skill **frontend-design**): **không làm "admin SaaS mặc định"**. Bám thế giới HeyP — tiệm order **giày nữ editorial** (tabi/slingback/ballet), logo **chữ viết tay**, chất liệu **da camel/kem**. Rủi ro dồn vào đúng một chỗ (giấy ấm + serif + camel + logo viết tay); mọi thứ khác giữ trầm, ưu tiên nhanh/legibility vì đây là công cụ vận hành hằng ngày trên mobile.
+
+Định nghĩa trong `:root` ở `globals.css`. Đỏ chỉ còn vai trò ngữ nghĩa (sự cố/hủy/lỗi/lỗ), KHÔNG phải màu thương hiệu.
 
 **Thương hiệu (navy từ logo):**
-- `--brand: #0E5A87` — sidebar, nút chính, link, active
-- `--brand-strong: #0A4468` — hover/nhấn
-- `--brand-tint: #E8F1F7` — nền nhạt: nav active (bản sáng), dòng chọn, banner info
-- `--on-brand: #FFFFFF` — chữ/icon trên nền navy
+- `--brand: #0E5A87` — nút chính, link, active
+- `--brand-strong: #0A4468` — hover/nhấn · `--brand-deep: #0A3D5C` — chiều sâu sidebar
+- `--brand-tint: #E8F1F7` — nền nhạt: dòng chọn, banner info · `--on-brand: #FFFFFF`
 
-**Trung tính (xám mát):**
-- `--bg: #F6F8FA` · `--surface: #FFFFFF` · `--surface-2: #F1F4F7`
-- `--border: #E2E8EF`
-- `--text: #16202B` · `--text-muted: #5A6B7B` · `--text-subtle: #8A98A6`
+**Điểm nhấn camel (lấy từ da giày — dùng CỰC tiết chế):**
+- `--accent: #B07A4B` · `--accent-strong: #92603A` · `--accent-tint: #F3EBE1`
+- Chỉ dùng cho: sợi chỉ đánh dấu mục nav đang xem + vài hairline signature. KHÔNG dùng cho nút/tiền.
+
+**Trung tính ấm (giấy — thay xám lạnh):**
+- `--bg: #F6F3EC` (giấy ấm) · `--surface: #FFFFFF` · `--surface-2: #F1ECE3`
+- `--border: #E7E0D5`
+- `--text: #1E2530` · `--muted: #5F6B6A` · `--text-subtle: #8A8C86`
 
 **Ngữ nghĩa:**
 - `--danger: #DC2A25` (sự cố/hủy/lỗi) · nền `--danger-tint: #FEF2F2`
@@ -57,7 +62,11 @@ tags: [design, ui, redesign, v2, mobile]
 - `--shadow-md: 0 6px 20px rgba(16,32,43,.10)` (sidebar, sheet, sticky)
 - Spacing scale: 4 / 8 / 12 / 16 / 20 / 24 / 32
 
-**Chữ:** giữ font hệ thống. Cỡ: h1 22–24, h2 16–18, body 14–15, phụ 12–13. Số tiền dùng `font-variant-numeric: tabular-nums`.
+**Chữ (vẫn 0 phụ thuộc):**
+- **Tiêu đề & wordmark = serif** `--font-display: Georgia, "Palatino Linotype", Palatino, "Times New Roman", serif` — editorial, dội lại logo viết tay. ⚠️ **Serif BẮT BUỘC hỗ trợ tiếng Việt** (Georgia render đúng dấu móc ơ/ư; KHÔNG dùng "Iowan Old Style" — mất glyph tiếng Việt).
+- **Nội dung/dữ liệu = sans hệ thống**; số tiền `font-variant-numeric: tabular-nums`. Cỡ: h1 24, tiêu đề thẻ 16, body 14–15, phụ 12–13.
+
+**Signature (một thứ để nhớ):** logo **chữ viết tay** trên **sidebar navy sâu**, dội lại bởi **tiêu đề serif** + **một sợi chỉ camel** đánh dấu mục đang xem. Giấy ấm + navy + camel + serif = HeyP, không lẫn admin chung chung.
 
 ## 3. Bố cục & điều hướng
 
