@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
-import { AppHeader } from "../../_components/app-header";
+import { AppShell } from "../../_components/app-shell";
 import { CopyButton } from "../../_components/copy-button";
 import { PhotoUpload } from "../../_components/photo-upload";
 import { PhotoGallery } from "../../_components/photo-gallery";
@@ -66,9 +66,7 @@ export default async function OrderDetailPage({
   });
 
   return (
-    <>
-      <AppHeader username={session.username} />
-      <main className="container">
+    <AppShell username={session.username}>
         <div className="crumbs">
           <Link href="/orders">← Danh sách đơn</Link>
         </div>
@@ -342,7 +340,6 @@ export default async function OrderDetailPage({
             />
           </div>
         </section>
-      </main>
-    </>
+    </AppShell>
   );
 }

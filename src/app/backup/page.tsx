@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth";
-import { AppHeader } from "../_components/app-header";
+import { AppShell } from "../_components/app-shell";
 import { listBackups } from "@/lib/backup";
 import { config } from "@/lib/config";
 import { formatDateTime } from "@/lib/format";
@@ -10,9 +10,7 @@ export default async function BackupPage() {
   const backups = listBackups();
 
   return (
-    <>
-      <AppHeader username={session.username} />
-      <main className="container">
+    <AppShell username={session.username}>
         <div className="page-head">
           <h1>Sao lưu</h1>
           <form action={backupNowAction}>
@@ -56,7 +54,6 @@ export default async function BackupPage() {
             </div>
           )}
         </section>
-      </main>
-    </>
+    </AppShell>
   );
 }

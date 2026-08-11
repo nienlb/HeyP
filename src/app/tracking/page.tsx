@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
-import { AppHeader } from "../_components/app-header";
+import { AppShell } from "../_components/app-shell";
 import { listPackages } from "@/db/queries";
 import { knownCarriers } from "@/lib/tracking";
 import { formatDateTime } from "@/lib/format";
@@ -14,9 +14,7 @@ export default async function TrackingPage() {
   const needAttention = pkgs.filter((p) => p.needsManualCheck);
 
   return (
-    <>
-      <AppHeader username={session.username} />
-      <main className="container">
+    <AppShell username={session.username}>
         <div className="page-head">
           <h1>Tracking</h1>
           <form action={runSweepAction}>
@@ -104,7 +102,6 @@ export default async function TrackingPage() {
             ))}
           </div>
         )}
-      </main>
-    </>
+    </AppShell>
   );
 }

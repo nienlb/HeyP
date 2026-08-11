@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth";
-import { AppHeader } from "../_components/app-header";
+import { AppShell } from "../_components/app-shell";
 import { listCustomersWithTotals } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 
@@ -8,9 +8,7 @@ export default async function CustomersPage() {
   const customers = listCustomersWithTotals();
 
   return (
-    <>
-      <AppHeader username={session.username} />
-      <main className="container">
+    <AppShell username={session.username}>
         <div className="page-head">
           <h1>Khách hàng</h1>
         </div>
@@ -63,7 +61,6 @@ export default async function CustomersPage() {
             </table>
           </div>
         )}
-      </main>
-    </>
+    </AppShell>
   );
 }

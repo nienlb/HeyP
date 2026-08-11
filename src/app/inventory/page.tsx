@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth";
-import { AppHeader } from "../_components/app-header";
+import { AppShell } from "../_components/app-shell";
 import { listInventory, listPhotosForInventory } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import {
@@ -30,9 +30,7 @@ export default async function InventoryPage() {
   })).filter((g) => g.items.length > 0);
 
   return (
-    <>
-      <AppHeader username={session.username} />
-      <main className="container">
+    <AppShell username={session.username}>
         <div className="page-head">
           <h1>Tồn kho</h1>
         </div>
@@ -82,7 +80,6 @@ export default async function InventoryPage() {
             </section>
           ))
         )}
-      </main>
-    </>
+    </AppShell>
   );
 }

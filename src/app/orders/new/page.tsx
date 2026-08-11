@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
-import { AppHeader } from "../../_components/app-header";
+import { AppShell } from "../../_components/app-shell";
 import { listCustomers } from "@/db/queries";
 import { NewOrderForm } from "./new-order-form";
 
@@ -9,9 +9,7 @@ export default async function NewOrderPage() {
   const customers = await listCustomers();
 
   return (
-    <>
-      <AppHeader username={session.username} />
-      <main className="container">
+    <AppShell username={session.username}>
         <div className="crumbs">
           <Link href="/orders">← Danh sách đơn</Link>
         </div>
@@ -25,7 +23,6 @@ export default async function NewOrderPage() {
           }))}
           defaultExchangeRate={3600}
         />
-      </main>
-    </>
+    </AppShell>
   );
 }
