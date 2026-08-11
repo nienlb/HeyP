@@ -15,6 +15,8 @@ import type { PhotoLabel } from "@/lib/photos";
 import { getAdapter } from "@/lib/tracking";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import {
+  BRANCH_STATUSES,
+  MAIN_CHAIN,
   isTerminal,
   transition,
   type OrderStatus,
@@ -676,6 +678,19 @@ export async function listOrders(query?: string): Promise<OrderListRow[]> {
         needsAttention: isIncident || isStale,
       };
     });
+}
+
+/** Đếm số đơn ở mỗi trạng thái (chỉ trạng thái có đơn), theo thứ tự vòng đời. */
+export async function countOrdersByStatus(): Promise<
+  { status: OrderStatus; count: number }[]
+> {
+  const rows = await listOrders();
+  const order = [...MAIN_CHAIN, ...BRANCH_STATUSES];
+  const counts = new Map<string, number>();
+  for (const r of rows) counts.set(r.status, (counts.get(r.status) ?? 0) + 1);
+  return order
+    .map((status) => ({ status, count: counts.get(status) ?? 0 }))
+    .filter((x) => x.count > 0);
 }
 
 // ---------- Khách hàng (danh sách + công nợ) ----------

@@ -1052,6 +1052,101 @@ a {
   }
 }
 
+/* ---------- Tổng quan (dashboard) ---------- */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.dash-attention {
+  grid-column: 1 / -1;
+}
+.dash-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dash-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-tint);
+  color: var(--brand-strong);
+  border: 1px solid var(--brand-tint-2);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+.dash-chip-count {
+  font-size: 16px;
+  font-weight: 700;
+}
+.dash-chip.status-su_co {
+  background: var(--danger-tint);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+.dash-chip.status-khach_bom {
+  background: var(--danger-tint);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+.dash-chip.status-huy {
+  background: var(--surface-2);
+  color: var(--muted);
+  border-color: var(--border);
+}
+.dash-chip.status-hoan_tat {
+  background: var(--success-tint);
+  color: var(--success);
+  border-color: var(--success-border);
+}
+.dash-big-number {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+.dash-debtors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+.dash-debtors li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 14px;
+}
+.dash-debtors li:last-child {
+  border-bottom: none;
+}
+.dash-debtors a {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+.dash-debtors span {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.dash-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (max-width: 767px) {
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 720px) {
   .two-col {
