@@ -253,7 +253,7 @@ export default async function OrderDetailPage({
                         it.lineStatus !== "normal" ? "line-removed" : undefined
                       }
                     >
-                      <td>
+                      <td data-label="Tên hàng">
                         {it.productUrl ? (
                           <a
                             href={it.productUrl}
@@ -266,14 +266,18 @@ export default async function OrderDetailPage({
                           it.name
                         )}
                       </td>
-                      <td>{it.attributes ?? "—"}</td>
-                      <td className="num">{it.quantity}</td>
-                      <td className="num">{money2(it.unitPriceCny)}</td>
-                      <td className="num">
+                      <td data-label="Thuộc tính">{it.attributes ?? "—"}</td>
+                      <td className="num" data-label="SL">
+                        {it.quantity}
+                      </td>
+                      <td className="num" data-label="Đơn giá">
+                        {money2(it.unitPriceCny)}
+                      </td>
+                      <td className="num" data-label="Thành tiền">
                         {money2(it.quantity * it.unitPriceCny)}
                       </td>
                       {showLineActions && (
-                        <td>
+                        <td data-label="">
                           {it.lineStatus === "supplier_defect" ? (
                             <span className="badge status-su_co">Lỗi NCC</span>
                           ) : it.lineStatus === "returned" ? (

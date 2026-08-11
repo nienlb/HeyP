@@ -284,12 +284,12 @@ a {
   color: var(--brand-strong);
 }
 .type-nhap_kho {
-  background: #ecfdf3;
-  color: #027a48;
+  background: var(--success-tint);
+  color: var(--success);
 }
 .type-ban_tu_kho {
-  background: #fff6ed;
-  color: #c4320a;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
 }
 .badge-status {
   background: var(--brand-tint);
@@ -297,24 +297,24 @@ a {
   border: 1px solid var(--brand-tint-2);
 }
 .status-su_co {
-  background: #fef3f2;
-  color: #b42318;
-  border-color: #fecdca;
+  background: var(--danger-tint);
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 .status-khach_bom {
-  background: #fef3f2;
+  background: var(--danger-tint);
   color: #7a271a;
-  border-color: #fda29b;
+  border-color: var(--danger-border);
 }
 .status-huy {
-  background: #f2f4f7;
-  color: #475467;
-  border-color: #e4e7ec;
+  background: var(--surface-2);
+  color: var(--muted);
+  border-color: var(--border);
 }
 .status-hoan_tat {
-  background: #ecfdf3;
-  color: #027a48;
-  border-color: #a6f4c5;
+  background: var(--success-tint);
+  color: var(--success);
+  border-color: var(--success-border);
 }
 
 /* ---------- Order list ---------- */
@@ -384,8 +384,8 @@ a {
 }
 .attention-item .order-row {
   flex: 1;
-  border-color: #fecdca;
-  background: #fffbfa;
+  border-color: var(--danger-border);
+  background: var(--danger-tint);
 }
 .attention-status {
   font-size: 12px;
@@ -438,10 +438,10 @@ a {
   gap: 8px;
 }
 .warn-flag {
-  background: #fffaeb;
-  border: 1px solid #fedf89;
-  color: #b54708;
-  border-radius: 8px;
+  background: var(--warning-tint);
+  border: 1px solid var(--warning-border);
+  color: var(--warning);
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 14px;
   margin-bottom: 14px;
@@ -598,13 +598,13 @@ a {
 }
 .flag-reason {
   font-size: 12px;
-  color: #b54708;
+  color: var(--warning);
   margin-top: 2px;
 }
 
 /* ---------- Lãi/lỗ ---------- */
 .pos {
-  color: #027a48;
+  color: var(--success);
 }
 .neg {
   color: var(--danger);
@@ -785,8 +785,8 @@ a {
   gap: 8px;
 }
 .pkg-item.pkg-flag {
-  border-color: #fecdca;
-  background: #fffbfa;
+  border-color: var(--danger-border);
+  background: var(--danger-tint);
 }
 .pkg-head {
   display: flex;
@@ -832,14 +832,14 @@ a {
 
 /* ---------- Đọc ảnh Zalo (AI) ---------- */
 .zalo-reader {
-  border: 1px solid #d6bbfb;
-  background: linear-gradient(180deg, #fbf7ff 0%, #fff 100%);
+  border: 1px solid var(--brand-tint-2);
+  background: linear-gradient(180deg, var(--brand-tint) 0%, var(--surface) 100%);
 }
 .zalo-info {
-  background: #ecfdf3;
-  border: 1px solid #a6f4c5;
-  color: #027a48;
-  border-radius: 8px;
+  background: var(--success-tint);
+  border: 1px solid var(--success-border);
+  color: var(--success);
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 14px;
 }
@@ -1144,6 +1144,61 @@ a {
 @media (max-width: 767px) {
   .dash-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Bảng → thẻ xếp dọc trên mobile ---------- */
+@media (max-width: 767px) {
+  .tbl thead {
+    display: none;
+  }
+  .tbl,
+  .tbl tbody,
+  .tbl tr,
+  .tbl td {
+    display: block;
+    width: 100%;
+  }
+  .tbl tr {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 10px;
+    padding: 4px 12px;
+    background: var(--surface);
+  }
+  .tbl tr:last-child {
+    margin-bottom: 0;
+  }
+  .tbl td {
+    border: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px 0;
+    text-align: right;
+    border-bottom: 1px dashed var(--border);
+  }
+  .tbl td:last-child {
+    border-bottom: none;
+  }
+  .tbl td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+    flex-shrink: 0;
+  }
+  .tbl td:not([data-label]),
+  .tbl td[data-label=""] {
+    justify-content: flex-end;
+  }
+  .tbl td:not([data-label])::before,
+  .tbl td[data-label=""]::before {
+    content: none;
+  }
+  .tbl .num {
+    text-align: right;
   }
 }
 
