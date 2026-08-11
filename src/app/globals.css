@@ -1,12 +1,40 @@
 :root {
-  --bg: #f6f7f9;
-  --card: #ffffff;
-  --border: #e3e6ea;
-  --text: #1a1d21;
-  --muted: #6b7280;
-  --brand: #d92d20;
-  --brand-hover: #b42318;
-  --danger: #d92d20;
+  /* Thương hiệu — navy từ logo HeyP */
+  --brand: #0e5a87;
+  --brand-strong: #0a4468;
+  --brand-hover: #0a4468; /* alias tương thích code cũ */
+  --brand-tint: #e8f1f7;
+  --brand-tint-2: #d3e5f1;
+  --on-brand: #ffffff;
+
+  /* Trung tính (xám mát hợp navy) */
+  --bg: #f6f8fa;
+  --surface: #ffffff;
+  --card: #ffffff; /* alias tương thích */
+  --surface-2: #f1f4f7;
+  --border: #e2e8ef;
+  --border-strong: #cfd8e2;
+  --text: #16202b;
+  --muted: #5a6b7b;
+  --text-subtle: #8a98a6;
+
+  /* Ngữ nghĩa */
+  --danger: #dc2a25;
+  --danger-tint: #fef2f2;
+  --danger-border: #fecdca;
+  --warning: #b7791f;
+  --warning-tint: #fff7e6;
+  --warning-border: #fedf89;
+  --success: #1f9d57;
+  --success-tint: #eaf7ef;
+  --success-border: #a6f4c5;
+
+  /* Hình khối & độ nổi */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(16, 32, 43, 0.06);
+  --shadow-md: 0 6px 20px rgba(16, 32, 43, 0.1);
 }
 
 * {
@@ -36,10 +64,11 @@ a {
 }
 
 .card {
-  background: var(--card);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   padding: 24px;
+  box-shadow: var(--shadow-sm);
 }
 
 .btn {
@@ -47,19 +76,38 @@ a {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: none;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   font-size: 15px;
   font-weight: 600;
   padding: 10px 16px;
   cursor: pointer;
   text-decoration: none;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .btn:hover {
-  background: var(--brand-hover);
+  background: var(--brand-strong);
+}
+
+.btn:active {
+  transform: translateY(0.5px);
+}
+
+.btn-outline {
+  background: var(--surface);
+  color: var(--brand);
+  border-color: var(--border-strong);
+}
+
+.btn-outline:hover {
+  background: var(--brand-tint);
+  border-color: var(--brand);
 }
 
 .btn-ghost {
@@ -69,7 +117,7 @@ a {
 }
 
 .btn-ghost:hover {
-  background: var(--bg);
+  background: var(--surface-2);
 }
 
 .field {
@@ -87,10 +135,10 @@ a {
 
 .field input {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 15px;
-  background: #fff;
+  background: var(--surface);
   color: var(--text);
 }
 
@@ -101,10 +149,10 @@ a {
 }
 
 .error {
-  background: #fef3f2;
-  border: 1px solid #fecdca;
+  background: var(--danger-tint);
+  border: 1px solid var(--danger-border);
   color: var(--danger);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 14px;
   margin-bottom: 14px;
@@ -156,12 +204,12 @@ a {
   border-radius: 7px;
 }
 .btn-warn {
-  background: #fff;
-  color: var(--brand);
-  border: 1px solid #fecdca;
+  background: var(--surface);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
 }
 .btn-warn:hover {
-  background: #fef3f2;
+  background: var(--danger-tint);
 }
 
 /* ---------- Page layout ---------- */
@@ -216,8 +264,8 @@ a {
   white-space: nowrap;
 }
 .badge-type {
-  background: #eef2ff;
-  color: #3538cd;
+  background: var(--brand-tint);
+  color: var(--brand-strong);
 }
 .type-nhap_kho {
   background: #ecfdf3;
@@ -228,9 +276,9 @@ a {
   color: #c4320a;
 }
 .badge-status {
-  background: #eff8ff;
-  color: #175cd3;
-  border: 1px solid #b2ddff;
+  background: var(--brand-tint);
+  color: var(--brand-strong);
+  border: 1px solid var(--brand-tint-2);
 }
 .status-su_co {
   background: #fef3f2;
@@ -267,7 +315,7 @@ a {
   gap: 8px;
 }
 .attention h2 {
-  color: var(--brand);
+  color: var(--danger);
 }
 .status-group .count {
   color: var(--muted);
@@ -511,9 +559,9 @@ a {
   color: var(--muted);
 }
 .item-row .it-del:hover {
-  background: #fef3f2;
-  color: var(--brand);
-  border-color: #fecdca;
+  background: var(--danger-tint);
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 .form-actions {
   display: flex;
@@ -541,7 +589,7 @@ a {
   color: #027a48;
 }
 .neg {
-  color: var(--brand);
+  color: var(--danger);
 }
 
 /* ---------- Dòng đã tách ---------- */
@@ -650,7 +698,7 @@ a {
 }
 .dropzone.over {
   border-color: var(--brand);
-  background: #fff6f5;
+  background: var(--brand-tint);
   color: var(--brand);
 }
 .gallery {
