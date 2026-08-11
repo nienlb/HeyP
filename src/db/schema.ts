@@ -17,6 +17,7 @@ import { ORDER_STATUSES, ORDER_TYPES } from "@/lib/order-status";
 import { PHOTO_LABELS } from "@/lib/photos";
 
 export const LINE_STATUSES = ["normal", "supplier_defect", "returned"] as const;
+export const SHIP_STATUSES = ["unknown", "free", "set"] as const;
 export const PACKAGE_MODES = ["auto", "manual"] as const;
 export const INVENTORY_SOURCES = [
   "active", // Nhập chủ động
@@ -47,9 +48,7 @@ export const customers = sqliteTable("customers", {
 // 2) Đơn hàng
 export const orders = sqliteTable("orders", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  customerId: integer("customer_id")
-    .notNull()
-    .references(() => customers.id),
+  customerId: integer("customer_id").references(() => customers.id),
   orderType: text("order_type", { enum: ORDER_TYPES }).notNull(),
   status: text("status", { enum: ORDER_STATUSES })
     .notNull()
@@ -57,7 +56,7 @@ export const orders = sqliteTable("orders", {
   // Khối tiền — CNY & tỷ giá là số thực; các khoản VND là số nguyên đồng.
   exchangeRate: real("exchange_rate").notNull().default(0),
   goodsTotalCny: real("goods_total_cny").notNull().default(0),
-  serviceFee: integer("service_fee").notNull().default(0),
+  marginVnd: integer("margin_vnd").notNull().default(0),
   shippingFee: integer("shipping_fee").notNull().default(0),
   deposit: integer("deposit").notNull().default(0),
   amountDue: integer("amount_due").notNull().default(0),
@@ -68,6 +67,10 @@ export const orders = sqliteTable("orders", {
   statusChangedAt: integer("status_changed_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
+  quotedTotalVnd: integer("quoted_total_vnd").notNull().default(0),
+  shipStatus: text("ship_status", { enum: SHIP_STATUSES })
+    .notNull()
+    .default("unknown"),
 });
 
 // 3) Sản phẩm trong đơn
@@ -85,6 +88,10 @@ export const orderItems = sqliteTable("order_items", {
   lineStatus: text("line_status", { enum: LINE_STATUSES })
     .notNull()
     .default("normal"),
+  marginVnd: integer("margin_vnd").notNull().default(0),
+  costConfirmed: integer("cost_confirmed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   createdAt: createdAt(),
 });
 
@@ -160,4 +167,10 @@ export const orderStatusHistory = sqliteTable("order_status_history", {
     .notNull()
     .default(sql`(unixepoch())`),
   note: text("note"),
+});
+
+// 7) Tham số nghiệp vụ đổi được lúc chạy (tỷ giá bán, lời mặc định).
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
 });

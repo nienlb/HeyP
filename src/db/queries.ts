@@ -96,7 +96,7 @@ export function createOrder(input: NewOrderInput): number {
       .prepare(
         `INSERT INTO orders
            (customer_id, order_type, status, exchange_rate, goods_total_cny,
-            service_fee, shipping_fee, deposit, amount_due, note)
+            margin_vnd, shipping_fee, deposit, amount_due, note)
          VALUES (?, ?, 'cho_bao_gia', ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
@@ -149,11 +149,13 @@ export function createOrder(input: NewOrderInput): number {
 export async function getOrderDetail(id: number) {
   const order = await db.select().from(orders).where(eq(orders.id, id)).get();
   if (!order) return null;
-  const customer = await db
-    .select()
-    .from(customers)
-    .where(eq(customers.id, order.customerId))
-    .get();
+  const customer = order.customerId
+    ? await db
+        .select()
+        .from(customers)
+        .where(eq(customers.id, order.customerId))
+        .get()
+    : null;
   const items = await db
     .select()
     .from(orderItems)
@@ -439,11 +441,11 @@ function _addStock(
 function _recomputeOrderMoney(orderId: number): void {
   const order = sqlite
     .prepare(
-      "SELECT exchange_rate, service_fee, shipping_fee, deposit FROM orders WHERE id = ?",
+      "SELECT exchange_rate, margin_vnd, shipping_fee, deposit FROM orders WHERE id = ?",
     )
     .get(orderId) as {
     exchange_rate: number;
-    service_fee: number;
+    margin_vnd: number;
     shipping_fee: number;
     deposit: number;
   };
@@ -459,7 +461,7 @@ function _recomputeOrderMoney(orderId: number): void {
   const money = computeOrderMoney({
     goodsTotalCny,
     exchangeRate: order.exchange_rate,
-    serviceFee: order.service_fee,
+    serviceFee: order.margin_vnd,
     shippingFee: order.shipping_fee,
     deposit: order.deposit,
   });
@@ -829,7 +831,7 @@ export function sellFromStock(input: SellFromStockInput): SellResult {
         .prepare(
           `INSERT INTO orders
              (customer_id, order_type, status, exchange_rate, goods_total_cny,
-              service_fee, shipping_fee, deposit, amount_due, sale_cost, status_changed_at)
+              margin_vnd, shipping_fee, deposit, amount_due, sale_cost, status_changed_at)
            VALUES (?, 'ban_tu_kho', 'da_giao_khach', 1, ?, 0, 0, ?, ?, ?, unixepoch())`,
         )
         .run(

@@ -36,7 +36,7 @@ export default async function OrderDetailPage({
   const money = computeOrderMoney({
     goodsTotalCny: order.goodsTotalCny,
     exchangeRate: order.exchangeRate,
-    serviceFee: order.serviceFee,
+    serviceFee: order.marginVnd,
     shippingFee: order.shippingFee,
     deposit: order.deposit,
   });
@@ -60,7 +60,7 @@ export default async function OrderDetailPage({
       unitPriceCny: it.unitPriceCny,
     })),
     exchangeRate: order.exchangeRate,
-    serviceFee: order.serviceFee,
+    serviceFee: order.marginVnd,
     shippingFee: order.shippingFee,
     deposit: order.deposit,
   });
@@ -180,7 +180,7 @@ export default async function OrderDetailPage({
                 </div>
                 <div className="kv">
                   <span>Phí dịch vụ</span>
-                  <span>{formatVnd(order.serviceFee)}</span>
+                  <span>{formatVnd(order.marginVnd)}</span>
                 </div>
                 <div className="kv">
                   <span>Phí ship</span>

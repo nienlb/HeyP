@@ -16,7 +16,10 @@ const dbPath = resolve(
 mkdirSync(dirname(dbPath), { recursive: true });
 
 const db = new DatabaseSync(dbPath);
-db.exec("PRAGMA foreign_keys = ON;");
+// Tắt khoá ngoại trong lúc migrate: quy trình dựng lại bảng của SQLite
+// (CREATE new → COPY → DROP old → RENAME) cần điều này. PRAGMA không có
+// tác dụng bên trong transaction nên phải đặt ở đây, ngoài mọi BEGIN.
+db.exec("PRAGMA foreign_keys = OFF;");
 db.exec(
   `CREATE TABLE IF NOT EXISTS _migrations (
      name TEXT PRIMARY KEY,
@@ -53,6 +56,15 @@ for (const file of files) {
     process.exit(1);
   }
 }
+
+// Migrate xong: bật lại và soát toàn bộ khoá ngoại. Dựng lại bảng sai sẽ
+// để lại con mồ côi — thà hỏng ầm ĩ ở đây còn hơn âm thầm trong dữ liệu thật.
+const violations = db.prepare("PRAGMA foreign_key_check").all();
+if (violations.length > 0) {
+  console.error("✗ Vi phạm khoá ngoại sau khi migrate:", violations);
+  process.exit(1);
+}
+db.exec("PRAGMA foreign_keys = ON;");
 
 console.log(
   count === 0 ? "Không có migration mới." : `Xong: áp dụng ${count} migration.`,
