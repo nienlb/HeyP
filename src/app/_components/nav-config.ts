@@ -13,6 +13,7 @@ export const NAV_ITEMS: NavItem[] = [
 /** Mục phụ — sidebar hiện thêm; mobile gom vào sheet "Thêm". */
 export const MORE_ITEMS: NavItem[] = [
   { href: "/tracking", label: "Tracking", icon: "tracking" },
+  { href: "/finance", label: "Tài chính", icon: "finance" },
   { href: "/settings", label: "Cài đặt", icon: "settings" },
   { href: "/backup", label: "Sao lưu", icon: "backup" },
 ];

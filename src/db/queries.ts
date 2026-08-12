@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { db, sqlite } from "./index";
 import {
   customers,
+  expenses,
   inventory,
   orderItems,
   orderPackages,
@@ -636,6 +637,55 @@ export function deleteLedgerEntry(id: number): LineActionResult {
         "Chỉ xoá được đợt nạp. Dòng mua hàng sửa bằng cách ghi điều chỉnh.",
     };
   sqlite.prepare("DELETE FROM cny_ledger WHERE id = ?").run(id);
+  return { ok: true };
+}
+
+// ---------- Sổ chi phí (v3-B) ----------
+
+export async function listExpenses(limit = 100) {
+  return db
+    .select()
+    .from(expenses)
+    .orderBy(desc(expenses.spentAt))
+    .limit(limit);
+}
+
+export type AddExpenseInput = {
+  spentAt: Date;
+  category: ExpenseCategory;
+  amountVnd: number;
+  orderId?: number | null;
+  method: PaymentMethod;
+  note?: string | null;
+};
+
+export function addExpense(input: AddExpenseInput): LineActionResult {
+  if (!(input.amountVnd > 0))
+    return { ok: false, reason: "Số tiền phải lớn hơn 0" };
+  if (input.orderId != null) {
+    const exists = sqlite
+      .prepare("SELECT 1 AS x FROM orders WHERE id = ?")
+      .get(input.orderId);
+    if (!exists) return { ok: false, reason: "Đơn không tồn tại" };
+  }
+  sqlite
+    .prepare(
+      `INSERT INTO expenses (spent_at, category, amount_vnd, order_id, method, note)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      Math.floor(input.spentAt.getTime() / 1000),
+      input.category,
+      Math.round(input.amountVnd),
+      input.orderId ?? null,
+      input.method,
+      input.note ?? null,
+    );
+  return { ok: true };
+}
+
+export function deleteExpense(id: number): LineActionResult {
+  sqlite.prepare("DELETE FROM expenses WHERE id = ?").run(id);
   return { ok: true };
 }
 

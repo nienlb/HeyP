@@ -1429,3 +1429,13 @@ a {
   font-size: 0.82rem;
   font-family: inherit;
 }
+
+.warn-banner {
+  background: var(--warning-tint);
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
