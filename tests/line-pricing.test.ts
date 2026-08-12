@@ -1,0 +1,124 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  allocateMargins,
+  lineCostVnd,
+  lineSellVnd,
+  orderProfit,
+  quotedTotalFromLines,
+  redistribute,
+  suggestCnyFromTotal,
+  type PricingLine,
+} from "../src/lib/line-pricing.ts";
+
+const line = (unitPriceCny: number, quantity = 1, marginVnd = 0): PricingLine => ({
+  quantity,
+  unitPriceCny,
+  marginVnd,
+});
+
+test("giá vốn và giá bán của một dòng", () => {
+  const l = line(60, 1, 170000);
+  assert.equal(lineCostVnd(l, 4000), 240000);
+  assert.equal(lineSellVnd(l, 4000), 410000);
+});
+
+test("đơn 1 món: lời là phần dư, bị Total ghim cứng", () => {
+  // Total 410.000, 60¥ × 4000 = 240.000 → lời 170.000
+  const m = allocateMargins(410000, [line(60)], 4000, 170000);
+  assert.deepEqual(m, [170000]);
+});
+
+test("đơn 1 món: defaultMargin bị bỏ qua, Total luôn thắng", () => {
+  const m = allocateMargins(410000, [line(60)], 4000, 999999);
+  assert.deepEqual(m, [170000]);
+});
+
+test("đơn 2 món khớp đúng mức mặc định", () => {
+  // Total 820.000; 62¥+58¥ = 480.000 giá vốn → còn 340.000 = 170k × 2
+  const m = allocateMargins(820000, [line(62), line(58)], 4000, 170000);
+  assert.deepEqual(m, [170000, 170000]);
+});
+
+test("đơn 2 món lệch: phần thiếu chia theo tỷ trọng giá vốn", () => {
+  // 70¥ + 58¥ = 512.000 giá vốn → lời còn 308.000, thiếu 32.000 so với 340.000
+  const lines = [line(70), line(58)];
+  const m = allocateMargins(820000, lines, 4000, 170000);
+  assert.equal(m[0] + m[1], 308000);
+  // giá vốn 280.000 vs 232.000 → dòng đắt hơn gánh phần hụt nhiều hơn
+  assert.ok(m[0] < m[1], "dòng giá vốn cao hơn phải bị trừ lời nhiều hơn");
+});
+
+test("BẤT BIẾN: Σ giá bán món luôn đúng bằng Total, không lệch 1₫", () => {
+  const cases: [number, PricingLine[]][] = [
+    [410000, [line(60)]],
+    [820000, [line(70), line(58)]],
+    [999999, [line(33.33), line(11.11), line(7.77)]],
+    [1234567, [line(1.01, 3), line(99.99, 2), line(0.5, 7)]],
+    [500000, [line(0), line(0)]], // chưa nhập ¥
+  ];
+  for (const [total, lines] of cases) {
+    const margins = allocateMargins(total, lines, 4000, 170000);
+    const withMargins = lines.map((l, i) => ({ ...l, marginVnd: margins[i] }));
+    assert.equal(
+      quotedTotalFromLines(withMargins, 4000),
+      total,
+      `lệch ở Total ${total}`,
+    );
+  }
+});
+
+test("chưa nhập ¥ → toàn bộ Total nằm ở lời, chia đều", () => {
+  const m = allocateMargins(500000, [line(0), line(0)], 4000, 170000);
+  assert.deepEqual(m, [250000, 250000]);
+});
+
+test("¥ cao hơn Total → lời âm, không chặn", () => {
+  // 200¥ × 4000 = 800.000 > Total 410.000
+  const m = allocateMargins(410000, [line(200)], 4000, 170000);
+  assert.deepEqual(m, [-390000]);
+  assert.equal(orderProfit([line(200, 1, m[0])]), -390000);
+});
+
+test("kéo lời một dòng thì các dòng khác bù lại, Total giữ nguyên", () => {
+  const lines = [line(62, 1, 170000), line(58, 1, 170000)];
+  const m = redistribute(lines, 0, 120000, 820000, 4000);
+  assert.equal(m[0], 120000);
+  assert.equal(m[0] + m[1], 340000, "tổng lời không đổi");
+  const withMargins = lines.map((l, i) => ({ ...l, marginVnd: m[i] }));
+  assert.equal(quotedTotalFromLines(withMargins, 4000), 820000);
+});
+
+test("đơn 1 dòng: không kéo được, lời luôn là phần dư", () => {
+  const m = redistribute([line(60, 1, 170000)], 0, 50000, 410000, 4000);
+  assert.deepEqual(m, [170000], "Total ghim cứng, giá trị kéo bị bỏ qua");
+});
+
+test("suy ngược ¥ gợi ý từ Total", () => {
+  assert.equal(suggestCnyFromTotal(410000, 1, 4000, 170000), 60);
+  assert.equal(suggestCnyFromTotal(820000, 2, 4000, 170000), 60);
+});
+
+test("suy ngược ra số âm → kẹp về 0, không gợi ý bậy", () => {
+  assert.equal(suggestCnyFromTotal(100000, 1, 4000, 170000), 0);
+});
+
+test("suy ngược làm tròn 2 chữ số thập phân", () => {
+  // (500.000 − 170.000) / 4000 = 82,5
+  assert.equal(suggestCnyFromTotal(500000, 1, 4000, 170000), 82.5);
+});
+
+test("đơn bán từ kho: tỷ giá 1, giá vốn tính thẳng bằng VND", () => {
+  const l = line(300000, 1, 0);
+  assert.equal(lineCostVnd(l, 1), 300000);
+  assert.equal(lineSellVnd(l, 1), 300000);
+});
+
+test("số lượng > 1 nhân đúng", () => {
+  assert.equal(lineCostVnd(line(60, 3), 4000), 720000);
+});
+
+test("danh sách rỗng không làm vỡ", () => {
+  assert.deepEqual(allocateMargins(410000, [], 4000, 170000), []);
+  assert.equal(orderProfit([]), 0);
+});
