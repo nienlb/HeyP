@@ -92,6 +92,8 @@ export async function createOrderAction(
           attributes: String(it.attributes ?? "").trim() || null,
           quantity: Number(it.quantity) || 0,
           unitPriceCny: Number(it.unitPriceCny) || 0,
+          // Người gõ tay = đã xác nhận; số AI gợi ý thì form gửi false.
+          costConfirmed: it.costConfirmed === true,
         }))
         .filter((it) => it.name !== "");
     }
