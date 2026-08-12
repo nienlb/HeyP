@@ -40,104 +40,7 @@ export default async function FinancePage({
 
       {err && <div className="error">{err}</div>}
 
-      {/* Ví ¥ */}
-      <section className="card">
-        <h2 className="card-title">Ví ¥</h2>
-
-        {wallet.balance < 0 && (
-          <p className="warn-banner">
-            ⚠️ Ví ¥ đang âm ({wallet.balance}¥) — có đợt nạp nào chưa ghi?
-          </p>
-        )}
-
-        <div className="dash-big-number">
-          {wallet.balance.toLocaleString("vi-VN")}¥
-        </div>
-        <p className="muted" style={{ margin: "0 0 12px" }}>
-          ≈ {formatVnd(wallet.valueVnd)} · giá vốn bình quân{" "}
-          {Math.round(wallet.avgCost).toLocaleString("vi-VN")}₫/¥
-        </p>
-
-        <details style={{ marginBottom: 16 }}>
-          <summary className="btn btn-outline btn-sm" style={{ display: "inline-block" }}>
-            + Nạp ¥
-          </summary>
-          <form action={addTopupAction} className="stack-form" style={{ marginTop: 12 }}>
-            <label>
-              <span>Số tệ nhận (¥)</span>
-              <input type="number" name="cny" step="0.01" min="0" required />
-            </label>
-            <label>
-              <span>Số tiền trả (₫)</span>
-              <input type="number" name="vndPaid" step="1000" min="0" required />
-            </label>
-            <label>
-              <span>Ghi chú</span>
-              <input type="text" name="note" placeholder="tuỳ chọn" />
-            </label>
-            <button type="submit" className="btn">
-              Lưu
-            </button>
-          </form>
-        </details>
-
-        <div className="table-scroll">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Ngày</th>
-                <th>Loại</th>
-                <th className="num">¥</th>
-                <th className="num">VND trả</th>
-                <th className="num">Giá vốn chốt</th>
-                <th>Đơn</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {ledger.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="muted">
-                    Chưa có chuyển động nào.
-                  </td>
-                </tr>
-              ) : (
-                ledger.map((l) => (
-                  <tr key={l.id}>
-                    <td>{formatDate(new Date(l.createdAt * 1000))}</td>
-                    <td>{LEDGER_KIND_LABELS[l.kind]}</td>
-                    <td className="num">
-                      {l.cnyDelta > 0 ? "+" : ""}
-                      {l.cnyDelta.toLocaleString("vi-VN")}
-                    </td>
-                    <td className="num">
-                      {l.vndPaid != null ? formatVnd(l.vndPaid) : "—"}
-                    </td>
-                    <td className="num">
-                      {l.rateSnapshot != null
-                        ? `${l.rateSnapshot.toLocaleString("vi-VN")}₫/¥`
-                        : "—"}
-                    </td>
-                    <td>{l.orderId ? `#${l.orderId}` : "—"}</td>
-                    <td>
-                      {l.kind === "nap" && (
-                        <form action={deleteLedgerAction}>
-                          <input type="hidden" name="id" value={l.id} />
-                          <button type="submit" className="btn btn-sm btn-outline">
-                            Xoá
-                          </button>
-                        </form>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Chi phí */}
+      {/* Chi phí — dùng hàng ngày, ưu tiên lên trước */}
       <section className="card">
         <h2 className="card-title">Chi phí</h2>
 
@@ -233,6 +136,109 @@ export default async function FinancePage({
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* Ví ¥ — gọn, số liệu sát phải, chi tiết gấp trong <details> */}
+      <section className="card wallet-card">
+        <div className="wallet-head">
+          <h2 className="card-title" style={{ marginBottom: 0 }}>
+            Ví ¥
+          </h2>
+          <div className="wallet-figures">
+            <div className="wallet-balance">
+              {wallet.balance.toLocaleString("vi-VN")}¥
+            </div>
+            <div className="wallet-sub">
+              ≈ {formatVnd(wallet.valueVnd)} · giá vốn bq{" "}
+              {Math.round(wallet.avgCost).toLocaleString("vi-VN")}₫/¥
+            </div>
+          </div>
+        </div>
+
+        {wallet.balance < 0 && (
+          <p className="warn-banner">
+            ⚠️ Ví ¥ đang âm ({wallet.balance}¥) — có đợt nạp nào chưa ghi?
+          </p>
+        )}
+
+        <details>
+          <summary className="btn btn-outline btn-sm" style={{ display: "inline-block" }}>
+            + Nạp ¥ / xem sổ chuyển động
+          </summary>
+
+          <form action={addTopupAction} className="stack-form" style={{ marginTop: 12 }}>
+            <label>
+              <span>Số tệ nhận (¥)</span>
+              <input type="number" name="cny" step="0.01" min="0" required />
+            </label>
+            <label>
+              <span>Số tiền trả (₫)</span>
+              <input type="number" name="vndPaid" step="1000" min="0" required />
+            </label>
+            <label>
+              <span>Ghi chú</span>
+              <input type="text" name="note" placeholder="tuỳ chọn" />
+            </label>
+            <button type="submit" className="btn">
+              Lưu
+            </button>
+          </form>
+
+          <div className="table-scroll" style={{ marginTop: 16 }}>
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Ngày</th>
+                  <th>Loại</th>
+                  <th className="num">¥</th>
+                  <th className="num">VND trả</th>
+                  <th className="num">Giá vốn chốt</th>
+                  <th>Đơn</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {ledger.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="muted">
+                      Chưa có chuyển động nào.
+                    </td>
+                  </tr>
+                ) : (
+                  ledger.map((l) => (
+                    <tr key={l.id}>
+                      <td>{formatDate(new Date(l.createdAt * 1000))}</td>
+                      <td>{LEDGER_KIND_LABELS[l.kind]}</td>
+                      <td className="num">
+                        {l.cnyDelta > 0 ? "+" : ""}
+                        {l.cnyDelta.toLocaleString("vi-VN")}
+                      </td>
+                      <td className="num">
+                        {l.vndPaid != null ? formatVnd(l.vndPaid) : "—"}
+                      </td>
+                      <td className="num">
+                        {l.rateSnapshot != null
+                          ? `${l.rateSnapshot.toLocaleString("vi-VN")}₫/¥`
+                          : "—"}
+                      </td>
+                      <td>{l.orderId ? `#${l.orderId}` : "—"}</td>
+                      <td>
+                        {l.kind === "nap" && (
+                          <form action={deleteLedgerAction}>
+                            <input type="hidden" name="id" value={l.id} />
+                            <button type="submit" className="btn btn-sm btn-outline">
+                              Xoá
+                            </button>
+                          </form>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </details>
       </section>
     </AppShell>
   );

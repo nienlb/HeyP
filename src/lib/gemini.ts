@@ -12,6 +12,19 @@ import {
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
+// Gemini đôi khi chậm hẳn (quan sát thực tế: có lần 130s, phần lớn dưới 6s —
+// nghẽn phía Google, không sửa được từ code). Giới hạn thời gian chờ để
+// người dùng không bị treo màn hình vô thời hạn; hết giờ thì rơi về nhập
+// tay bình thường, đúng nguyên tắc "AI là tiện ích, không phải chốt chặn".
+const TIMEOUT_MS = 45_000;
+
+function timeoutMessage(err: unknown): string {
+  if (err instanceof Error && err.name === "TimeoutError") {
+    return `Gemini phản hồi quá chậm (>${TIMEOUT_MS / 1000}s) — thử lại hoặc nhập tay.`;
+  }
+  return `Không gọi được Gemini: ${(err as Error).message}`;
+}
+
 export type ReadResult =
   | { ok: true; data: ZaloExtract }
   | { ok: false; error: string };
@@ -52,9 +65,10 @@ export async function readZaloImage(
           temperature: 0,
         },
       }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
-    return { ok: false, error: `Không gọi được Gemini: ${(err as Error).message}` };
+    return { ok: false, error: timeoutMessage(err) };
   }
 
   if (!res.ok) {
@@ -152,12 +166,10 @@ export async function readZaloBatch(
           temperature: 0,
         },
       }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
-    return {
-      ok: false,
-      error: `Không gọi được Gemini: ${(err as Error).message}`,
-    };
+    return { ok: false, error: timeoutMessage(err) };
   }
 
   if (!res.ok) return { ok: false, error: `Gemini trả lỗi ${res.status}` };

@@ -97,54 +97,63 @@ export function NewOrderForm({
    * mang cost_confirmed = false để không lẻn vào báo cáo như sự thật.
    */
   async function applyExtract(d: ZaloExtract) {
+    // GỘP, KHÔNG GHI ĐÈ: mỗi lần thả ảnh chỉ điền thêm những gì đọc được lần
+    // này. Ảnh thứ 2 (vd chỉ có thông tin khách, không có Total/sản phẩm)
+    // trước đây làm trắng xoá hết dữ liệu đã điền từ ảnh chốt đơn thả trước
+    // — lỗi mất dữ liệu thật, phát hiện khi dùng thật. Nguyên tắc sửa: chỉ
+    // set một trường khi lần đọc NÀY thực sự có giá trị cho trường đó.
+    const found: string[] = [];
+
     if (d.customerName || d.customerPhone || d.customerAddress) {
       setCustomerMode("new");
-      setNewCustomerName(d.customerName ?? "");
-      setNewCustomerPhone(d.customerPhone ?? "");
-      setNewCustomerAddress(d.customerAddress ?? "");
+      if (d.customerName) setNewCustomerName(d.customerName);
+      if (d.customerPhone) setNewCustomerPhone(d.customerPhone);
+      if (d.customerAddress) setNewCustomerAddress(d.customerAddress);
+      found.push("thông tin khách");
     }
-    setExchangeRate(String(defaultExchangeRate));
-    setQuotedTotal(d.totalVnd != null ? String(d.totalVnd) : "");
-    setDeposit(d.depositVnd != null ? String(d.depositVnd) : "");
+
+    if (d.totalVnd != null) {
+      setQuotedTotal(String(d.totalVnd));
+      found.push(`Total ${d.totalVnd.toLocaleString("vi-VN")}₫`);
+    }
+    if (d.depositVnd != null) {
+      setDeposit(String(d.depositVnd));
+      found.push(`Cọc ${d.depositVnd.toLocaleString("vi-VN")}₫`);
+    }
 
     // Kiểm shipUnknown TRƯỚC: Gemini có thể trả shipVnd:0 (không phải null)
     // ngay cả khi thật ra chưa biết ship — "+ ship" không kèm số trong ảnh.
-    // Dựa vào shipVnd != null một mình sẽ đọc nhầm 0₫ thành "đã biết, miễn phí".
-    if (d.shipUnknown) {
-      setShipStatus("unknown");
-      setShippingFee("");
-    } else if (d.shipFree) {
+    // shipUnknown hoặc ảnh này không nhắc gì tới ship → GIỮ NGUYÊN trạng
+    // thái ship hiện có, đừng ghi đè về "chưa biết".
+    if (d.shipFree) {
       setShipStatus("free");
       setShippingFee("0");
-    } else if (d.shipVnd != null) {
+      found.push("freeship");
+    } else if (!d.shipUnknown && d.shipVnd != null) {
       setShipStatus("set");
       setShippingFee(String(d.shipVnd));
-    } else {
-      setShipStatus("unknown");
-      setShippingFee("");
+      found.push(`ship ${d.shipVnd.toLocaleString("vi-VN")}₫`);
     }
 
-    if (d.items.length === 0) {
-      setItems([{ ...emptyItem }]);
-      return;
-    }
+    if (d.items.length > 0) {
+      // Gợi ý ¥: lịch sử trước, không có thì suy ngược từ Total — dùng Total
+      // ĐANG CÓ trên form (có thể đến từ một lần thả ảnh trước đó), không
+      // chỉ riêng Total của lần đọc này.
+      let fromHistory: (number | null)[] = d.items.map(() => null);
+      try {
+        fromHistory = await suggestCnyAction(d.items.map((it) => it.name));
+      } catch {
+        // Tra lịch sử hỏng thì vẫn còn cách suy ngược — không chặn.
+      }
+      const totalForFallback = d.totalVnd ?? num(quotedTotal);
+      const fallbackCny = suggestCnyFromTotal(
+        totalForFallback,
+        d.items.length,
+        defaultExchangeRate,
+        defaultMarginVnd,
+      );
 
-    // Gợi ý ¥: lịch sử trước, không có thì suy ngược từ Total.
-    let fromHistory: (number | null)[] = d.items.map(() => null);
-    try {
-      fromHistory = await suggestCnyAction(d.items.map((it) => it.name));
-    } catch {
-      // Tra lịch sử hỏng thì vẫn còn cách suy ngược — không chặn.
-    }
-    const fallbackCny = suggestCnyFromTotal(
-      d.totalVnd ?? 0,
-      d.items.length,
-      defaultExchangeRate,
-      defaultMarginVnd,
-    );
-
-    setItems(
-      d.items.map((it, i) => {
+      const newRows: ItemRow[] = d.items.map((it, i) => {
         const cny = fromHistory[i] ?? fallbackCny;
         return {
           name: it.name,
@@ -154,16 +163,21 @@ export function NewOrderForm({
           unitPriceCny: cny > 0 ? String(cny) : "",
           costConfirmed: false,
         };
-      }),
-    );
+      });
 
-    const names = d.items.map((i) => i.name).join(", ");
+      // Dòng sản phẩm hiện tại còn là dòng trống ban đầu → điền vào đó.
+      // Đã có dữ liệu thật (từ lần thả trước) → nối thêm, không xoá.
+      setItems((prev) => {
+        const untouched = prev.length === 1 && prev[0].name.trim() === "";
+        return untouched ? newRows : [...prev, ...newRows];
+      });
+      found.push(`sản phẩm: ${d.items.map((i) => i.name).join(", ")}`);
+    }
+
     setZaloInfo(
-      `Đã đọc: ${names || "(không rõ sản phẩm)"}${
-        d.totalVnd != null
-          ? ` · Total ${d.totalVnd.toLocaleString("vi-VN")}₫`
-          : ""
-      }${d.depositVnd != null ? ` · Cọc ${d.depositVnd.toLocaleString("vi-VN")}₫` : ""}`,
+      found.length > 0
+        ? `Đã đọc thêm: ${found.join(" · ")}`
+        : "Ảnh này không đọc được thông tin nào — kiểm tra lại bằng mắt hoặc nhập tay.",
     );
   }
 

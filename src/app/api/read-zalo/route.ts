@@ -5,8 +5,9 @@ import { join, resolve } from "node:path";
 import { getSession } from "@/lib/auth";
 import { config } from "@/lib/config";
 import { addPhoto } from "@/db/queries";
-import { extFromContentType, type PhotoLabel } from "@/lib/photos";
+import type { PhotoLabel } from "@/lib/photos";
 import { readZaloBatch } from "@/lib/gemini";
+import { downsizeImage } from "@/lib/image";
 import type { ImageKind } from "@/lib/zalo-extract";
 
 const MAX_BYTES = 15 * 1024 * 1024;
@@ -56,11 +57,17 @@ export async function POST(req: Request): Promise<Response> {
     files.map(async (f) => Buffer.from(await f.arrayBuffer())),
   );
 
+  // Downsize TRƯỚC khi gửi Gemini và lưu đĩa — ảnh gốc chụp điện thoại
+  // thường vài MB; downsize giảm cả thời gian gọi AI lẫn dung lượng lưu trữ.
+  const downsized = await Promise.all(
+    buffers.map((buf, i) => downsizeImage(buf, files[i].type)),
+  );
+
   // Gọi Gemini TRƯỚC khi lưu, để biết nhãn nào cho ảnh nào.
   const result = await readZaloBatch(
-    buffers.map((buf, i) => ({
-      base64: buf.toString("base64"),
-      mimeType: files[i].type,
+    downsized.map((d) => ({
+      base64: d.buffer.toString("base64"),
+      mimeType: d.mimeType,
     })),
   );
 
@@ -76,12 +83,8 @@ export async function POST(req: Request): Promise<Response> {
   const photos: { id: number; kind: ImageKind; name: string }[] = [];
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    const ext =
-      extFromContentType(file.type) ??
-      file.name.split(".").pop()?.toLowerCase() ??
-      "jpg";
-    const fname = `${Date.now()}-${randomBytes(6).toString("hex")}.${ext}`;
-    await writeFile(join(dir, fname), buffers[i]);
+    const fname = `${Date.now()}-${randomBytes(6).toString("hex")}.${downsized[i].ext}`;
+    await writeFile(join(dir, fname), downsized[i].buffer);
     const kind = kinds[i] ?? "san_pham";
     photos.push({
       id: addPhoto({ filePath: fname, label: LABEL_OF[kind] }),
