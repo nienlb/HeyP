@@ -2,7 +2,7 @@
 
 Ứng dụng nội bộ (2 người dùng) quản lý dịch vụ **order hộ hàng Trung Quốc** cho shop HeyP (bán giày/dép/thời trang): báo giá → chốt đơn → mua hộ → gom kho → vận chuyển về VN → giao khách → thu tiền. Kèm bán hàng tồn kho và đọc ảnh chốt đơn Zalo bằng AI.
 
-**Trạng thái:** MVP xong (Phase 0–7). **v2 xong** — giao diện "Boutique atelier" (navy + giấy ấm + camel + serif), sidebar (desktop) / bottom tab+FAB+sheet (mobile), màn Tổng quan. Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`. Logo: chưa có `public/logo.png` → đang dùng wordmark serif fallback (`src/lib/logo.ts` tự chuyển sang ảnh khi có file, không cần sửa code).
+**Trạng thái:** MVP xong (Phase 0–7). **v2 xong** — giao diện "Boutique atelier" (navy + giấy ấm + camel + serif), sidebar (desktop) / bottom tab+FAB+sheet (mobile), màn Tổng quan. Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`. **v3 xong** (A + B) — bóc lớp giá theo món (¥/giá vốn/lời tách riêng từng dòng sản phẩm), luồng nhập đơn 3 mảnh (ảnh chốt đơn + thông tin khách + ảnh sản phẩm), ví ¥, sổ chi phí, sổ thu tiền, 3 báo cáo tài chính. Spec: `docs/2026-08-11-heyp-v3a-gia-va-nhap-don-design.md`, `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`. Logo: chưa có `public/logo.png` → đang dùng wordmark serif fallback (`src/lib/logo.ts` tự chuyển sang ảnh khi có file, không cần sửa code).
 
 ## Stack
 
@@ -37,6 +37,13 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
 - **KHÔNG `rm data/app.sqlite` để reset** — DB đang có **dữ liệu thật** của Niên. Chỉ xoá chọn lọc bằng SQL.
 - **`.env` gitignored** (chứa `GEMINI_API_KEY`, `SESSION_SECRET`). Mọi cấu hình đọc từ env qua `src/lib/config.ts`. Mẫu ở `.env.example`.
 - **Backups & uploads** gitignored (`/backups/`, `/uploads/`).
+- **DB chạy `journal_mode=wal`** → dry-run migration KHÔNG được `cp data/app.sqlite` (bản sao có thể thiếu commit gần nhất). Dùng `VACUUM INTO`, cùng cách `src/lib/backup.ts` đang dùng.
+- **Driver `sqlite-proxy` (`src/db/index.ts`) có lỗi có sẵn:** `.get()` khi không tìm thấy hàng trả `{ rows: [] }` thay vì `undefined`, khiến `if (!row) notFound()` không hoạt động — mọi trang chi tiết (đơn, khách...) trả lỗi 500 thay vì 404 khi ID không tồn tại. Chưa sửa (ngoài phạm vi v3), xem task đã gắn cờ.
+- **Tiền v3-A:** `orders.service_fee` đã đổi tên thành `margin_vnd` và mang nghĩa **tổng lời** (= Σ `order_items.margin_vnd`). `quoted_total_vnd` là Total đã chốt với khách, **bất biến** và **không gồm ship**. Sửa ¥ thì lời được rải lại, Total giữ nguyên — luật này khoá bởi `tests/line-pricing.test.ts`.
+- **Tham số nghiệp vụ v3-A** (tỷ giá bán, lời mặc định) nằm ở bảng `settings`, không phải `.env` — đổi được lúc chạy, không cần khởi động lại app.
+- **Ví ¥ (v3-B):** số dư và giá vốn bq **không lưu trong DB** — chạy lại `cny_ledger` bằng `src/lib/cny-wallet.ts`. Đừng thêm cột `balance`. Dòng `chi` giữ `rate_snapshot` đã chốt cứng lúc mua; sửa giá ¥ sau khi mua thì **ghi dòng `dieu_chinh`**, không sửa dòng cũ.
+- **`orders.deposit` là số dẫn xuất** (v3-B) = Σ `payments`. Mọi thay đổi thu tiền phải đi qua `syncOrderDeposit` trong `src/db/queries.ts`, đừng UPDATE thẳng cột này.
+- **Báo cáo lãi tính theo ngày HOÀN TẤT** (v3-B), đọc từ `order_status_history` chứ không từ `orders.status_changed_at` (cột đó chỉ giữ lần đổi gần nhất).
 
 ## Nghiệp vụ cốt lõi (đừng phá)
 
@@ -61,4 +68,6 @@ Test bắt buộc phải xanh cho **công thức tiền** và **luật trạng t
 - Kế hoạch MVP: `docs/2026-08-10-heyp-system-implementation-plan.md`
 - Nghiệm thu MVP: `docs/2026-08-10-heyp-system-acceptance-checklist.md`
 - Mẫu chốt đơn Zalo thật: `docs/reference-heyp-chot-don-template.md`
-- Thiết kế v2 (đang làm): `docs/2026-08-11-heyp-v2-ui-redesign-design.md`
+- Thiết kế v2: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`
+- Thiết kế v3-A (giá & nhập đơn): `docs/2026-08-11-heyp-v3a-gia-va-nhap-don-design.md`, kế hoạch: `docs/2026-08-11-heyp-v3a-implementation-plan.md`
+- Thiết kế v3-B (tài chính): `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`, kế hoạch: `docs/2026-08-11-heyp-v3b-implementation-plan.md`
