@@ -1359,3 +1359,42 @@ a {
     width: 88px;
   }
 }
+
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.ok-banner {
+  background: var(--brand-tint);
+  border: 1px solid var(--brand-tint-2);
+  color: var(--brand-strong);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.stack-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.stack-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stack-form label span {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.stack-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font: inherit;
+}

@@ -5,16 +5,17 @@ import { Icon } from "./_components/icons";
 import {
   countOrdersByStatus,
   listCustomersWithTotals,
-  listOrders,
+  listOrdersWithGaps,
 } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import { STATUS_LABELS } from "@/lib/order-status";
+import { GAP_CODES, GAP_LABELS } from "@/lib/order-gaps";
 
 export default async function HomePage() {
   const session = await requireAuth();
 
   const [orders, statusCounts] = await Promise.all([
-    listOrders(),
+    listOrdersWithGaps(),
     countOrdersByStatus(),
   ]);
   const customers = listCustomersWithTotals();
@@ -30,6 +31,12 @@ export default async function HomePage() {
 
   const totalOutstanding = customers.reduce((s, c) => s + c.outstanding, 0);
   const topDebtors = customers.filter((c) => c.outstanding > 0).slice(0, 5);
+
+  const needInfo = orders.filter((o) => o.gaps.length > 0);
+  const gapCounts = GAP_CODES.map((code) => ({
+    code,
+    count: needInfo.filter((o) => o.gaps.includes(code)).length,
+  })).filter((g) => g.count > 0);
 
   return (
     <AppShell username={session.username}>
@@ -62,6 +69,27 @@ export default async function HomePage() {
                 </Link>
               ))}
             </div>
+          )}
+        </section>
+
+        {/* Cần bổ sung */}
+        <section className="card">
+          <h2 className="card-title">
+            Cần bổ sung <span className="count">{needInfo.length}</span>
+          </h2>
+          {needInfo.length === 0 ? (
+            <p className="muted">Không đơn nào thiếu thông tin 👍</p>
+          ) : (
+            <ul className="dash-debtors">
+              {gapCounts.map((g) => (
+                <li key={g.code}>
+                  <Link href={`/orders?gap=${g.code}`}>
+                    {GAP_LABELS[g.code]}
+                  </Link>
+                  <span>{g.count} đơn</span>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
 
