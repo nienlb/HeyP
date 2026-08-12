@@ -7,6 +7,8 @@ import {
   changeOrderStatus,
   createOrder,
   linkPhotoToOrder,
+  addPayment,
+  deletePayment,
   markLineDefect,
   returnLine,
   setShipFee,
@@ -277,4 +279,61 @@ export async function suggestCnyAction(
   const session = await getSession();
   if (!session) return names.map(() => null);
   return names.map((n) => suggestCnyFromHistory(n));
+}
+
+function parseDateInput(v: FormDataEntryValue | null): Date {
+  const s = String(v ?? "").trim();
+  if (s === "") return new Date();
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
+/** Ghi một khoản khách đã trả (cọc / thu nốt / hoàn trả). */
+export async function addPaymentAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = Number(formData.get("orderId"));
+  const kindRaw = String(formData.get("kind") ?? "thu_not");
+  const kind = (["coc", "thu_not", "hoan_tra"] as readonly string[]).includes(
+    kindRaw,
+  )
+    ? (kindRaw as "coc" | "thu_not" | "hoan_tra")
+    : "thu_not";
+  const methodRaw = String(formData.get("method") ?? "chuyen_khoan");
+  const method = (["chuyen_khoan", "tien_mat"] as readonly string[]).includes(
+    methodRaw,
+  )
+    ? (methodRaw as "chuyen_khoan" | "tien_mat")
+    : "chuyen_khoan";
+
+  const result = addPayment({
+    orderId,
+    amountVnd: num(formData.get("amountVnd")),
+    paidAt: parseDateInput(formData.get("paidAt")),
+    kind,
+    method,
+    note: String(formData.get("note") ?? "").trim() || null,
+  });
+
+  if (!result.ok)
+    redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  redirect(`/orders/${orderId}`);
+}
+
+export async function deletePaymentAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = Number(formData.get("orderId"));
+  const paymentId = Number(formData.get("paymentId"));
+  const result = deletePayment(paymentId, orderId);
+
+  if (!result.ok)
+    redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  redirect(`/orders/${orderId}`);
 }

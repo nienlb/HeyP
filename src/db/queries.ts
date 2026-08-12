@@ -9,6 +9,7 @@ import {
   orderStatusHistory,
   orders,
   packages,
+  payments,
   photos,
   settings,
 } from "./schema";
@@ -24,6 +25,13 @@ import {
   type GapCode,
   type ShipStatus,
 } from "@/lib/order-gaps";
+import type {
+  ExpenseCategory,
+  LedgerKind,
+  PaymentKind,
+  PaymentMethod,
+} from "@/lib/expenses";
+import { currentRate, replayLedger, walletValueVnd } from "@/lib/cny-wallet";
 import { getAdapter } from "@/lib/tracking";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import {
@@ -221,6 +229,17 @@ export function createOrder(input: NewOrderInput): number {
          VALUES (?, NULL, 'cho_bao_gia', ?, 'Tạo đơn')`,
       )
       .run(orderId, input.changedBy ?? null);
+
+    // Cọc đọc từ ảnh Zalo → một dòng thu tiền, không ghi thẳng vào
+    // orders.deposit nữa (deposit là số dẫn xuất — spec v3-B mục 3).
+    if (input.deposit > 0) {
+      sqlite
+        .prepare(
+          `INSERT INTO payments (order_id, amount_vnd, paid_at, kind, method, note)
+           VALUES (?, ?, unixepoch(), 'coc', 'chuyen_khoan', NULL)`,
+        )
+        .run(orderId, Math.round(input.deposit));
+    }
 
     sqlite.exec("COMMIT");
     return orderId;
@@ -843,6 +862,107 @@ export function updatePhotoLabel(photoId: number, label: PhotoLabel): void {
   sqlite
     .prepare("UPDATE photos SET label = ? WHERE id = ?")
     .run(label, photoId);
+}
+
+// ---------- Sổ thu tiền (v3-B) ----------
+
+export async function listPaymentsForOrder(orderId: number) {
+  return db
+    .select()
+    .from(payments)
+    .where(eq(payments.orderId, orderId))
+    .orderBy(payments.paidAt, payments.id);
+}
+
+/** Số tiền đề xuất cho khoản "thu nốt": đúng bằng phần còn phải thu. */
+export function suggestFinalPayment(orderId: number): number {
+  const row = sqlite
+    .prepare(
+      `SELECT o.quoted_total_vnd AS total, o.shipping_fee AS ship,
+              COALESCE((SELECT SUM(p.amount_vnd) FROM payments p
+                         WHERE p.order_id = o.id), 0) AS paid
+         FROM orders o WHERE o.id = ?`,
+    )
+    .get(orderId) as
+    | { total: number; ship: number; paid: number }
+    | undefined;
+  if (!row) return 0;
+  return row.total + row.ship - row.paid;
+}
+
+export type AddPaymentInput = {
+  orderId: number;
+  amountVnd: number;
+  paidAt: Date;
+  kind: PaymentKind;
+  method: PaymentMethod;
+  note?: string | null;
+};
+
+export function addPayment(input: AddPaymentInput): LineActionResult {
+  // Hoàn trả lưu số ÂM; các khoản thu phải dương.
+  const amount =
+    input.kind === "hoan_tra"
+      ? -Math.abs(Math.round(input.amountVnd))
+      : Math.round(input.amountVnd);
+  if (amount === 0) return { ok: false, reason: "Số tiền phải khác 0" };
+
+  sqlite.exec("BEGIN");
+  try {
+    sqlite
+      .prepare(
+        `INSERT INTO payments (order_id, amount_vnd, paid_at, kind, method, note)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.orderId,
+        amount,
+        Math.floor(input.paidAt.getTime() / 1000),
+        input.kind,
+        input.method,
+        input.note ?? null,
+      );
+    syncOrderDeposit(input.orderId);
+    sqlite.exec("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+export function deletePayment(id: number, orderId: number): LineActionResult {
+  sqlite.exec("BEGIN");
+  try {
+    sqlite
+      .prepare("DELETE FROM payments WHERE id = ? AND order_id = ?")
+      .run(id, orderId);
+    syncOrderDeposit(orderId);
+    sqlite.exec("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/**
+ * Đồng bộ orders.deposit từ sổ thu tiền rồi tính lại khối tiền của đơn.
+ * Gọi BÊN TRONG transaction đang mở.
+ */
+function syncOrderDeposit(orderId: number): void {
+  const row = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(amount_vnd), 0) AS paid FROM payments WHERE order_id = ?`,
+    )
+    .get(orderId) as { paid: number };
+
+  sqlite
+    .prepare("UPDATE orders SET deposit = ? WHERE id = ?")
+    .run(row.paid, orderId);
+
+  const order = readOrderMoneyRow(orderId);
+  recomputeOrderMoneyRow(orderId, order);
 }
 
 // ---------- Ba luồng ngoại lệ theo dòng sản phẩm ----------
