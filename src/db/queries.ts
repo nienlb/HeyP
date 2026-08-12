@@ -332,6 +332,23 @@ export function getPhoto(
     .get(id) as { id: number; file_path: string } | undefined;
 }
 
+/**
+ * Xoá một ảnh CHƯA GẮN ĐƠN (order_id IS NULL) — dùng khi thả nhầm ảnh ở màn
+ * tạo đơn từ Zalo, trước khi bấm Lưu đơn. Chặn xoá ảnh đã thuộc đơn thật để
+ * không lỡ tay mất bằng chứng chốt đơn của đơn khác.
+ *
+ * Chỉ xoá bản ghi DB, theo đúng khuôn của addPhoto (không đụng file vật lý)
+ * — nơi gọi có quyền I/O (route/action) tự xoá file bằng filePath trả về.
+ */
+export function deletePhoto(id: number): { filePath: string } | null {
+  const photo = sqlite
+    .prepare("SELECT file_path FROM photos WHERE id = ? AND order_id IS NULL")
+    .get(id) as { file_path: string } | undefined;
+  if (!photo) return null;
+  sqlite.prepare("DELETE FROM photos WHERE id = ?").run(id);
+  return { filePath: photo.file_path };
+}
+
 export async function listPhotosForOrder(orderId: number) {
   return db
     .select()

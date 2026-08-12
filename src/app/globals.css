@@ -1385,6 +1385,25 @@ input.cny-suggested {
   font-size: 0.82rem;
   font-family: inherit;
 }
+.photo-kind .btn {
+  width: 100%;
+  margin-top: 6px;
+}
+/* Ảnh mới thả, chưa đọc — viền đứt để phân biệt với ảnh đã đọc/lưu. */
+.photo-kind-pending {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+.photo-pending-name {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 6px;
+}
 
 .warn-banner {
   background: var(--warning-tint);

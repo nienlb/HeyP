@@ -1,11 +1,15 @@
 "use server";
 
+import { unlink } from "node:fs/promises";
+import { basename, join, resolve } from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { config } from "@/lib/config";
 import {
   changeOrderStatus,
   createOrder,
+  deletePhoto,
   linkPhotoToOrder,
   addPayment,
   deletePayment,
@@ -336,4 +340,28 @@ export async function deletePaymentAction(formData: FormData): Promise<void> {
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}`);
+}
+
+/**
+ * Xoá một ảnh đã thả lên nhưng chưa gắn đơn nào — dùng khi thả nhầm ở màn
+ * tạo đơn từ Zalo (trước khi bấm Lưu đơn). Gọi trực tiếp từ client, không
+ * qua <form>, vì đơn chưa tồn tại nên không có orderId để redirect về.
+ */
+export async function deletePhotoAction(
+  photoId: number,
+): Promise<{ ok: boolean }> {
+  const session = await getSession();
+  if (!session) return { ok: false };
+
+  const removed = deletePhoto(photoId);
+  if (!removed) return { ok: false };
+
+  try {
+    const dir = resolve(process.cwd(), config.uploadsPath);
+    await unlink(join(dir, basename(removed.filePath)));
+  } catch {
+    // File đã mất/không tồn tại trên đĩa — DB đã sạch là đủ, không chặn.
+  }
+
+  return { ok: true };
 }
