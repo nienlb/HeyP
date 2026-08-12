@@ -10,6 +10,7 @@ import {
   markLineDefect,
   returnLine,
   setShipFee,
+  suggestCnyFromHistory,
   updateLineCost,
   updateLineMargin,
   type NewOrderItemInput,
@@ -262,4 +263,16 @@ export async function setShipFeeAction(formData: FormData): Promise<void> {
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}`);
+}
+
+/**
+ * Tra giá ¥ gợi ý cho danh sách tên món (đã từng order thì lấy lần gần nhất
+ * đã xác nhận). Trả null cho món chưa từng bán — form sẽ suy ngược từ Total.
+ */
+export async function suggestCnyAction(
+  names: string[],
+): Promise<(number | null)[]> {
+  const session = await getSession();
+  if (!session) return names.map(() => null);
+  return names.map((n) => suggestCnyFromHistory(n));
 }
