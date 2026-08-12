@@ -6,7 +6,13 @@ import { CopyButton } from "../../_components/copy-button";
 import { PhotoUpload } from "../../_components/photo-upload";
 import { PhotoGallery } from "../../_components/photo-gallery";
 import { changeStatusAction, lineExceptionAction } from "../actions";
-import { getOrderDetail, getPackagesForOrder, getSettings } from "@/db/queries";
+import {
+  getOrderDetail,
+  getPackagesForOrder,
+  getSettings,
+  suggestFinalPayment,
+} from "@/db/queries";
+import { PaymentsBlock } from "./payments-block";
 import { computeOrderMoney } from "@/lib/money";
 import { buildQuoteText, formatCny, formatDateTime, formatVnd } from "@/lib/format";
 import {
@@ -33,7 +39,7 @@ export default async function OrderDetailPage({
   const detail = await getOrderDetail(orderId);
   if (!detail || !detail.order) notFound();
 
-  const { order, customer, items, history, photos } = detail;
+  const { order, customer, items, history, photos, payments } = detail;
   const orderPackages = getPackagesForOrder(orderId);
   const money = computeOrderMoney({
     goodsTotalCny: order.goodsTotalCny,
@@ -280,6 +286,14 @@ export default async function OrderDetailPage({
             shipStatus={order.shipStatus}
           />
         )}
+
+        <PaymentsBlock
+          orderId={order.id}
+          rows={payments}
+          quotedTotalVnd={order.quotedTotalVnd}
+          shippingFee={order.shippingFee}
+          suggestedFinal={suggestFinalPayment(order.id)}
+        />
 
         {/* Sản phẩm */}
         <section className="card">

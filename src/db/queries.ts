@@ -274,7 +274,15 @@ export async function getOrderDetail(id: number) {
     .where(eq(orderStatusHistory.orderId, id))
     .orderBy(desc(orderStatusHistory.changedAt), desc(orderStatusHistory.id));
   const orderPhotos = await listPhotosForOrder(id);
-  return { order, customer, items, history, photos: orderPhotos };
+  const orderPayments = await listPaymentsForOrder(id);
+  return {
+    order,
+    customer,
+    items,
+    history,
+    photos: orderPhotos,
+    payments: orderPayments,
+  };
 }
 
 // ---------- Ảnh ----------

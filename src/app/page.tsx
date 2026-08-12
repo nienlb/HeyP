@@ -4,12 +4,15 @@ import { AppShell } from "./_components/app-shell";
 import { Icon } from "./_components/icons";
 import {
   countOrdersByStatus,
+  getPnlData,
+  getWallet,
   listCustomersWithTotals,
   listOrdersWithGaps,
 } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import { STATUS_LABELS } from "@/lib/order-status";
 import { GAP_CODES, GAP_LABELS } from "@/lib/order-gaps";
+import { computePnl } from "@/lib/pnl";
 
 export default async function HomePage() {
   const session = await requireAuth();
@@ -37,6 +40,10 @@ export default async function HomePage() {
     code,
     count: needInfo.filter((o) => o.gaps.includes(code)).length,
   })).filter((g) => g.count > 0);
+
+  const wallet = getWallet();
+  const now = new Date();
+  const pnl = computePnl(getPnlData(now.getFullYear(), now.getMonth() + 1));
 
   return (
     <AppShell username={session.username}>
@@ -133,6 +140,41 @@ export default async function HomePage() {
               ))}
             </ul>
           )}
+        </section>
+
+        {/* Ví ¥ */}
+        <section className="card">
+          <h2 className="card-title">Ví ¥</h2>
+          <div
+            className={`dash-big-number ${wallet.balance < 0 ? "profit-negative" : ""}`}
+          >
+            {wallet.balance.toLocaleString("vi-VN")}¥
+          </div>
+          <p className="muted" style={{ margin: "0 0 12px" }}>
+            ≈ {formatVnd(wallet.valueVnd)} · giá vốn bq{" "}
+            {Math.round(wallet.avgCost).toLocaleString("vi-VN")}₫/¥
+          </p>
+          <Link href="/finance" className="btn btn-outline">
+            Xem ví
+          </Link>
+        </section>
+
+        {/* Lãi tháng này */}
+        <section className="card">
+          <h2 className="card-title">Lãi tháng này</h2>
+          <div
+            className={`dash-big-number ${pnl.netProfitVnd < 0 ? "profit-negative" : ""}`}
+          >
+            {formatVnd(pnl.netProfitVnd)}
+          </div>
+          {pnl.estimated.orderCount > 0 && (
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              gồm {pnl.estimated.orderCount} đơn còn ước tính
+            </p>
+          )}
+          <Link href="/reports" className="btn btn-outline">
+            Xem báo cáo
+          </Link>
         </section>
 
         {/* Tác vụ nhanh */}
