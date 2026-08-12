@@ -575,6 +575,70 @@ function _recomputeOrderMoney(orderId: number): void {
     .run(goodsTotalCny, money.amountDue, orderId);
 }
 
+// ---------- Ví ¥ (v3-B) ----------
+
+export function listLedger() {
+  return sqlite
+    .prepare(
+      `SELECT id, kind, cny_delta AS cnyDelta, vnd_paid AS vndPaid,
+              rate_snapshot AS rateSnapshot, order_id AS orderId, note,
+              created_at AS createdAt
+         FROM cny_ledger ORDER BY created_at, id`,
+    )
+    .all() as {
+    id: number;
+    kind: LedgerKind;
+    cnyDelta: number;
+    vndPaid: number | null;
+    rateSnapshot: number | null;
+    orderId: number | null;
+    note: string | null;
+    createdAt: number;
+  }[];
+}
+
+export function getWallet() {
+  const state = replayLedger(listLedger());
+  return { ...state, valueVnd: walletValueVnd(state) };
+}
+
+export function addTopup(input: {
+  cny: number;
+  vndPaid: number;
+  note?: string | null;
+}): LineActionResult {
+  if (!(input.cny > 0)) return { ok: false, reason: "Số tệ phải lớn hơn 0" };
+  if (!(input.vndPaid > 0))
+    return { ok: false, reason: "Số tiền trả phải lớn hơn 0" };
+
+  sqlite
+    .prepare(
+      `INSERT INTO cny_ledger (kind, cny_delta, vnd_paid, note)
+       VALUES ('nap', ?, ?, ?)`,
+    )
+    .run(input.cny, Math.round(input.vndPaid), input.note ?? null);
+  return { ok: true };
+}
+
+/**
+ * Chỉ cho xoá dòng 'nap' — dòng 'chi' sinh tự động từ trạng thái đơn.
+ * Sửa = xoá rồi nạp lại: số dư chạy lại từ sổ nên kết quả giống hệt.
+ */
+export function deleteLedgerEntry(id: number): LineActionResult {
+  const row = sqlite
+    .prepare("SELECT kind FROM cny_ledger WHERE id = ?")
+    .get(id) as { kind: LedgerKind } | undefined;
+  if (!row) return { ok: false, reason: "Không tìm thấy dòng sổ" };
+  if (row.kind !== "nap")
+    return {
+      ok: false,
+      reason:
+        "Chỉ xoá được đợt nạp. Dòng mua hàng sửa bằng cách ghi điều chỉnh.",
+    };
+  sqlite.prepare("DELETE FROM cny_ledger WHERE id = ?").run(id);
+  return { ok: true };
+}
+
 // ---------- Đổi trạng thái (kèm side-effect tồn kho) ----------
 
 export type ChangeStatusResult =
@@ -659,6 +723,19 @@ export function changeOrderStatus(
            WHERE id = ?`,
         )
         .run(`Từng bom hàng (đơn #${id})`, order.customer_id);
+    }
+
+    // Đã mua hàng TQ → trừ ví ¥ và CHỐT CỨNG giá vốn tại thời điểm này.
+    // Nạp ¥ đợt sau rẻ hơn không được làm đổi lãi/lỗ của đơn đã mua rồi.
+    // goods_total_cny = 0 (chưa nhập giá ¥) → không ghi dòng chi vô nghĩa.
+    if (to === "da_mua_tq" && order.goods_total_cny > 0) {
+      const rate = Math.round(currentRate(listLedger()));
+      sqlite
+        .prepare(
+          `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
+           VALUES ('chi', ?, ?, ?, ?)`,
+        )
+        .run(-order.goods_total_cny, rate, id, `Mua hàng đơn #${id}`);
     }
 
     sqlite.exec("COMMIT");
@@ -768,6 +845,33 @@ export function updateLineCost(
       "UPDATE order_items SET margin_vnd = ? WHERE id = ?",
     );
     rows.forEach((r, i) => stmt.run(margins[i], r.id));
+
+    // Đơn đã mua hàng rồi mà giá ¥ mới sửa → ghi dòng điều chỉnh bằng phần
+    // chênh vào ví. Sổ ví là append-only: không bao giờ sửa quá khứ.
+    const spent = sqlite
+      .prepare(
+        `SELECT COALESCE(SUM(-cny_delta), 0) AS cny
+           FROM cny_ledger WHERE order_id = ? AND kind IN ('chi','dieu_chinh')`,
+      )
+      .get(orderId) as { cny: number };
+
+    if (spent.cny > 0) {
+      const agg = sqlite
+        .prepare(
+          "SELECT COALESCE(SUM(quantity * unit_price_cny), 0) AS cny FROM order_items WHERE order_id = ?",
+        )
+        .get(orderId) as { cny: number };
+      const diff = agg.cny - spent.cny;
+      if (Math.abs(diff) > 0.0001) {
+        const rate = Math.round(currentRate(listLedger()));
+        sqlite
+          .prepare(
+            `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
+             VALUES ('dieu_chinh', ?, ?, ?, ?)`,
+          )
+          .run(-diff, rate, orderId, `Sửa giá ¥ đơn #${orderId}`);
+      }
+    }
 
     recomputeOrderMoneyRow(orderId, order);
     sqlite.exec("COMMIT");
