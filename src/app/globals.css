@@ -1274,8 +1274,11 @@ a {
 
 /* ===== v3-A: bóc lớp giá theo món & cờ cần bổ sung ===== */
 
-/* Giá ¥ do máy gợi ý — phải nhìn ra ngay là chưa được xác nhận. */
-.cny-suggested {
+/* Giá ¥ do máy gợi ý — phải nhìn ra ngay là chưa được xác nhận.
+   Chọn "input.cny-suggested" (không phải ".cny-suggested" đơn) để độ đặc
+   hiệu đủ thắng các luật ".item-row input" / ".tbl input" đang tô màu chữ
+   và nền riêng — nếu không thì chỉ có font-style sống sót, màu và nền bị đè. */
+input.cny-suggested {
   color: var(--muted);
   font-style: italic;
   background: var(--warning-tint);

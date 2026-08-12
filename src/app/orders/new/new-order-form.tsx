@@ -107,7 +107,13 @@ export function NewOrderForm({
     setQuotedTotal(d.totalVnd != null ? String(d.totalVnd) : "");
     setDeposit(d.depositVnd != null ? String(d.depositVnd) : "");
 
-    if (d.shipFree) {
+    // Kiểm shipUnknown TRƯỚC: Gemini có thể trả shipVnd:0 (không phải null)
+    // ngay cả khi thật ra chưa biết ship — "+ ship" không kèm số trong ảnh.
+    // Dựa vào shipVnd != null một mình sẽ đọc nhầm 0₫ thành "đã biết, miễn phí".
+    if (d.shipUnknown) {
+      setShipStatus("unknown");
+      setShippingFee("");
+    } else if (d.shipFree) {
       setShipStatus("free");
       setShippingFee("0");
     } else if (d.shipVnd != null) {
@@ -560,8 +566,15 @@ export function NewOrderForm({
                 placeholder="Đơn giá"
                 inputMode="decimal"
                 value={it.unitPriceCny}
-                onChange={(e) => updateItem(i, { unitPriceCny: e.target.value })}
-                className="it-price"
+                onChange={(e) =>
+                  updateItem(i, {
+                    unitPriceCny: e.target.value,
+                    // Sửa số = xác nhận giá vốn, không còn là gợi ý của máy.
+                    costConfirmed: true,
+                  })
+                }
+                title={it.costConfirmed ? undefined : "Giá gợi ý — sửa để xác nhận"}
+                className={`it-price${it.costConfirmed ? "" : " cny-suggested"}`}
               />
               <button
                 type="button"
