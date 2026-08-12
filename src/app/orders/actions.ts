@@ -9,15 +9,23 @@ import {
   linkPhotoToOrder,
   markLineDefect,
   returnLine,
+  setShipFee,
+  updateLineCost,
+  updateLineMargin,
   type NewOrderItemInput,
 } from "@/db/queries";
-import { validateLineItem, validateOrderMoney } from "@/lib/money";
+import {
+  sumLineItemsCny,
+  validateLineItem,
+  validateOrderMoney,
+} from "@/lib/money";
 import {
   ORDER_TYPES,
   ORDER_STATUSES,
   type OrderStatus,
   type OrderType,
 } from "@/lib/order-status";
+import type { ShipStatus } from "@/lib/order-gaps";
 
 function num(v: FormDataEntryValue | null): number {
   const n = Number(String(v ?? "").replace(/[,\s]/g, ""));
@@ -39,12 +47,21 @@ export async function createOrderAction(
     : "order_ho";
 
   const exchangeRate = num(formData.get("exchangeRate"));
-  const serviceFee = num(formData.get("serviceFee"));
   const shippingFee = num(formData.get("shippingFee"));
   const deposit = num(formData.get("deposit"));
   const note = String(formData.get("note") ?? "").trim() || null;
 
-  // Khách hàng: chọn có sẵn hoặc tạo mới.
+  const shipStatusRaw = String(formData.get("shipStatus") ?? "");
+  const shipStatus: ShipStatus = (
+    ["unknown", "free", "set"] as readonly string[]
+  ).includes(shipStatusRaw)
+    ? (shipStatusRaw as ShipStatus)
+    : shippingFee > 0
+      ? "set"
+      : "unknown";
+
+  // Khách hàng: chọn có sẵn hoặc tạo mới. ĐƯỢC PHÉP để trống —
+  // đơn tạo từ ảnh Zalo thường chưa có thông tin khách, cờ "thiếu khách" sẽ nhắc.
   const customerMode = String(formData.get("customerMode") ?? "existing");
   let customerId: number | null = null;
   let newCustomer: { name: string; phone?: string; address?: string } | null =
@@ -60,7 +77,6 @@ export async function createOrderAction(
     };
   } else {
     customerId = num(formData.get("customerId")) || null;
-    if (!customerId) return { error: "Chưa chọn khách hàng." };
   }
 
   // Sản phẩm.
@@ -92,10 +108,19 @@ export async function createOrderAction(
       };
   }
 
+  // Total đã chốt với khách (không gồm ship). Form gửi thẳng nếu có; form cũ
+  // chỉ có ô "lời" nên suy ra: Σ(¥ × tỷ giá) + lời.
+  const quotedRaw = formData.get("quotedTotalVnd");
+  const quotedTotalVnd =
+    quotedRaw !== null
+      ? num(quotedRaw)
+      : Math.round(sumLineItemsCny(items) * exchangeRate) +
+        num(formData.get("serviceFee"));
+
   const moneyErrors = validateOrderMoney({
     goodsTotalCny: 0,
     exchangeRate,
-    serviceFee,
+    serviceFee: 0,
     shippingFee,
     deposit,
   });
@@ -109,8 +134,9 @@ export async function createOrderAction(
       newCustomer,
       orderType,
       exchangeRate,
-      serviceFee,
+      quotedTotalVnd,
       shippingFee,
+      shipStatus,
       deposit,
       note,
       items,
@@ -182,5 +208,58 @@ export async function lineExceptionAction(formData: FormData): Promise<void> {
 
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/inventory");
+  redirect(`/orders/${orderId}`);
+}
+
+/** Nhập/sửa giá ¥ của một dòng — Total giữ nguyên, lời rải lại. */
+export async function updateLineCostAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = Number(formData.get("orderId"));
+  const itemId = Number(formData.get("itemId"));
+  const result = updateLineCost(orderId, itemId, num(formData.get("unitPriceCny")));
+
+  if (!result.ok)
+    redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  redirect(`/orders/${orderId}`);
+}
+
+/** Kéo lời của một dòng — các dòng khác bù lại. */
+export async function updateLineMarginAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = Number(formData.get("orderId"));
+  const itemId = Number(formData.get("itemId"));
+  const result = updateLineMargin(orderId, itemId, num(formData.get("marginVnd")));
+
+  if (!result.ok)
+    redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  revalidatePath(`/orders/${orderId}`);
+  redirect(`/orders/${orderId}`);
+}
+
+/** Nhập phí ship khi hàng về VN, hoặc đánh dấu freeship. */
+export async function setShipFeeAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = Number(formData.get("orderId"));
+  const raw = String(formData.get("shipStatus") ?? "set");
+  const shipStatus: ShipStatus = (
+    ["unknown", "free", "set"] as readonly string[]
+  ).includes(raw)
+    ? (raw as ShipStatus)
+    : "set";
+
+  const result = setShipFee(orderId, shipStatus, num(formData.get("shippingFee")));
+
+  if (!result.ok)
+    redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
   redirect(`/orders/${orderId}`);
 }

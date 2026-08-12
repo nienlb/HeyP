@@ -10,8 +10,20 @@ import {
   orders,
   packages,
   photos,
+  settings,
 } from "./schema";
 import type { PhotoLabel } from "@/lib/photos";
+import {
+  SETTING_KEYS,
+  parseSettings,
+  type AppSettings,
+} from "@/lib/settings";
+import { allocateMargins, redistribute } from "@/lib/line-pricing";
+import {
+  orderGaps,
+  type GapCode,
+  type ShipStatus,
+} from "@/lib/order-gaps";
 import { getAdapter } from "@/lib/tracking";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import {
@@ -32,6 +44,49 @@ import {
 import { config } from "@/lib/config";
 import { ageInDays } from "@/lib/format";
 
+// ---------- Tham số nghiệp vụ (bảng settings) ----------
+
+export function getSettings(): AppSettings {
+  const rows = sqlite.prepare("SELECT key, value FROM settings").all() as {
+    key: string;
+    value: string;
+  }[];
+  return parseSettings(rows);
+}
+
+export function saveSettings(next: AppSettings): void {
+  const stmt = sqlite.prepare(
+    `INSERT INTO settings(key, value) VALUES(?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+  );
+  // Dựng chuỗi trong JS: node:sqlite bind số JS thành REAL → "4000.0" trong DB.
+  stmt.run(SETTING_KEYS.sellRate, String(next.sellRate));
+  stmt.run(SETTING_KEYS.defaultMarginVnd, String(next.defaultMarginVnd));
+}
+
+/**
+ * Gợi ý giá ¥ cho món đã từng order: lấy lần gần nhất ĐÃ xác nhận giá vốn.
+ * Khớp tên chính xác sau khi chuẩn hoá (bỏ khoảng trắng thừa, không phân biệt
+ * hoa thường). KHÔNG đoán theo tên gần giống — gợi ý sai âm thầm còn tệ hơn
+ * không gợi ý.
+ */
+export function suggestCnyFromHistory(productName: string): number | null {
+  const key = productName.trim().replace(/\s+/g, " ").toLowerCase();
+  if (key === "") return null;
+  const row = sqlite
+    .prepare(
+      `SELECT unit_price_cny AS cny
+         FROM order_items
+        WHERE cost_confirmed = 1
+          AND unit_price_cny > 0
+          AND LOWER(TRIM(name)) = ?
+        ORDER BY id DESC
+        LIMIT 1`,
+    )
+    .get(key) as { cny: number } | undefined;
+  return row ? row.cny : null;
+}
+
 // ---------- Khách hàng ----------
 
 export async function listCustomers() {
@@ -50,15 +105,22 @@ export type NewOrderItemInput = {
   attributes?: string | null;
   quantity: number;
   unitPriceCny: number;
+  /** Lời của món. Bỏ trống → app tự rải theo mức mặc định để khớp Total. */
+  marginVnd?: number;
+  /** Giá ¥ do người dùng xác nhận, hay chỉ là số máy gợi ý? */
+  costConfirmed?: boolean;
 };
 
 export type NewOrderInput = {
+  /** Cho phép null: đơn tạo từ ảnh có thể chưa có thông tin khách. */
   customerId?: number | null;
   newCustomer?: { name: string; phone?: string; address?: string } | null;
   orderType: OrderType;
   exchangeRate: number;
-  serviceFee: number;
+  /** Total đã chốt với khách (KHÔNG gồm ship) — dữ kiện, không phải kết quả. */
+  quotedTotalVnd: number;
   shippingFee: number;
+  shipStatus: ShipStatus;
   deposit: number;
   note?: string | null;
   items: NewOrderItemInput[];
@@ -67,10 +129,27 @@ export type NewOrderInput = {
 
 export function createOrder(input: NewOrderInput): number {
   const goodsTotalCny = sumLineItemsCny(input.items);
+  const pricingLines = input.items.map((it) => ({
+    quantity: it.quantity,
+    unitPriceCny: it.unitPriceCny,
+    marginVnd: it.marginVnd ?? 0,
+  }));
+  // Lời chưa được rải (tạo đơn từ ảnh) → rải theo mức mặc định, khớp Total.
+  const hasMargins = input.items.some((it) => it.marginVnd !== undefined);
+  const margins = hasMargins
+    ? pricingLines.map((l) => Math.round(l.marginVnd))
+    : allocateMargins(
+        input.quotedTotalVnd,
+        pricingLines,
+        input.exchangeRate,
+        getSettings().defaultMarginVnd,
+      );
+  const marginTotal = margins.reduce((s, m) => s + m, 0);
+
   const money = computeOrderMoney({
     goodsTotalCny,
     exchangeRate: input.exchangeRate,
-    serviceFee: input.serviceFee,
+    serviceFee: marginTotal,
     shippingFee: input.shippingFee,
     deposit: input.deposit,
   });
@@ -90,34 +169,39 @@ export function createOrder(input: NewOrderInput): number {
         );
       customerId = Number(info.lastInsertRowid);
     }
-    if (!customerId) throw new Error("Thiếu khách hàng cho đơn");
+    // Đơn ĐƯỢC PHÉP chưa có khách (tiền cọc đã về thật, thông tin tới sau).
+    // Cờ `thieu_khach` của order-gaps lo phần nhắc bổ sung.
 
     const info = sqlite
       .prepare(
         `INSERT INTO orders
            (customer_id, order_type, status, exchange_rate, goods_total_cny,
-            margin_vnd, shipping_fee, deposit, amount_due, note)
-         VALUES (?, ?, 'cho_bao_gia', ?, ?, ?, ?, ?, ?, ?)`,
+            margin_vnd, shipping_fee, deposit, amount_due, note,
+            quoted_total_vnd, ship_status)
+         VALUES (?, ?, 'cho_bao_gia', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         customerId,
         input.orderType,
         input.exchangeRate,
         goodsTotalCny,
-        input.serviceFee,
+        marginTotal,
         input.shippingFee,
         input.deposit,
         money.amountDue,
         input.note ?? null,
+        Math.round(input.quotedTotalVnd),
+        input.shipStatus,
       );
     const orderId = Number(info.lastInsertRowid);
 
     const itemStmt = sqlite.prepare(
       `INSERT INTO order_items
-         (order_id, product_url, name, attributes, quantity, unit_price_cny)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+         (order_id, product_url, name, attributes, quantity, unit_price_cny,
+          margin_vnd, cost_confirmed)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
-    for (const it of input.items) {
+    input.items.forEach((it, i) => {
       itemStmt.run(
         orderId,
         it.productUrl ?? null,
@@ -125,8 +209,10 @@ export function createOrder(input: NewOrderInput): number {
         it.attributes ?? null,
         it.quantity,
         it.unitPriceCny,
+        margins[i],
+        it.costConfirmed ? 1 : 0,
       );
-    }
+    });
 
     sqlite
       .prepare(
@@ -564,6 +650,201 @@ export function changeOrderStatus(
   }
 }
 
+// ---------- Bóc lớp giá theo dòng (v3-A) ----------
+
+type OrderMoneyRow = {
+  exchange_rate: number;
+  shipping_fee: number;
+  deposit: number;
+};
+
+function readOrderMoneyRow(orderId: number): OrderMoneyRow {
+  const row = sqlite
+    .prepare(
+      "SELECT exchange_rate, shipping_fee, deposit FROM orders WHERE id = ?",
+    )
+    .get(orderId) as OrderMoneyRow | undefined;
+  if (!row) throw new Error("Không tìm thấy đơn");
+  return row;
+}
+
+/**
+ * Đồng bộ khối tiền cấp đơn từ các dòng. Gọi BÊN TRONG transaction đang mở.
+ * goods_total_cny và margin_vnd ở cấp đơn là số DẪN XUẤT từ order_items.
+ */
+export function recomputeOrderMoneyRow(
+  orderId: number,
+  order: OrderMoneyRow,
+): void {
+  const agg = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(quantity * unit_price_cny), 0) AS cny,
+              COALESCE(SUM(margin_vnd), 0) AS margin
+         FROM order_items WHERE order_id = ?`,
+    )
+    .get(orderId) as { cny: number; margin: number };
+
+  const money = computeOrderMoney({
+    goodsTotalCny: agg.cny,
+    exchangeRate: order.exchange_rate,
+    serviceFee: agg.margin,
+    shippingFee: order.shipping_fee,
+    deposit: order.deposit,
+  });
+
+  sqlite
+    .prepare(
+      "UPDATE orders SET goods_total_cny = ?, margin_vnd = ?, amount_due = ? WHERE id = ?",
+    )
+    .run(agg.cny, agg.margin, money.amountDue, orderId);
+}
+
+/**
+ * Nhập hoặc sửa giá ¥ của một dòng. Total giữ nguyên (khách đã đồng ý), lời
+ * được rải lại cho toàn bộ dòng. Chạm vào ô này = xác nhận giá vốn.
+ */
+export function updateLineCost(
+  orderId: number,
+  itemId: number,
+  unitPriceCny: number,
+): LineActionResult {
+  if (!(unitPriceCny >= 0))
+    return { ok: false, reason: "Giá tệ không được âm" };
+
+  sqlite.exec("BEGIN");
+  try {
+    const order = readOrderMoneyRow(orderId);
+    const quoted = sqlite
+      .prepare("SELECT quoted_total_vnd AS total FROM orders WHERE id = ?")
+      .get(orderId) as { total: number };
+
+    sqlite
+      .prepare(
+        "UPDATE order_items SET unit_price_cny = ?, cost_confirmed = 1 WHERE id = ? AND order_id = ?",
+      )
+      .run(unitPriceCny, itemId, orderId);
+
+    // Giá vốn đổi → lời phải rải lại để Σ giá bán vẫn đúng bằng Total.
+    const rows = sqlite
+      .prepare(
+        "SELECT id, quantity, unit_price_cny, margin_vnd FROM order_items WHERE order_id = ? ORDER BY id",
+      )
+      .all(orderId) as {
+      id: number;
+      quantity: number;
+      unit_price_cny: number;
+      margin_vnd: number;
+    }[];
+    const margins = allocateMargins(
+      quoted.total,
+      rows.map((r) => ({
+        quantity: r.quantity,
+        unitPriceCny: r.unit_price_cny,
+        marginVnd: r.margin_vnd,
+      })),
+      order.exchange_rate,
+      getSettings().defaultMarginVnd,
+    );
+    const stmt = sqlite.prepare(
+      "UPDATE order_items SET margin_vnd = ? WHERE id = ?",
+    );
+    rows.forEach((r, i) => stmt.run(margins[i], r.id));
+
+    recomputeOrderMoneyRow(orderId, order);
+    sqlite.exec("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/** Kéo lời của một dòng; các dòng khác bù lại để Total giữ nguyên. */
+export function updateLineMargin(
+  orderId: number,
+  itemId: number,
+  marginVnd: number,
+): LineActionResult {
+  sqlite.exec("BEGIN");
+  try {
+    const order = readOrderMoneyRow(orderId);
+    const quoted = sqlite
+      .prepare("SELECT quoted_total_vnd AS total FROM orders WHERE id = ?")
+      .get(orderId) as { total: number };
+
+    const rows = sqlite
+      .prepare(
+        "SELECT id, quantity, unit_price_cny FROM order_items WHERE order_id = ? ORDER BY id",
+      )
+      .all(orderId) as {
+      id: number;
+      quantity: number;
+      unit_price_cny: number;
+    }[];
+    const idx = rows.findIndex((r) => r.id === itemId);
+    if (idx === -1) throw new Error("Không tìm thấy dòng sản phẩm");
+
+    const margins = redistribute(
+      rows.map((r) => ({
+        quantity: r.quantity,
+        unitPriceCny: r.unit_price_cny,
+        marginVnd: 0,
+      })),
+      idx,
+      marginVnd,
+      quoted.total,
+      order.exchange_rate,
+    );
+
+    const stmt = sqlite.prepare(
+      "UPDATE order_items SET margin_vnd = ? WHERE id = ?",
+    );
+    rows.forEach((r, i) => stmt.run(margins[i], r.id));
+
+    recomputeOrderMoneyRow(orderId, order);
+    sqlite.exec("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/** Nhập phí ship khi hàng về VN (hoặc đánh dấu freeship). */
+export function setShipFee(
+  orderId: number,
+  shipStatus: ShipStatus,
+  shippingFee: number,
+): LineActionResult {
+  if (!(shippingFee >= 0))
+    return { ok: false, reason: "Phí ship không được âm" };
+  const fee = shipStatus === "set" ? Math.round(shippingFee) : 0;
+
+  sqlite.exec("BEGIN");
+  try {
+    const order = readOrderMoneyRow(orderId);
+    sqlite
+      .prepare(
+        "UPDATE orders SET ship_status = ?, shipping_fee = ? WHERE id = ?",
+      )
+      .run(shipStatus, fee, orderId);
+
+    recomputeOrderMoneyRow(orderId, { ...order, shipping_fee: fee });
+    sqlite.exec("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/** Đổi nhãn ảnh (người dùng sửa lại khi AI phân loại sai). */
+export function updatePhotoLabel(photoId: number, label: PhotoLabel): void {
+  sqlite
+    .prepare("UPDATE photos SET label = ? WHERE id = ?")
+    .run(label, photoId);
+}
+
 // ---------- Ba luồng ngoại lệ theo dòng sản phẩm ----------
 
 export type LineActionResult = { ok: true } | { ok: false; reason: string };
@@ -653,13 +934,19 @@ export async function listOrders(query?: string): Promise<OrderListRow[]> {
       customerName: customers.name,
     })
     .from(orders)
-    .innerJoin(customers, eq(orders.customerId, customers.id))
+    // leftJoin, KHÔNG phải innerJoin: đơn chưa gắn khách vẫn phải hiện ra —
+    // nếu không thì đơn thiếu thông tin lại là đơn bị giấu đi, đúng chỗ cần thấy nhất.
+    .leftJoin(customers, eq(orders.customerId, customers.id))
     .orderBy(desc(orders.createdAt));
 
   const threshold = config.staleOrderDays;
   const q = query?.trim().toLowerCase();
 
   return rows
+    .map((r) => ({
+      ...r,
+      customerName: r.customerName ?? "— chưa có khách —",
+    }))
     .filter((r) => {
       if (!q) return true;
       return (
@@ -861,4 +1148,60 @@ export function sellFromStock(input: SellFromStockInput): SellResult {
     sqlite.exec("ROLLBACK");
     throw err;
   }
+}
+
+/** Danh sách đơn kèm cờ "cần bổ sung" (v3-A). */
+export async function listOrdersWithGaps(): Promise<
+  (OrderListRow & { gaps: GapCode[] })[]
+> {
+  const rows = await listOrders();
+  const meta = sqlite
+    .prepare(
+      `SELECT o.id                                         AS id,
+              o.order_type                                 AS orderType,
+              o.status                                     AS status,
+              o.customer_id                                AS customerId,
+              o.ship_status                                AS shipStatus,
+              c.phone                                      AS phone,
+              c.address                                    AS address,
+              (SELECT COUNT(*) FROM order_items i
+                WHERE i.order_id = o.id AND i.cost_confirmed = 0) AS unconfirmed,
+              (SELECT COUNT(*) FROM photos p
+                WHERE p.order_id = o.id AND p.label = 'product')  AS productPhotos
+         FROM orders o LEFT JOIN customers c ON c.id = o.customer_id`,
+    )
+    .all() as {
+    id: number;
+    orderType: OrderType;
+    status: OrderStatus;
+    customerId: number | null;
+    shipStatus: ShipStatus;
+    phone: string | null;
+    address: string | null;
+    unconfirmed: number;
+    productPhotos: number;
+  }[];
+
+  const byId = new Map(meta.map((m) => [m.id, m]));
+  return rows.map((r) => {
+    const m = byId.get(r.id);
+    if (!m) return { ...r, gaps: [] as GapCode[] };
+    return {
+      ...r,
+      gaps: orderGaps(
+        {
+          orderType: m.orderType,
+          status: m.status,
+          customerId: m.customerId,
+          customerPhone: m.phone,
+          customerAddress: m.address,
+          shipStatus: m.shipStatus,
+        },
+        Array.from({ length: m.unconfirmed }, () => ({ costConfirmed: false })),
+        Array.from({ length: m.productPhotos }, () => ({
+          label: "product" as const,
+        })),
+      ),
+    };
+  });
 }
