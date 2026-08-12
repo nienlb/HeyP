@@ -14,6 +14,7 @@ export const NAV_ITEMS: NavItem[] = [
 export const MORE_ITEMS: NavItem[] = [
   { href: "/tracking", label: "Tracking", icon: "tracking" },
   { href: "/finance", label: "Tài chính", icon: "finance" },
+  { href: "/reports", label: "Báo cáo", icon: "reports" },
   { href: "/settings", label: "Cài đặt", icon: "settings" },
   { href: "/backup", label: "Sao lưu", icon: "backup" },
 ];

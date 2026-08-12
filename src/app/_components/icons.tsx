@@ -13,6 +13,7 @@ export type IconName =
   | "backup"
   | "settings"
   | "finance"
+  | "reports"
   | "plus"
   | "menu"
   | "logout";
@@ -69,6 +70,12 @@ const PATHS: Record<IconName, ReactNode> = {
       <rect x="2" y="6" width="20" height="12" rx="2" />
       <circle cx="12" cy="12" r="2" />
       <path d="M6 6V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
+    </>
+  ),
+  reports: (
+    <>
+      <path d="M3 3v18h18" />
+      <path d="M18 17V9M13 17V5M8 17v-3" />
     </>
   ),
   settings: (

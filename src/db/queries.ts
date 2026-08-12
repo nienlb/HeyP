@@ -33,6 +33,7 @@ import type {
   PaymentMethod,
 } from "@/lib/expenses";
 import { currentRate, replayLedger, walletValueVnd } from "@/lib/cny-wallet";
+import type { PnlExpense, PnlOrder } from "@/lib/pnl";
 import { getAdapter } from "@/lib/tracking";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import {
@@ -1478,4 +1479,142 @@ export async function listOrdersWithGaps(): Promise<
       ),
     };
   });
+}
+
+// ---------- Dữ liệu cho 3 báo cáo (v3-B) ----------
+
+function monthRange(year: number, month: number): [number, number] {
+  const from = Math.floor(Date.UTC(year, month - 1, 1) / 1000);
+  const to = Math.floor(Date.UTC(year, month, 1) / 1000);
+  return [from, to];
+}
+
+/**
+ * Đơn HOÀN TẤT trong tháng — ngày lấy từ order_status_history, không từ
+ * orders.status_changed_at (cột đó chỉ giữ lần đổi gần nhất).
+ */
+export function getPnlData(
+  year: number,
+  month: number,
+): { orders: PnlOrder[]; expenses: PnlExpense[]; bomDepositsVnd: number } {
+  const [from, to] = monthRange(year, month);
+
+  const rows = sqlite
+    .prepare(
+      `SELECT o.id                     AS id,
+              o.order_type             AS orderType,
+              o.quoted_total_vnd       AS quotedTotalVnd,
+              o.shipping_fee           AS shippingFee,
+              o.goods_total_cny        AS goodsTotalCny,
+              o.exchange_rate          AS sellRate,
+              o.sale_cost              AS saleCost,
+              (SELECT l.rate_snapshot FROM cny_ledger l
+                WHERE l.order_id = o.id AND l.kind = 'chi'
+                ORDER BY l.id LIMIT 1)                        AS costRate,
+              (SELECT COALESCE(SUM(i.margin_vnd), 0) FROM order_items i
+                WHERE i.order_id = o.id)                      AS marginVnd,
+              (SELECT COUNT(*) = 0 FROM order_items i
+                WHERE i.order_id = o.id AND i.cost_confirmed = 0) AS costConfirmedRaw
+         FROM orders o
+        WHERE EXISTS (SELECT 1 FROM order_status_history h
+                       WHERE h.order_id = o.id AND h.to_status = 'hoan_tat'
+                         AND h.changed_at >= ? AND h.changed_at < ?)`,
+    )
+    .all(from, to) as (Omit<PnlOrder, "costConfirmed"> & {
+    costConfirmedRaw: number;
+  })[];
+
+  const orders: PnlOrder[] = rows.map((r) => ({
+    ...r,
+    costConfirmed: r.costConfirmedRaw === 1,
+  }));
+
+  const expenseRows = sqlite
+    .prepare(
+      `SELECT amount_vnd AS amountVnd, category, order_id AS orderId
+         FROM expenses WHERE spent_at >= ? AND spent_at < ?`,
+    )
+    .all(from, to) as PnlExpense[];
+
+  // Cọc giữ được từ đơn chuyển sang khách bom trong tháng.
+  const bom = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(p.amount_vnd), 0) AS total
+         FROM payments p
+        WHERE p.order_id IN (
+              SELECT h.order_id FROM order_status_history h
+               WHERE h.to_status = 'khach_bom'
+                 AND h.changed_at >= ? AND h.changed_at < ?)`,
+    )
+    .get(from, to) as { total: number };
+
+  return { orders, expenses: expenseRows, bomDepositsVnd: bom.total };
+}
+
+export function getCashFlow(year: number, month: number) {
+  const [from, to] = monthRange(year, month);
+
+  const inflow = sqlite
+    .prepare(
+      `SELECT method, COALESCE(SUM(amount_vnd), 0) AS total
+         FROM payments WHERE paid_at >= ? AND paid_at < ? GROUP BY method`,
+    )
+    .all(from, to) as { method: PaymentMethod; total: number }[];
+
+  const topups = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(vnd_paid), 0) AS total FROM cny_ledger
+        WHERE kind = 'nap' AND created_at >= ? AND created_at < ?`,
+    )
+    .get(from, to) as { total: number };
+
+  const spend = sqlite
+    .prepare(
+      `SELECT method, COALESCE(SUM(amount_vnd), 0) AS total
+         FROM expenses WHERE spent_at >= ? AND spent_at < ? GROUP BY method`,
+    )
+    .all(from, to) as { method: PaymentMethod; total: number }[];
+
+  const sum = (rows: { total: number }[]) =>
+    rows.reduce((s, r) => s + r.total, 0);
+
+  return {
+    inflow,
+    inflowTotal: sum(inflow),
+    topupsVnd: topups.total,
+    spend,
+    spendTotal: sum(spend),
+    netVnd: sum(inflow) - topups.total - sum(spend),
+  };
+}
+
+export function getAssetSnapshot() {
+  const wallet = getWallet();
+  const stock = sqlite
+    .prepare(
+      "SELECT COALESCE(SUM(quantity * avg_cost), 0) AS total FROM inventory",
+    )
+    .get() as { total: number };
+  const receivable = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(amount_due), 0) AS total FROM orders
+        WHERE status NOT IN ('hoan_tat','huy','khach_bom')`,
+    )
+    .get() as { total: number };
+  // Cọc của đơn CHƯA giao — tiền này nằm trong tài khoản nhưng chưa phải của mình.
+  const heldDeposits = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(p.amount_vnd), 0) AS total FROM payments p
+         JOIN orders o ON o.id = p.order_id
+        WHERE o.status NOT IN ('da_giao_khach','hoan_tat','huy','khach_bom')`,
+    )
+    .get() as { total: number };
+
+  return {
+    walletCny: wallet.balance,
+    walletVnd: wallet.valueVnd,
+    stockVnd: stock.total,
+    receivableVnd: receivable.total,
+    heldDepositsVnd: heldDeposits.total,
+  };
 }
