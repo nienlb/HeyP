@@ -178,8 +178,10 @@ INSERT INTO settings(key, value) VALUES ('default_margin_vnd', '170000');
 
 - [ ] **Bước 3: Chạy thử migration trên BẢN SAO của DB thật**
 
+DB đang chạy `journal_mode=wal`, nên **`cp` trần không dùng được**: nó chỉ chép file chính, bỏ lại `-wal`/`-shm`, và bản sao có thể thiếu đúng những commit gần nhất. Dùng `VACUUM INTO` để có snapshot nhất quán — cùng cách `src/lib/backup.ts` đang dùng.
+
 ```bash
-cp data/app.sqlite /tmp/heyp-test.sqlite && DATABASE_PATH=/tmp/heyp-test.sqlite npm run db:migrate
+node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync('data/app.sqlite').exec(\"VACUUM INTO '/tmp/heyp-test.sqlite'\")" && DATABASE_PATH=/tmp/heyp-test.sqlite npm run db:migrate
 ```
 
 Kỳ vọng: in `✓ đã áp dụng 0003_v3a_line_pricing.sql`, **không** có dòng vi phạm khoá ngoại.

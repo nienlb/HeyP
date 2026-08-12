@@ -42,7 +42,7 @@ function addOrder(opts: {
     .prepare(
       `INSERT INTO orders
          (customer_id, order_type, status, exchange_rate, goods_total_cny,
-          service_fee, shipping_fee, deposit, amount_due, status_changed_at)
+          margin_vnd, shipping_fee, deposit, amount_due, status_changed_at)
        VALUES (?, 'order_ho', ?, ?, ?, ?, ?, ?, ?,
                unixepoch() - ?)`,
     )

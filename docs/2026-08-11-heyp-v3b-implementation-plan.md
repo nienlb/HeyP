@@ -110,8 +110,10 @@ SELECT id, deposit, created_at, 'coc', 'chuyen_khoan', 'Chuyển từ dữ liệ
 
 - [ ] **Bước 2: Chạy thử trên bản sao DB thật**
 
+DB chạy `journal_mode=wal` nên **`cp` trần không dùng được** (bỏ lại `-wal`/`-shm`, bản sao có thể thiếu commit gần nhất). Dùng `VACUUM INTO` — cùng cách `src/lib/backup.ts` đang dùng.
+
 ```bash
-cp data/app.sqlite /tmp/heyp-v3b.sqlite && DATABASE_PATH=/tmp/heyp-v3b.sqlite npm run db:migrate
+node -e "const{DatabaseSync}=require('node:sqlite');new DatabaseSync('data/app.sqlite').exec(\"VACUUM INTO '/tmp/heyp-v3b.sqlite'\")" && DATABASE_PATH=/tmp/heyp-v3b.sqlite npm run db:migrate
 ```
 
 Kỳ vọng: `✓ đã áp dụng 0004_v3b_tai_chinh.sql`, không có vi phạm khoá ngoại.
