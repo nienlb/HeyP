@@ -1271,3 +1271,91 @@ a {
     min-width: 160px;
   }
 }
+
+/* ===== v3-A: bóc lớp giá theo món & cờ cần bổ sung ===== */
+
+/* Giá ¥ do máy gợi ý — phải nhìn ra ngay là chưa được xác nhận. */
+.cny-suggested {
+  color: var(--muted);
+  font-style: italic;
+  background: var(--warning-tint);
+}
+
+.cell-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.cell-form input[type="number"] {
+  width: 108px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font: inherit;
+  text-align: right;
+}
+
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.profit-negative {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.ship-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.gap-banner {
+  background: var(--warning-tint);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.gap-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.gap-chip {
+  background: var(--surface);
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Chấm nhỏ báo đơn còn thiếu thông tin, dùng ở danh sách đơn. */
+.gap-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .cell-form {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .cell-form input[type="number"] {
+    width: 88px;
+  }
+}

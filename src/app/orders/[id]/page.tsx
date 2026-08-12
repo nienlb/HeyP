@@ -6,7 +6,7 @@ import { CopyButton } from "../../_components/copy-button";
 import { PhotoUpload } from "../../_components/photo-upload";
 import { PhotoGallery } from "../../_components/photo-gallery";
 import { changeStatusAction, lineExceptionAction } from "../actions";
-import { getOrderDetail, getPackagesForOrder } from "@/db/queries";
+import { getOrderDetail, getPackagesForOrder, getSettings } from "@/db/queries";
 import { computeOrderMoney } from "@/lib/money";
 import { buildQuoteText, formatCny, formatDateTime, formatVnd } from "@/lib/format";
 import {
@@ -14,6 +14,8 @@ import {
   ORDER_TYPE_LABELS,
   STATUS_LABELS,
 } from "@/lib/order-status";
+import { GAP_LABELS, orderGaps } from "@/lib/order-gaps";
+import { LinePricingTable } from "./line-pricing-table";
 
 export default async function OrderDetailPage({
   params,
@@ -42,6 +44,19 @@ export default async function OrderDetailPage({
   });
   const nextStatuses = allowedNextStatuses(order.orderType, order.status);
   const isStockSale = order.orderType === "ban_tu_kho";
+  const gaps = orderGaps(
+    {
+      orderType: order.orderType,
+      status: order.status,
+      customerId: order.customerId,
+      customerPhone: customer?.phone ?? null,
+      customerAddress: customer?.address ?? null,
+      shipStatus: order.shipStatus,
+    },
+    items.map((it) => ({ costConfirmed: it.costConfirmed })),
+    photos.map((p) => ({ label: p.label })),
+  );
+  const sellRate = order.exchangeRate || getSettings().sellRate;
   const saleProfit = money.goodsTotalVnd - (order.saleCost ?? 0);
   // Khi nào cho tách dòng: lỗi NCC ở khâu lưu thông, đổi/trả sau khi giao.
   const canDefect = (
@@ -85,6 +100,21 @@ export default async function OrderDetailPage({
 
         {err && <div className="error">{err}</div>}
 
+        {gaps.length > 0 && (
+          <div className="gap-banner">
+            <div className="gap-chips">
+              {gaps.map((g) => (
+                <span key={g} className="gap-chip">
+                  {GAP_LABELS[g]}
+                </span>
+              ))}
+            </div>
+            <p className="muted small" style={{ margin: "6px 0 0" }}>
+              Đơn vẫn chạy bình thường — các mục này chỉ để nhắc bổ sung.
+            </p>
+          </div>
+        )}
+
         {customer?.warningFlag && (
           <div className="warn-flag">
             ⚠️ Khách có cờ cảnh báo
@@ -125,7 +155,11 @@ export default async function OrderDetailPage({
             <h2 className="card-title">Khách hàng</h2>
             <div className="kv">
               <span>Tên</span>
-              <strong>{customer?.name}</strong>
+              {customer ? (
+                <strong>{customer.name}</strong>
+              ) : (
+                <em className="muted">— chưa có khách —</em>
+              )}
             </div>
             {customer?.phone && (
               <div className="kv">
@@ -179,7 +213,7 @@ export default async function OrderDetailPage({
                   </span>
                 </div>
                 <div className="kv">
-                  <span>Phí dịch vụ</span>
+                  <span>Lời</span>
                   <span>{formatVnd(order.marginVnd)}</span>
                 </div>
                 <div className="kv">
@@ -226,6 +260,26 @@ export default async function OrderDetailPage({
             </ol>
           </section>
         </div>
+
+        {/* Bóc lớp giá theo món — chỉ đơn tính giá vốn bằng ¥ */}
+        {!isStockSale && items.length > 0 && (
+          <LinePricingTable
+            orderId={order.id}
+            rows={items.map((it) => ({
+              id: it.id,
+              name: it.name,
+              attributes: it.attributes,
+              quantity: it.quantity,
+              unitPriceCny: it.unitPriceCny,
+              marginVnd: it.marginVnd,
+              costConfirmed: it.costConfirmed,
+            }))}
+            sellRate={sellRate}
+            quotedTotalVnd={order.quotedTotalVnd}
+            shippingFee={order.shippingFee}
+            shipStatus={order.shipStatus}
+          />
+        )}
 
         {/* Sản phẩm */}
         <section className="card">
