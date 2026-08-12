@@ -15,6 +15,12 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { ORDER_STATUSES, ORDER_TYPES } from "@/lib/order-status";
 import { PHOTO_LABELS } from "@/lib/photos";
+import {
+  EXPENSE_CATEGORIES,
+  LEDGER_KINDS,
+  PAYMENT_KINDS,
+  PAYMENT_METHODS,
+} from "@/lib/expenses";
 
 export const LINE_STATUSES = ["normal", "supplier_defect", "returned"] as const;
 export const SHIP_STATUSES = ["unknown", "free", "set"] as const;
@@ -173,4 +179,48 @@ export const orderStatusHistory = sqliteTable("order_status_history", {
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
+});
+
+// 8) Sổ ví ¥ — số dư và giá vốn bq KHÔNG lưu, tính lại từ sổ.
+export const cnyLedger = sqliteTable("cny_ledger", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  kind: text("kind", { enum: LEDGER_KINDS }).notNull(),
+  cnyDelta: real("cny_delta").notNull(),
+  vndPaid: integer("vnd_paid"),
+  rateSnapshot: integer("rate_snapshot"),
+  orderId: integer("order_id").references(() => orders.id),
+  note: text("note"),
+  createdAt: createdAt(),
+});
+
+// 9) Chi phí VND. order_id NULL = chi phí theo kỳ.
+export const expenses = sqliteTable("expenses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  spentAt: integer("spent_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  category: text("category", { enum: EXPENSE_CATEGORIES }).notNull(),
+  amountVnd: integer("amount_vnd").notNull(),
+  orderId: integer("order_id").references(() => orders.id),
+  method: text("method", { enum: PAYMENT_METHODS })
+    .notNull()
+    .default("chuyen_khoan"),
+  note: text("note"),
+});
+
+// 10) Sổ thu tiền — orders.deposit là Σ của bảng này.
+export const payments = sqliteTable("payments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  orderId: integer("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  amountVnd: integer("amount_vnd").notNull(),
+  paidAt: integer("paid_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  kind: text("kind", { enum: PAYMENT_KINDS }).notNull(),
+  method: text("method", { enum: PAYMENT_METHODS })
+    .notNull()
+    .default("chuyen_khoan"),
+  note: text("note"),
 });
