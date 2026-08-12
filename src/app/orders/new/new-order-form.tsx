@@ -1,11 +1,23 @@
 "use client";
 
 import { useActionState, useMemo, useRef, useState } from "react";
-import { createOrderAction, type CreateOrderState } from "../actions";
+import {
+  createOrderAction,
+  suggestCnyAction,
+  type CreateOrderState,
+} from "../actions";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import { buildQuoteText, formatVnd } from "@/lib/format";
 import { ORDER_TYPES, ORDER_TYPE_LABELS } from "@/lib/order-status";
-import { itemAttributes, type ZaloExtract } from "@/lib/zalo-extract";
+import { suggestCnyFromTotal } from "@/lib/line-pricing";
+import type { ShipStatus } from "@/lib/order-gaps";
+import {
+  IMAGE_KINDS,
+  IMAGE_KIND_LABELS,
+  itemAttributes,
+  type ImageKind,
+  type ZaloExtract,
+} from "@/lib/zalo-extract";
 import { CopyButton } from "../../_components/copy-button";
 
 type ItemRow = {
@@ -14,6 +26,8 @@ type ItemRow = {
   attributes: string;
   quantity: string;
   unitPriceCny: string;
+  /** false = giá ¥ do máy gợi ý, chưa ai xác nhận. */
+  costConfirmed: boolean;
 };
 
 const emptyItem: ItemRow = {
@@ -22,11 +36,16 @@ const emptyItem: ItemRow = {
   attributes: "",
   quantity: "1",
   unitPriceCny: "",
+  costConfirmed: true,
 };
+
+/** Ảnh đã thả lên, kèm loại AI phân ra (sửa được). */
+type DroppedPhoto = { id: number; kind: ImageKind; name: string };
 
 export function NewOrderForm({
   customers,
   defaultExchangeRate,
+  defaultMarginVnd,
 }: {
   customers: {
     id: number;
@@ -35,6 +54,7 @@ export function NewOrderForm({
     warningReason: string | null;
   }[];
   defaultExchangeRate: number;
+  defaultMarginVnd: number;
 }) {
   const [state, formAction, pending] = useActionState<
     CreateOrderState,
@@ -46,7 +66,9 @@ export function NewOrderForm({
   );
   const [orderType, setOrderType] = useState<string>("order_ho");
   const [exchangeRate, setExchangeRate] = useState(String(defaultExchangeRate));
-  const [serviceFee, setServiceFee] = useState("");
+  const [quotedTotal, setQuotedTotal] = useState("");
+  const [shipStatus, setShipStatus] = useState<ShipStatus>("unknown");
+  const [photos, setPhotos] = useState<DroppedPhoto[]>([]);
   const [shippingFee, setShippingFee] = useState("");
   const [deposit, setDeposit] = useState("");
   const [items, setItems] = useState<ItemRow[]>([{ ...emptyItem }]);
@@ -67,65 +89,124 @@ export function NewOrderForm({
 
   const num = (s: string) => Number(String(s).replace(/[,\s]/g, "")) || 0;
 
-  function applyExtract(d: ZaloExtract) {
-    setCustomerMode("new");
-    setNewCustomerName(d.customerName ?? "");
-    setNewCustomerPhone(d.customerPhone ?? "");
-    setNewCustomerAddress(d.customerAddress ?? "");
-    // Giá đã là VND (mẫu Zalo dùng Total VND) → tỷ giá = 1, không dùng phí dịch vụ riêng.
-    setExchangeRate("1");
-    setServiceFee("");
-    setDeposit(d.depositVnd != null ? String(d.depositVnd) : "");
-    // "+ ship" chưa rõ → để trống cho người nhập; freeship → 0; có số → số đó.
-    setShippingFee(
-      d.shipUnknown
-        ? ""
-        : d.shipVnd != null
-          ? String(d.shipVnd)
-          : d.shipFree
-            ? "0"
-            : "",
-    );
-    const rows: ItemRow[] = d.items.length
-      ? d.items.map((it) => ({
+  /**
+   * Đổ dữ liệu AI đọc được vào form.
+   *
+   * Total là DỮ KIỆN (khách đã đồng ý). Giá ¥ thì gợi ý: ưu tiên lần gần nhất
+   * đã bán món cùng tên, không có thì suy ngược từ Total. Mọi số gợi ý đều
+   * mang cost_confirmed = false để không lẻn vào báo cáo như sự thật.
+   */
+  async function applyExtract(d: ZaloExtract) {
+    // GỘP, KHÔNG GHI ĐÈ: mỗi lần thả ảnh chỉ điền thêm những gì đọc được lần
+    // này. Ảnh thứ 2 (vd chỉ có thông tin khách, không có Total/sản phẩm)
+    // trước đây làm trắng xoá hết dữ liệu đã điền từ ảnh chốt đơn thả trước
+    // — lỗi mất dữ liệu thật, phát hiện khi dùng thật. Nguyên tắc sửa: chỉ
+    // set một trường khi lần đọc NÀY thực sự có giá trị cho trường đó.
+    const found: string[] = [];
+
+    if (d.customerName || d.customerPhone || d.customerAddress) {
+      setCustomerMode("new");
+      if (d.customerName) setNewCustomerName(d.customerName);
+      if (d.customerPhone) setNewCustomerPhone(d.customerPhone);
+      if (d.customerAddress) setNewCustomerAddress(d.customerAddress);
+      found.push("thông tin khách");
+    }
+
+    if (d.totalVnd != null) {
+      setQuotedTotal(String(d.totalVnd));
+      found.push(`Total ${d.totalVnd.toLocaleString("vi-VN")}₫`);
+    }
+    if (d.depositVnd != null) {
+      setDeposit(String(d.depositVnd));
+      found.push(`Cọc ${d.depositVnd.toLocaleString("vi-VN")}₫`);
+    }
+
+    // Kiểm shipUnknown TRƯỚC: Gemini có thể trả shipVnd:0 (không phải null)
+    // ngay cả khi thật ra chưa biết ship — "+ ship" không kèm số trong ảnh.
+    // shipUnknown hoặc ảnh này không nhắc gì tới ship → GIỮ NGUYÊN trạng
+    // thái ship hiện có, đừng ghi đè về "chưa biết".
+    if (d.shipFree) {
+      setShipStatus("free");
+      setShippingFee("0");
+      found.push("freeship");
+    } else if (!d.shipUnknown && d.shipVnd != null) {
+      setShipStatus("set");
+      setShippingFee(String(d.shipVnd));
+      found.push(`ship ${d.shipVnd.toLocaleString("vi-VN")}₫`);
+    }
+
+    if (d.items.length > 0) {
+      // Gợi ý ¥: lịch sử trước, không có thì suy ngược từ Total — dùng Total
+      // ĐANG CÓ trên form (có thể đến từ một lần thả ảnh trước đó), không
+      // chỉ riêng Total của lần đọc này.
+      let fromHistory: (number | null)[] = d.items.map(() => null);
+      try {
+        fromHistory = await suggestCnyAction(d.items.map((it) => it.name));
+      } catch {
+        // Tra lịch sử hỏng thì vẫn còn cách suy ngược — không chặn.
+      }
+      const totalForFallback = d.totalVnd ?? num(quotedTotal);
+      const fallbackCny = suggestCnyFromTotal(
+        totalForFallback,
+        d.items.length,
+        defaultExchangeRate,
+        defaultMarginVnd,
+      );
+
+      const newRows: ItemRow[] = d.items.map((it, i) => {
+        const cny = fromHistory[i] ?? fallbackCny;
+        return {
           name: it.name,
           productUrl: "",
           attributes: itemAttributes(it),
           quantity: String(it.quantity || 1),
-          unitPriceCny:
-            d.items.length === 1 && d.totalVnd != null
-              ? String(Math.round(d.totalVnd / (it.quantity || 1)))
-              : "",
-        }))
-      : [{ ...emptyItem }];
-    setItems(rows);
-    const names = d.items.map((i) => i.name).join(", ");
+          unitPriceCny: cny > 0 ? String(cny) : "",
+          costConfirmed: false,
+        };
+      });
+
+      // Dòng sản phẩm hiện tại còn là dòng trống ban đầu → điền vào đó.
+      // Đã có dữ liệu thật (từ lần thả trước) → nối thêm, không xoá.
+      setItems((prev) => {
+        const untouched = prev.length === 1 && prev[0].name.trim() === "";
+        return untouched ? newRows : [...prev, ...newRows];
+      });
+      found.push(`sản phẩm: ${d.items.map((i) => i.name).join(", ")}`);
+    }
+
     setZaloInfo(
-      `Đã đọc: ${names || "(không rõ sản phẩm)"}${
-        d.totalVnd != null
-          ? ` · Total ${d.totalVnd.toLocaleString("vi-VN")}₫`
-          : ""
-      }`,
+      found.length > 0
+        ? `Đã đọc thêm: ${found.join(" · ")}`
+        : "Ảnh này không đọc được thông tin nào — kiểm tra lại bằng mắt hoặc nhập tay.",
     );
   }
 
-  async function readZalo(file: File) {
-    if (!file.type.startsWith("image/")) return;
+  /** Thả bao nhiêu ảnh cũng được — AI phân loại rồi trả về từng ảnh. */
+  async function readZaloFiles(fileList: FileList | File[]) {
+    const files = [...fileList].filter((f) => f.type.startsWith("image/"));
+    if (files.length === 0) return;
+
     setZaloBusy(true);
     setZaloError(null);
     setZaloInfo(null);
     const fd = new FormData();
-    fd.set("file", file);
+    for (const f of files) fd.append("files", f);
+
     try {
       const res = await fetch("/api/read-zalo", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
+
+      if (Array.isArray(data.photos)) {
+        setPhotos((prev) => [...prev, ...(data.photos as DroppedPhoto[])]);
+      }
       if (data.photoId) setZaloPhotoId(String(data.photoId));
+
       if (!res.ok || !data.ok) {
         setZaloError(
           (data.error ?? "Đọc ảnh thất bại") + " — bạn nhập tay giúp nhé.",
         );
       } else {
-        applyExtract(data.data as ZaloExtract);
+        await applyExtract(data.data.order as ZaloExtract);
       }
     } catch {
       setZaloError("Lỗi mạng khi đọc ảnh — bạn nhập tay giúp nhé.");
@@ -133,6 +214,10 @@ export function NewOrderForm({
       setZaloBusy(false);
       if (zaloInputRef.current) zaloInputRef.current.value = "";
     }
+  }
+
+  function setPhotoKind(id: number, kind: ImageKind) {
+    setPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, kind } : p)));
   }
 
   const parsedItems = useMemo(
@@ -143,16 +228,28 @@ export function NewOrderForm({
         attributes: it.attributes.trim(),
         quantity: num(it.quantity),
         unitPriceCny: num(it.unitPriceCny),
+        costConfirmed: it.costConfirmed,
       })),
     [items],
   );
 
   const validItems = parsedItems.filter((it) => it.name !== "");
   const goodsTotalCny = sumLineItemsCny(validItems);
+  const goodsVnd = Math.round(goodsTotalCny * num(exchangeRate));
+
+  // Total là dữ kiện. Chưa nhập thì suy từ giá vốn + lời mặc định mỗi món.
+  const totalVnd =
+    quotedTotal.trim() !== ""
+      ? num(quotedTotal)
+      : goodsVnd + defaultMarginVnd * Math.max(validItems.length, 1);
+
+  // Lời = phần dư. Có thể âm — đơn lỗ là chuyện có thật.
+  const marginVnd = totalVnd - goodsVnd;
+
   const money = computeOrderMoney({
     goodsTotalCny,
     exchangeRate: num(exchangeRate),
-    serviceFee: num(serviceFee),
+    serviceFee: marginVnd,
     shippingFee: num(shippingFee),
     deposit: num(deposit),
   });
@@ -165,16 +262,21 @@ export function NewOrderForm({
     customerName,
     items: validItems,
     exchangeRate: num(exchangeRate),
-    serviceFee: num(serviceFee),
+    serviceFee: marginVnd,
     shippingFee: num(shippingFee),
     deposit: num(deposit),
   });
 
+  const quoteImages = photos.filter((p) => p.kind === "chot_don");
+
+  // KHÔNG bắt buộc có khách: đơn từ ảnh Zalo thường chưa có thông tin khách.
+  // Giá ¥ cũng không bắt buộc — chưa biết thì toàn bộ Total nằm ở lời,
+  // đơn mang cờ "thiếu giá vốn" để nhắc bổ sung sau.
   const canSubmit =
     validItems.length > 0 &&
-    validItems.every((it) => it.quantity > 0 && it.unitPriceCny > 0) &&
+    validItems.every((it) => it.quantity > 0) &&
     num(exchangeRate) > 0 &&
-    (customerMode === "new" ? newCustomerName.trim() !== "" : customerId !== "");
+    totalVnd > 0;
 
   function updateItem(i: number, patch: Partial<ItemRow>) {
     setItems((prev) =>
@@ -197,13 +299,16 @@ export function NewOrderForm({
       <input type="hidden" name="items" value={JSON.stringify(parsedItems)} />
       <input type="hidden" name="customerMode" value={customerMode} />
       <input type="hidden" name="zaloPhotoId" value={zaloPhotoId} />
+      <input type="hidden" name="quotedTotalVnd" value={totalVnd} />
+      <input type="hidden" name="shipStatus" value={shipStatus} />
 
       {/* Đọc ảnh chốt đơn Zalo bằng AI */}
       <section className="card zalo-reader">
         <h2 className="card-title">🤖 Đọc ảnh chốt đơn Zalo</h2>
         <p className="muted" style={{ margin: "0 0 10px" }}>
-          Kéo-thả ảnh chụp tin nhắn chốt đơn — AI điền sẵn form, bạn kiểm tra
-          rồi lưu. Ảnh tự đính vào đơn.
+          Thả <strong>tất cả ảnh đang có</strong> — ảnh chốt đơn, ảnh thông tin
+          khách, ảnh sản phẩm. AI tự phân loại và điền sẵn form; thiếu gì bổ
+          sung sau cũng được.
         </p>
         <div
           className={`dropzone${zaloDragOver ? " over" : ""}`}
@@ -215,7 +320,7 @@ export function NewOrderForm({
           onDrop={(e) => {
             e.preventDefault();
             setZaloDragOver(false);
-            if (e.dataTransfer.files[0]) readZalo(e.dataTransfer.files[0]);
+            if (e.dataTransfer.files.length) readZaloFiles(e.dataTransfer.files);
           }}
           onClick={() => zaloInputRef.current?.click()}
           role="button"
@@ -223,7 +328,7 @@ export function NewOrderForm({
         >
           {zaloBusy
             ? "🤖 Đang đọc ảnh…"
-            : "Kéo-thả ảnh chốt đơn vào đây, hoặc bấm để chọn ảnh"}
+            : "Kéo-thả ảnh vào đây, hoặc bấm để chọn (chọn được nhiều ảnh)"}
         </div>
         {zaloError && (
           <div className="error" style={{ marginTop: 10 }}>
@@ -239,9 +344,37 @@ export function NewOrderForm({
           ref={zaloInputRef}
           type="file"
           accept="image/*"
+          multiple
           hidden
-          onChange={(e) => e.target.files?.[0] && readZalo(e.target.files[0])}
+          onChange={(e) => e.target.files?.length && readZaloFiles(e.target.files)}
         />
+
+        {quoteImages.length > 1 && (
+          <div className="warn-flag" style={{ marginTop: 10 }}>
+            ⚠️ Phát hiện {quoteImages.length} ảnh chốt đơn. Nếu đây là các đơn
+            riêng, hãy tạo đơn này trước rồi thả ảnh còn lại vào đơn mới.
+          </div>
+        )}
+
+        {photos.length > 0 && (
+          <div className="photo-kinds">
+            {photos.map((ph) => (
+              <div key={ph.id} className="photo-kind">
+                <img src={`/api/photo/${ph.id}`} alt="" />
+                <select
+                  value={ph.kind}
+                  onChange={(e) => setPhotoKind(ph.id, e.target.value as ImageKind)}
+                >
+                  {IMAGE_KINDS.map((k) => (
+                    <option key={k} value={k}>
+                      {IMAGE_KIND_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <div className="two-col">
@@ -350,13 +483,19 @@ export function NewOrderForm({
           </div>
           <div className="grid-2">
             <div className="field">
-              <label>Phí dịch vụ (₫)</label>
+              <label>Total đã chốt (₫)</label>
               <input
-                name="serviceFee"
                 inputMode="numeric"
-                value={serviceFee}
-                onChange={(e) => setServiceFee(e.target.value)}
+                value={quotedTotal}
+                onChange={(e) => setQuotedTotal(e.target.value)}
+                placeholder={String(totalVnd)}
               />
+              <span className="muted small">
+                Lời:{" "}
+                <strong className={marginVnd < 0 ? "profit-negative" : ""}>
+                  {formatVnd(marginVnd)}
+                </strong>
+              </span>
             </div>
             <div className="field">
               <label>Phí ship (₫)</label>
@@ -364,9 +503,20 @@ export function NewOrderForm({
                 name="shippingFee"
                 inputMode="numeric"
                 value={shippingFee}
-                onChange={(e) => setShippingFee(e.target.value)}
+                onChange={(e) => {
+                  setShippingFee(e.target.value);
+                  // Gõ số vào = đã biết ship; xoá trắng = quay lại "chưa biết".
+                  setShipStatus(e.target.value.trim() === "" ? "unknown" : "set");
+                }}
                 placeholder="tính sau khi hàng về"
               />
+              <span className="muted small">
+                {shipStatus === "unknown"
+                  ? "Chưa biết — sẽ nhắc khi hàng về kho VN"
+                  : shipStatus === "free"
+                    ? "Freeship"
+                    : "Đã nhập"}
+              </span>
             </div>
           </div>
           <div className="field">
@@ -430,8 +580,15 @@ export function NewOrderForm({
                 placeholder="Đơn giá"
                 inputMode="decimal"
                 value={it.unitPriceCny}
-                onChange={(e) => updateItem(i, { unitPriceCny: e.target.value })}
-                className="it-price"
+                onChange={(e) =>
+                  updateItem(i, {
+                    unitPriceCny: e.target.value,
+                    // Sửa số = xác nhận giá vốn, không còn là gợi ý của máy.
+                    costConfirmed: true,
+                  })
+                }
+                title={it.costConfirmed ? undefined : "Giá gợi ý — sửa để xác nhận"}
+                className={`it-price${it.costConfirmed ? "" : " cny-suggested"}`}
               />
               <button
                 type="button"

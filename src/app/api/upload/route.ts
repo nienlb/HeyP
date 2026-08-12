@@ -5,7 +5,8 @@ import { join, resolve } from "node:path";
 import { getSession } from "@/lib/auth";
 import { config } from "@/lib/config";
 import { addPhoto } from "@/db/queries";
-import { PHOTO_LABELS, extFromContentType, type PhotoLabel } from "@/lib/photos";
+import { PHOTO_LABELS, type PhotoLabel } from "@/lib/photos";
+import { downsizeImage } from "@/lib/image";
 
 const MAX_BYTES = 15 * 1024 * 1024; // 15MB
 
@@ -40,13 +41,10 @@ export async function POST(req: Request): Promise<Response> {
         { ok: false, error: "Ảnh quá lớn (giới hạn 15MB)" },
         { status: 400 },
       );
-    const ext =
-      extFromContentType(file.type) ??
-      file.name.split(".").pop()?.toLowerCase() ??
-      "jpg";
-    const fname = `${Date.now()}-${randomBytes(6).toString("hex")}.${ext}`;
     const buf = Buffer.from(await file.arrayBuffer());
-    await writeFile(join(dir, fname), buf);
+    const downsized = await downsizeImage(buf, file.type);
+    const fname = `${Date.now()}-${randomBytes(6).toString("hex")}.${downsized.ext}`;
+    await writeFile(join(dir, fname), downsized.buffer);
     ids.push(
       addPhoto({ filePath: fname, label, orderId, inventoryId }),
     );

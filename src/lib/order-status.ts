@@ -123,6 +123,35 @@ export function allowedNextStatuses(
   return [...result];
 }
 
+/**
+ * Các mốc hiển thị trên "hành trình đơn hàng" (UI). Đơn bán từ kho không đi
+ * qua khâu báo giá/mua hàng TQ/gom kho/vận chuyển — hiển thị đủ 9 bước sẽ
+ * làm 4-5 mốc giữa mãi mãi treo "chưa tới" dù đơn đã xong. Nguồn chân lý
+ * duy nhất cho việc này, để UI không tự suy luận lại luật nghiệp vụ.
+ */
+export function journeyTrack(orderType: OrderType): readonly OrderStatus[] {
+  return orderType === "ban_tu_kho"
+    ? (["da_giao_khach", "hoan_tat"] as const)
+    : MAIN_CHAIN;
+}
+
+/**
+ * Mốc SỚM NHẤT trên trục chính mà một trạng thái nhánh có thể xuất phát
+ * (theo đúng luật ở trên — CANCELLABLE_FROM/INCIDENT_FROM/BOMB_FROM).
+ *
+ * Dùng làm điểm neo dự phòng cho UI khi lịch sử trạng thái không ghi đủ các
+ * bước trung gian trên trục chính (dữ liệu demo/cũ) — "khách bom" luôn xuất
+ * phát từ ve_kho_vn trở đi, nên nếu không tìm được mốc thật trong lịch sử,
+ * neo về ve_kho_vn còn đúng luật hơn nhiều so với neo về cho_bao_gia (bước
+ * đầu tiên) như thể đơn chưa làm gì.
+ */
+export function earliestOriginFor(status: OrderStatus): OrderStatus {
+  if (status === "huy") return CANCELLABLE_FROM[0];
+  if (status === "su_co") return INCIDENT_FROM[0];
+  if (status === "khach_bom") return BOMB_FROM[0];
+  return MAIN_CHAIN[0];
+}
+
 export function canTransition(
   orderType: OrderType,
   from: OrderStatus,

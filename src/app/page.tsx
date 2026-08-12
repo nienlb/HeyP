@@ -4,17 +4,22 @@ import { AppShell } from "./_components/app-shell";
 import { Icon } from "./_components/icons";
 import {
   countOrdersByStatus,
+  getPnlData,
+  getWallet,
   listCustomersWithTotals,
-  listOrders,
+  listOrdersWithGaps,
 } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
-import { STATUS_LABELS } from "@/lib/order-status";
+import { MAIN_CHAIN, STATUS_LABELS } from "@/lib/order-status";
+import { GAP_CODES, GAP_LABELS } from "@/lib/order-gaps";
+import { computePnl } from "@/lib/pnl";
+import { StatusIcon } from "./_components/status-icon";
 
 export default async function HomePage() {
   const session = await requireAuth();
 
   const [orders, statusCounts] = await Promise.all([
-    listOrders(),
+    listOrdersWithGaps(),
     countOrdersByStatus(),
   ]);
   const customers = listCustomersWithTotals();
@@ -30,6 +35,16 @@ export default async function HomePage() {
 
   const totalOutstanding = customers.reduce((s, c) => s + c.outstanding, 0);
   const topDebtors = customers.filter((c) => c.outstanding > 0).slice(0, 5);
+
+  const needInfo = orders.filter((o) => o.gaps.length > 0);
+  const gapCounts = GAP_CODES.map((code) => ({
+    code,
+    count: needInfo.filter((o) => o.gaps.includes(code)).length,
+  })).filter((g) => g.count > 0);
+
+  const wallet = getWallet();
+  const now = new Date();
+  const pnl = computePnl(getPnlData(now.getFullYear(), now.getMonth() + 1));
 
   return (
     <AppShell username={session.username}>
@@ -65,25 +80,63 @@ export default async function HomePage() {
           )}
         </section>
 
+        {/* Cần bổ sung */}
+        <section className="card">
+          <h2 className="card-title">
+            Cần bổ sung <span className="count">{needInfo.length}</span>
+          </h2>
+          {needInfo.length === 0 ? (
+            <p className="muted">Không đơn nào thiếu thông tin 👍</p>
+          ) : (
+            <ul className="dash-debtors">
+              {gapCounts.map((g) => (
+                <li key={g.code}>
+                  <Link href={`/orders?gap=${g.code}`}>
+                    {GAP_LABELS[g.code]}
+                  </Link>
+                  <span>{g.count} đơn</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         {/* Đơn theo trạng thái */}
         <section className="card">
           <h2 className="card-title">Đơn theo trạng thái</h2>
           {statusCounts.length === 0 ? (
             <p className="muted">Chưa có đơn nào.</p>
           ) : (
-            <div className="dash-chips">
-              {statusCounts.map((s) => (
-                <Link
-                  key={s.status}
-                  href="/orders"
-                  className={`dash-chip status-${s.status}`}
-                >
-                  <span className="dash-chip-count">{s.count}</span>
-                  <span className="dash-chip-label">
-                    {STATUS_LABELS[s.status]}
-                  </span>
-                </Link>
-              ))}
+            <div className="status-cards">
+              {statusCounts.map((s) => {
+                const chainIdx = (MAIN_CHAIN as readonly string[]).indexOf(
+                  s.status,
+                );
+                const progress =
+                  chainIdx >= 0
+                    ? ((chainIdx + 1) / MAIN_CHAIN.length) * 100
+                    : null;
+                return (
+                  <Link
+                    key={s.status}
+                    href="/orders"
+                    className={`status-card status-card--${s.status}`}
+                  >
+                    <span className="status-card-icon">
+                      <StatusIcon status={s.status} size={16} />
+                    </span>
+                    <span className="status-card-count">{s.count}</span>
+                    <span className="status-card-label">
+                      {STATUS_LABELS[s.status]}
+                    </span>
+                    {progress !== null && (
+                      <span className="status-card-progress">
+                        <span style={{ width: `${progress}%` }} />
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </section>
@@ -105,6 +158,41 @@ export default async function HomePage() {
               ))}
             </ul>
           )}
+        </section>
+
+        {/* Ví ¥ */}
+        <section className="card">
+          <h2 className="card-title">Ví ¥</h2>
+          <div
+            className={`dash-big-number ${wallet.balance < 0 ? "profit-negative" : ""}`}
+          >
+            {wallet.balance.toLocaleString("vi-VN")}¥
+          </div>
+          <p className="muted" style={{ margin: "0 0 12px" }}>
+            ≈ {formatVnd(wallet.valueVnd)} · giá vốn bq{" "}
+            {Math.round(wallet.avgCost).toLocaleString("vi-VN")}₫/¥
+          </p>
+          <Link href="/finance" className="btn btn-outline">
+            Xem ví
+          </Link>
+        </section>
+
+        {/* Lãi tháng này */}
+        <section className="card">
+          <h2 className="card-title">Lãi tháng này</h2>
+          <div
+            className={`dash-big-number ${pnl.netProfitVnd < 0 ? "profit-negative" : ""}`}
+          >
+            {formatVnd(pnl.netProfitVnd)}
+          </div>
+          {pnl.estimated.orderCount > 0 && (
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              gồm {pnl.estimated.orderCount} đơn còn ước tính
+            </p>
+          )}
+          <Link href="/reports" className="btn btn-outline">
+            Xem báo cáo
+          </Link>
         </section>
 
         {/* Tác vụ nhanh */}

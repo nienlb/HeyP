@@ -5,15 +5,46 @@ import { AppShell } from "../../_components/app-shell";
 import { CopyButton } from "../../_components/copy-button";
 import { PhotoUpload } from "../../_components/photo-upload";
 import { PhotoGallery } from "../../_components/photo-gallery";
-import { changeStatusAction, lineExceptionAction } from "../actions";
-import { getOrderDetail, getPackagesForOrder } from "@/db/queries";
+import { lineExceptionAction } from "../actions";
+import {
+  getOrderDetail,
+  getPackagesForOrder,
+  getSettings,
+  suggestFinalPayment,
+} from "@/db/queries";
+import { PaymentsBlock } from "./payments-block";
 import { computeOrderMoney } from "@/lib/money";
 import { buildQuoteText, formatCny, formatDateTime, formatVnd } from "@/lib/format";
 import {
   allowedNextStatuses,
+  earliestOriginFor,
+  MAIN_CHAIN,
   ORDER_TYPE_LABELS,
   STATUS_LABELS,
+  type OrderStatus,
 } from "@/lib/order-status";
+import { GAP_LABELS, orderGaps } from "@/lib/order-gaps";
+import { LinePricingTable } from "./line-pricing-table";
+import { OrderJourney } from "./order-journey";
+
+/**
+ * Mốc trên trục chính để định vị bước hiện tại trên stepper. Đơn đang ở
+ * chính trục chính thì dùng luôn; đang ở nhánh (sự cố/khách bom/huỷ) thì
+ * tìm mốc main-chain gần nhất trước khi rẽ nhánh, từ lịch sử trạng thái.
+ * Lịch sử không ghi đủ bước trung gian (dữ liệu demo/cũ) → neo về mốc SỚM
+ * NHẤT hợp lệ theo luật (earliestOriginFor), không phải "cho_bao_gia" —
+ * neo sai kiểu đó khiến một đơn "khách bom" (chỉ xảy ra từ về kho VN trở
+ * đi) trông như còn ở bước đầu tiên, chưa làm gì.
+ */
+function journeyPosition(
+  status: OrderStatus,
+  history: { toStatus: OrderStatus }[],
+): OrderStatus {
+  const chain = MAIN_CHAIN as readonly string[];
+  if (chain.includes(status)) return status;
+  const lastMain = history.find((h) => chain.includes(h.toStatus));
+  return lastMain ? lastMain.toStatus : earliestOriginFor(status);
+}
 
 export default async function OrderDetailPage({
   params,
@@ -31,17 +62,31 @@ export default async function OrderDetailPage({
   const detail = await getOrderDetail(orderId);
   if (!detail || !detail.order) notFound();
 
-  const { order, customer, items, history, photos } = detail;
+  const { order, customer, items, history, photos, payments } = detail;
   const orderPackages = getPackagesForOrder(orderId);
   const money = computeOrderMoney({
     goodsTotalCny: order.goodsTotalCny,
     exchangeRate: order.exchangeRate,
-    serviceFee: order.serviceFee,
+    serviceFee: order.marginVnd,
     shippingFee: order.shippingFee,
     deposit: order.deposit,
   });
   const nextStatuses = allowedNextStatuses(order.orderType, order.status);
+  const positionStatus = journeyPosition(order.status, history);
   const isStockSale = order.orderType === "ban_tu_kho";
+  const gaps = orderGaps(
+    {
+      orderType: order.orderType,
+      status: order.status,
+      customerId: order.customerId,
+      customerPhone: customer?.phone ?? null,
+      customerAddress: customer?.address ?? null,
+      shipStatus: order.shipStatus,
+    },
+    items.map((it) => ({ costConfirmed: it.costConfirmed })),
+    photos.map((p) => ({ label: p.label })),
+  );
+  const sellRate = order.exchangeRate || getSettings().sellRate;
   const saleProfit = money.goodsTotalVnd - (order.saleCost ?? 0);
   // Khi nào cho tách dòng: lỗi NCC ở khâu lưu thông, đổi/trả sau khi giao.
   const canDefect = (
@@ -60,7 +105,7 @@ export default async function OrderDetailPage({
       unitPriceCny: it.unitPriceCny,
     })),
     exchangeRate: order.exchangeRate,
-    serviceFee: order.serviceFee,
+    serviceFee: order.marginVnd,
     shippingFee: order.shippingFee,
     deposit: order.deposit,
   });
@@ -85,6 +130,21 @@ export default async function OrderDetailPage({
 
         {err && <div className="error">{err}</div>}
 
+        {gaps.length > 0 && (
+          <div className="gap-banner">
+            <div className="gap-chips">
+              {gaps.map((g) => (
+                <span key={g} className="gap-chip">
+                  {GAP_LABELS[g]}
+                </span>
+              ))}
+            </div>
+            <p className="muted small" style={{ margin: "6px 0 0" }}>
+              Đơn vẫn chạy bình thường — các mục này chỉ để nhắc bổ sung.
+            </p>
+          </div>
+        )}
+
         {customer?.warningFlag && (
           <div className="warn-flag">
             ⚠️ Khách có cờ cảnh báo
@@ -92,32 +152,14 @@ export default async function OrderDetailPage({
           </div>
         )}
 
-        {/* Chuyển trạng thái một chạm */}
-        <section className="card">
-          <h2 className="card-title">Chuyển trạng thái</h2>
-          {nextStatuses.length === 0 ? (
-            <p className="muted">Đơn đã ở trạng thái cuối, không thể chuyển tiếp.</p>
-          ) : (
-            <div className="status-actions">
-              {nextStatuses.map((to) => (
-                <form key={to} action={changeStatusAction}>
-                  <input type="hidden" name="orderId" value={order.id} />
-                  <input type="hidden" name="to" value={to} />
-                  <button
-                    type="submit"
-                    className={`btn ${
-                      to === "su_co" || to === "khach_bom" || to === "huy"
-                        ? "btn-warn"
-                        : ""
-                    }`}
-                  >
-                    {STATUS_LABELS[to]}
-                  </button>
-                </form>
-              ))}
-            </div>
-          )}
-        </section>
+        {/* Hành trình đơn hàng: stepper + hành động chuyển trạng thái */}
+        <OrderJourney
+          orderId={order.id}
+          orderType={order.orderType}
+          status={order.status}
+          positionStatus={positionStatus}
+          nextStatuses={nextStatuses}
+        />
 
         <div className="two-col">
           {/* Khách + tiền */}
@@ -125,7 +167,11 @@ export default async function OrderDetailPage({
             <h2 className="card-title">Khách hàng</h2>
             <div className="kv">
               <span>Tên</span>
-              <strong>{customer?.name}</strong>
+              {customer ? (
+                <strong>{customer.name}</strong>
+              ) : (
+                <em className="muted">— chưa có khách —</em>
+              )}
             </div>
             {customer?.phone && (
               <div className="kv">
@@ -179,8 +225,8 @@ export default async function OrderDetailPage({
                   </span>
                 </div>
                 <div className="kv">
-                  <span>Phí dịch vụ</span>
-                  <span>{formatVnd(order.serviceFee)}</span>
+                  <span>Lời</span>
+                  <span>{formatVnd(order.marginVnd)}</span>
                 </div>
                 <div className="kv">
                   <span>Phí ship</span>
@@ -226,6 +272,34 @@ export default async function OrderDetailPage({
             </ol>
           </section>
         </div>
+
+        {/* Bóc lớp giá theo món — chỉ đơn tính giá vốn bằng ¥ */}
+        {!isStockSale && items.length > 0 && (
+          <LinePricingTable
+            orderId={order.id}
+            rows={items.map((it) => ({
+              id: it.id,
+              name: it.name,
+              attributes: it.attributes,
+              quantity: it.quantity,
+              unitPriceCny: it.unitPriceCny,
+              marginVnd: it.marginVnd,
+              costConfirmed: it.costConfirmed,
+            }))}
+            sellRate={sellRate}
+            quotedTotalVnd={order.quotedTotalVnd}
+            shippingFee={order.shippingFee}
+            shipStatus={order.shipStatus}
+          />
+        )}
+
+        <PaymentsBlock
+          orderId={order.id}
+          rows={payments}
+          quotedTotalVnd={order.quotedTotalVnd}
+          shippingFee={order.shippingFee}
+          suggestedFinal={suggestFinalPayment(order.id)}
+        />
 
         {/* Sản phẩm */}
         <section className="card">

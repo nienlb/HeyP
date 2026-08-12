@@ -1,12 +1,29 @@
 import "server-only";
 import { config } from "./config";
 import {
+  ZALO_BATCH_PROMPT,
+  ZALO_BATCH_SCHEMA,
   ZALO_EXTRACT_PROMPT,
   ZALO_RESPONSE_SCHEMA,
+  normalizeBatch,
+  type ZaloBatchExtract,
   type ZaloExtract,
 } from "./zalo-extract";
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+
+// Gemini đôi khi chậm hẳn (quan sát thực tế: có lần 130s, phần lớn dưới 6s —
+// nghẽn phía Google, không sửa được từ code). Giới hạn thời gian chờ để
+// người dùng không bị treo màn hình vô thời hạn; hết giờ thì rơi về nhập
+// tay bình thường, đúng nguyên tắc "AI là tiện ích, không phải chốt chặn".
+const TIMEOUT_MS = 45_000;
+
+function timeoutMessage(err: unknown): string {
+  if (err instanceof Error && err.name === "TimeoutError") {
+    return `Gemini phản hồi quá chậm (>${TIMEOUT_MS / 1000}s) — thử lại hoặc nhập tay.`;
+  }
+  return `Không gọi được Gemini: ${(err as Error).message}`;
+}
 
 export type ReadResult =
   | { ok: true; data: ZaloExtract }
@@ -48,9 +65,10 @@ export async function readZaloImage(
           temperature: 0,
         },
       }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
-    return { ok: false, error: `Không gọi được Gemini: ${(err as Error).message}` };
+    return { ok: false, error: timeoutMessage(err) };
   }
 
   if (!res.ok) {
@@ -100,4 +118,74 @@ function numOrNull(v: unknown): number | null {
 function strOrNull(v: unknown): string | null {
   const s = String(v ?? "").trim();
   return s === "" || s.toLowerCase() === "null" ? null : s;
+}
+
+export type BatchResult =
+  | { ok: true; data: ZaloBatchExtract }
+  | { ok: false; error: string };
+
+/**
+ * Gửi CẢ NHÓM ảnh trong một request: Gemini vừa phân loại từng ảnh vừa gộp
+ * dữ liệu đơn. Một lần gọi cho cả nhóm — rẻ và nhanh hơn gọi từng ảnh.
+ */
+export async function readZaloBatch(
+  images: { base64: string; mimeType: string }[],
+): Promise<BatchResult> {
+  if (!config.geminiApiKey) {
+    return {
+      ok: false,
+      error: "Chưa cấu hình GEMINI_API_KEY — nhập tay bình thường.",
+    };
+  }
+  if (images.length === 0) return { ok: false, error: "Chưa có ảnh nào" };
+
+  const url = `${ENDPOINT}/${config.geminiModel}:generateContent`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": config.geminiApiKey,
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: ZALO_BATCH_PROMPT },
+              ...images.flatMap((img, i) => [
+                { text: `Ảnh số ${i}:` },
+                { inlineData: { mimeType: img.mimeType, data: img.base64 } },
+              ]),
+            ],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: ZALO_BATCH_SCHEMA,
+          temperature: 0,
+        },
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (err) {
+    return { ok: false, error: timeoutMessage(err) };
+  }
+
+  if (!res.ok) return { ok: false, error: `Gemini trả lỗi ${res.status}` };
+
+  let text: string | undefined;
+  try {
+    const json = await res.json();
+    text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  } catch {
+    return { ok: false, error: "Không đọc được phản hồi Gemini" };
+  }
+  if (!text) return { ok: false, error: "Gemini không trả dữ liệu" };
+
+  try {
+    return { ok: true, data: normalizeBatch(JSON.parse(text), images.length) };
+  } catch {
+    return { ok: false, error: "Dữ liệu Gemini không đúng định dạng" };
+  }
 }

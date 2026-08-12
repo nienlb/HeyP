@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { AppShell } from "../../_components/app-shell";
-import { listCustomers } from "@/db/queries";
+import { getSettings, listCustomers } from "@/db/queries";
 import { NewOrderForm } from "./new-order-form";
 
 export default async function NewOrderPage() {
   const session = await requireAuth();
   const customers = await listCustomers();
+  const settings = getSettings();
 
   return (
     <AppShell username={session.username}>
@@ -21,7 +22,8 @@ export default async function NewOrderPage() {
             warningFlag: c.warningFlag,
             warningReason: c.warningReason,
           }))}
-          defaultExchangeRate={3600}
+          defaultExchangeRate={settings.sellRate}
+          defaultMarginVnd={settings.defaultMarginVnd}
         />
     </AppShell>
   );

@@ -15,8 +15,15 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { ORDER_STATUSES, ORDER_TYPES } from "@/lib/order-status";
 import { PHOTO_LABELS } from "@/lib/photos";
+import {
+  EXPENSE_CATEGORIES,
+  LEDGER_KINDS,
+  PAYMENT_KINDS,
+  PAYMENT_METHODS,
+} from "@/lib/expenses";
 
 export const LINE_STATUSES = ["normal", "supplier_defect", "returned"] as const;
+export const SHIP_STATUSES = ["unknown", "free", "set"] as const;
 export const PACKAGE_MODES = ["auto", "manual"] as const;
 export const INVENTORY_SOURCES = [
   "active", // Nhập chủ động
@@ -47,9 +54,7 @@ export const customers = sqliteTable("customers", {
 // 2) Đơn hàng
 export const orders = sqliteTable("orders", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  customerId: integer("customer_id")
-    .notNull()
-    .references(() => customers.id),
+  customerId: integer("customer_id").references(() => customers.id),
   orderType: text("order_type", { enum: ORDER_TYPES }).notNull(),
   status: text("status", { enum: ORDER_STATUSES })
     .notNull()
@@ -57,7 +62,7 @@ export const orders = sqliteTable("orders", {
   // Khối tiền — CNY & tỷ giá là số thực; các khoản VND là số nguyên đồng.
   exchangeRate: real("exchange_rate").notNull().default(0),
   goodsTotalCny: real("goods_total_cny").notNull().default(0),
-  serviceFee: integer("service_fee").notNull().default(0),
+  marginVnd: integer("margin_vnd").notNull().default(0),
   shippingFee: integer("shipping_fee").notNull().default(0),
   deposit: integer("deposit").notNull().default(0),
   amountDue: integer("amount_due").notNull().default(0),
@@ -68,6 +73,10 @@ export const orders = sqliteTable("orders", {
   statusChangedAt: integer("status_changed_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
+  quotedTotalVnd: integer("quoted_total_vnd").notNull().default(0),
+  shipStatus: text("ship_status", { enum: SHIP_STATUSES })
+    .notNull()
+    .default("unknown"),
 });
 
 // 3) Sản phẩm trong đơn
@@ -85,6 +94,10 @@ export const orderItems = sqliteTable("order_items", {
   lineStatus: text("line_status", { enum: LINE_STATUSES })
     .notNull()
     .default("normal"),
+  marginVnd: integer("margin_vnd").notNull().default(0),
+  costConfirmed: integer("cost_confirmed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   createdAt: createdAt(),
 });
 
@@ -159,5 +172,55 @@ export const orderStatusHistory = sqliteTable("order_status_history", {
   changedAt: integer("changed_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),
+  note: text("note"),
+});
+
+// 7) Tham số nghiệp vụ đổi được lúc chạy (tỷ giá bán, lời mặc định).
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
+// 8) Sổ ví ¥ — số dư và giá vốn bq KHÔNG lưu, tính lại từ sổ.
+export const cnyLedger = sqliteTable("cny_ledger", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  kind: text("kind", { enum: LEDGER_KINDS }).notNull(),
+  cnyDelta: real("cny_delta").notNull(),
+  vndPaid: integer("vnd_paid"),
+  rateSnapshot: integer("rate_snapshot"),
+  orderId: integer("order_id").references(() => orders.id),
+  note: text("note"),
+  createdAt: createdAt(),
+});
+
+// 9) Chi phí VND. order_id NULL = chi phí theo kỳ.
+export const expenses = sqliteTable("expenses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  spentAt: integer("spent_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  category: text("category", { enum: EXPENSE_CATEGORIES }).notNull(),
+  amountVnd: integer("amount_vnd").notNull(),
+  orderId: integer("order_id").references(() => orders.id),
+  method: text("method", { enum: PAYMENT_METHODS })
+    .notNull()
+    .default("chuyen_khoan"),
+  note: text("note"),
+});
+
+// 10) Sổ thu tiền — orders.deposit là Σ của bảng này.
+export const payments = sqliteTable("payments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  orderId: integer("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  amountVnd: integer("amount_vnd").notNull(),
+  paidAt: integer("paid_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  kind: text("kind", { enum: PAYMENT_KINDS }).notNull(),
+  method: text("method", { enum: PAYMENT_METHODS })
+    .notNull()
+    .default("chuyen_khoan"),
   note: text("note"),
 });

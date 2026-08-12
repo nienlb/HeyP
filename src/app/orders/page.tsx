@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { AppShell } from "../_components/app-shell";
-import { listOrders, type OrderListRow } from "@/db/queries";
+import { listOrdersWithGaps, type OrderListRow } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
+import { GAP_CODES, GAP_LABELS, type GapCode } from "@/lib/order-gaps";
 import {
   BRANCH_STATUSES,
   MAIN_CHAIN,
@@ -13,11 +14,21 @@ import {
 
 const DISPLAY_ORDER: OrderStatus[] = [...MAIN_CHAIN, ...BRANCH_STATUSES];
 
-function OrderRow({ o }: { o: OrderListRow }) {
+type RowWithGaps = OrderListRow & { gaps: GapCode[] };
+
+function OrderRow({ o }: { o: RowWithGaps }) {
   return (
     <Link href={`/orders/${o.id}`} className="order-row">
       <span className="order-id">#{o.id}</span>
-      <span className="order-customer">{o.customerName}</span>
+      <span className="order-customer">
+        {o.customerName}
+        {o.gaps.length > 0 && (
+          <span
+            className="gap-dot"
+            title={o.gaps.map((g) => GAP_LABELS[g]).join(" · ")}
+          />
+        )}
+      </span>
       <span className={`badge badge-type type-${o.orderType}`}>
         {ORDER_TYPE_LABELS[o.orderType]}
       </span>
@@ -36,11 +47,29 @@ function OrderRow({ o }: { o: OrderListRow }) {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; gap?: string }>;
 }) {
   const session = await requireAuth();
-  const { q } = await searchParams;
-  const rows = await listOrders(q);
+  const { q, gap } = await searchParams;
+  const all = await listOrdersWithGaps();
+
+  // Lọc tìm kiếm giữ nguyên hành vi cũ của listOrders(q).
+  const needle = q?.trim().toLowerCase();
+  const searched = needle
+    ? all.filter(
+        (r) =>
+          r.customerName.toLowerCase().includes(needle) ||
+          String(r.id).includes(needle) ||
+          `#${r.id}`.includes(needle),
+      )
+    : all;
+
+  const activeGap = (GAP_CODES as readonly string[]).includes(gap ?? "")
+    ? (gap as GapCode)
+    : null;
+  const rows = activeGap
+    ? searched.filter((r) => r.gaps.includes(activeGap))
+    : searched;
 
   const attention = rows
     .filter((r) => r.needsAttention)
@@ -71,6 +100,15 @@ export default async function OrdersPage({
             />
           </form>
         </div>
+
+        {activeGap && (
+          <div className="filter-bar">
+            <span className="gap-chip">Đang lọc: {GAP_LABELS[activeGap]}</span>
+            <Link href="/orders" className="btn btn-sm btn-outline">
+              Bỏ lọc
+            </Link>
+          </div>
+        )}
 
         {rows.length === 0 ? (
           <div className="card empty">

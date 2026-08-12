@@ -3,15 +3,37 @@ import { desc, eq } from "drizzle-orm";
 import { db, sqlite } from "./index";
 import {
   customers,
+  expenses,
   inventory,
   orderItems,
   orderPackages,
   orderStatusHistory,
   orders,
   packages,
+  payments,
   photos,
+  settings,
 } from "./schema";
 import type { PhotoLabel } from "@/lib/photos";
+import {
+  SETTING_KEYS,
+  parseSettings,
+  type AppSettings,
+} from "@/lib/settings";
+import { allocateMargins, redistribute } from "@/lib/line-pricing";
+import {
+  orderGaps,
+  type GapCode,
+  type ShipStatus,
+} from "@/lib/order-gaps";
+import type {
+  ExpenseCategory,
+  LedgerKind,
+  PaymentKind,
+  PaymentMethod,
+} from "@/lib/expenses";
+import { currentRate, replayLedger, walletValueVnd } from "@/lib/cny-wallet";
+import type { PnlExpense, PnlOrder } from "@/lib/pnl";
 import { getAdapter } from "@/lib/tracking";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import {
@@ -32,6 +54,49 @@ import {
 import { config } from "@/lib/config";
 import { ageInDays } from "@/lib/format";
 
+// ---------- Tham số nghiệp vụ (bảng settings) ----------
+
+export function getSettings(): AppSettings {
+  const rows = sqlite.prepare("SELECT key, value FROM settings").all() as {
+    key: string;
+    value: string;
+  }[];
+  return parseSettings(rows);
+}
+
+export function saveSettings(next: AppSettings): void {
+  const stmt = sqlite.prepare(
+    `INSERT INTO settings(key, value) VALUES(?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+  );
+  // Dựng chuỗi trong JS: node:sqlite bind số JS thành REAL → "4000.0" trong DB.
+  stmt.run(SETTING_KEYS.sellRate, String(next.sellRate));
+  stmt.run(SETTING_KEYS.defaultMarginVnd, String(next.defaultMarginVnd));
+}
+
+/**
+ * Gợi ý giá ¥ cho món đã từng order: lấy lần gần nhất ĐÃ xác nhận giá vốn.
+ * Khớp tên chính xác sau khi chuẩn hoá (bỏ khoảng trắng thừa, không phân biệt
+ * hoa thường). KHÔNG đoán theo tên gần giống — gợi ý sai âm thầm còn tệ hơn
+ * không gợi ý.
+ */
+export function suggestCnyFromHistory(productName: string): number | null {
+  const key = productName.trim().replace(/\s+/g, " ").toLowerCase();
+  if (key === "") return null;
+  const row = sqlite
+    .prepare(
+      `SELECT unit_price_cny AS cny
+         FROM order_items
+        WHERE cost_confirmed = 1
+          AND unit_price_cny > 0
+          AND LOWER(TRIM(name)) = ?
+        ORDER BY id DESC
+        LIMIT 1`,
+    )
+    .get(key) as { cny: number } | undefined;
+  return row ? row.cny : null;
+}
+
 // ---------- Khách hàng ----------
 
 export async function listCustomers() {
@@ -50,15 +115,22 @@ export type NewOrderItemInput = {
   attributes?: string | null;
   quantity: number;
   unitPriceCny: number;
+  /** Lời của món. Bỏ trống → app tự rải theo mức mặc định để khớp Total. */
+  marginVnd?: number;
+  /** Giá ¥ do người dùng xác nhận, hay chỉ là số máy gợi ý? */
+  costConfirmed?: boolean;
 };
 
 export type NewOrderInput = {
+  /** Cho phép null: đơn tạo từ ảnh có thể chưa có thông tin khách. */
   customerId?: number | null;
   newCustomer?: { name: string; phone?: string; address?: string } | null;
   orderType: OrderType;
   exchangeRate: number;
-  serviceFee: number;
+  /** Total đã chốt với khách (KHÔNG gồm ship) — dữ kiện, không phải kết quả. */
+  quotedTotalVnd: number;
   shippingFee: number;
+  shipStatus: ShipStatus;
   deposit: number;
   note?: string | null;
   items: NewOrderItemInput[];
@@ -67,10 +139,27 @@ export type NewOrderInput = {
 
 export function createOrder(input: NewOrderInput): number {
   const goodsTotalCny = sumLineItemsCny(input.items);
+  const pricingLines = input.items.map((it) => ({
+    quantity: it.quantity,
+    unitPriceCny: it.unitPriceCny,
+    marginVnd: it.marginVnd ?? 0,
+  }));
+  // Lời chưa được rải (tạo đơn từ ảnh) → rải theo mức mặc định, khớp Total.
+  const hasMargins = input.items.some((it) => it.marginVnd !== undefined);
+  const margins = hasMargins
+    ? pricingLines.map((l) => Math.round(l.marginVnd))
+    : allocateMargins(
+        input.quotedTotalVnd,
+        pricingLines,
+        input.exchangeRate,
+        getSettings().defaultMarginVnd,
+      );
+  const marginTotal = margins.reduce((s, m) => s + m, 0);
+
   const money = computeOrderMoney({
     goodsTotalCny,
     exchangeRate: input.exchangeRate,
-    serviceFee: input.serviceFee,
+    serviceFee: marginTotal,
     shippingFee: input.shippingFee,
     deposit: input.deposit,
   });
@@ -90,34 +179,39 @@ export function createOrder(input: NewOrderInput): number {
         );
       customerId = Number(info.lastInsertRowid);
     }
-    if (!customerId) throw new Error("Thiếu khách hàng cho đơn");
+    // Đơn ĐƯỢC PHÉP chưa có khách (tiền cọc đã về thật, thông tin tới sau).
+    // Cờ `thieu_khach` của order-gaps lo phần nhắc bổ sung.
 
     const info = sqlite
       .prepare(
         `INSERT INTO orders
            (customer_id, order_type, status, exchange_rate, goods_total_cny,
-            service_fee, shipping_fee, deposit, amount_due, note)
-         VALUES (?, ?, 'cho_bao_gia', ?, ?, ?, ?, ?, ?, ?)`,
+            margin_vnd, shipping_fee, deposit, amount_due, note,
+            quoted_total_vnd, ship_status)
+         VALUES (?, ?, 'cho_bao_gia', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         customerId,
         input.orderType,
         input.exchangeRate,
         goodsTotalCny,
-        input.serviceFee,
+        marginTotal,
         input.shippingFee,
         input.deposit,
         money.amountDue,
         input.note ?? null,
+        Math.round(input.quotedTotalVnd),
+        input.shipStatus,
       );
     const orderId = Number(info.lastInsertRowid);
 
     const itemStmt = sqlite.prepare(
       `INSERT INTO order_items
-         (order_id, product_url, name, attributes, quantity, unit_price_cny)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+         (order_id, product_url, name, attributes, quantity, unit_price_cny,
+          margin_vnd, cost_confirmed)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
-    for (const it of input.items) {
+    input.items.forEach((it, i) => {
       itemStmt.run(
         orderId,
         it.productUrl ?? null,
@@ -125,8 +219,10 @@ export function createOrder(input: NewOrderInput): number {
         it.attributes ?? null,
         it.quantity,
         it.unitPriceCny,
+        margins[i],
+        it.costConfirmed ? 1 : 0,
       );
-    }
+    });
 
     sqlite
       .prepare(
@@ -135,6 +231,17 @@ export function createOrder(input: NewOrderInput): number {
          VALUES (?, NULL, 'cho_bao_gia', ?, 'Tạo đơn')`,
       )
       .run(orderId, input.changedBy ?? null);
+
+    // Cọc đọc từ ảnh Zalo → một dòng thu tiền, không ghi thẳng vào
+    // orders.deposit nữa (deposit là số dẫn xuất — spec v3-B mục 3).
+    if (input.deposit > 0) {
+      sqlite
+        .prepare(
+          `INSERT INTO payments (order_id, amount_vnd, paid_at, kind, method, note)
+           VALUES (?, ?, unixepoch(), 'coc', 'chuyen_khoan', NULL)`,
+        )
+        .run(orderId, Math.round(input.deposit));
+    }
 
     sqlite.exec("COMMIT");
     return orderId;
@@ -149,11 +256,13 @@ export function createOrder(input: NewOrderInput): number {
 export async function getOrderDetail(id: number) {
   const order = await db.select().from(orders).where(eq(orders.id, id)).get();
   if (!order) return null;
-  const customer = await db
-    .select()
-    .from(customers)
-    .where(eq(customers.id, order.customerId))
-    .get();
+  const customer = order.customerId
+    ? await db
+        .select()
+        .from(customers)
+        .where(eq(customers.id, order.customerId))
+        .get()
+    : null;
   const items = await db
     .select()
     .from(orderItems)
@@ -165,7 +274,15 @@ export async function getOrderDetail(id: number) {
     .where(eq(orderStatusHistory.orderId, id))
     .orderBy(desc(orderStatusHistory.changedAt), desc(orderStatusHistory.id));
   const orderPhotos = await listPhotosForOrder(id);
-  return { order, customer, items, history, photos: orderPhotos };
+  const orderPayments = await listPaymentsForOrder(id);
+  return {
+    order,
+    customer,
+    items,
+    history,
+    photos: orderPhotos,
+    payments: orderPayments,
+  };
 }
 
 // ---------- Ảnh ----------
@@ -439,11 +556,11 @@ function _addStock(
 function _recomputeOrderMoney(orderId: number): void {
   const order = sqlite
     .prepare(
-      "SELECT exchange_rate, service_fee, shipping_fee, deposit FROM orders WHERE id = ?",
+      "SELECT exchange_rate, margin_vnd, shipping_fee, deposit FROM orders WHERE id = ?",
     )
     .get(orderId) as {
     exchange_rate: number;
-    service_fee: number;
+    margin_vnd: number;
     shipping_fee: number;
     deposit: number;
   };
@@ -459,13 +576,126 @@ function _recomputeOrderMoney(orderId: number): void {
   const money = computeOrderMoney({
     goodsTotalCny,
     exchangeRate: order.exchange_rate,
-    serviceFee: order.service_fee,
+    serviceFee: order.margin_vnd,
     shippingFee: order.shipping_fee,
     deposit: order.deposit,
   });
   sqlite
     .prepare("UPDATE orders SET goods_total_cny = ?, amount_due = ? WHERE id = ?")
     .run(goodsTotalCny, money.amountDue, orderId);
+}
+
+// ---------- Ví ¥ (v3-B) ----------
+
+export function listLedger() {
+  return sqlite
+    .prepare(
+      `SELECT id, kind, cny_delta AS cnyDelta, vnd_paid AS vndPaid,
+              rate_snapshot AS rateSnapshot, order_id AS orderId, note,
+              created_at AS createdAt
+         FROM cny_ledger ORDER BY created_at, id`,
+    )
+    .all() as {
+    id: number;
+    kind: LedgerKind;
+    cnyDelta: number;
+    vndPaid: number | null;
+    rateSnapshot: number | null;
+    orderId: number | null;
+    note: string | null;
+    createdAt: number;
+  }[];
+}
+
+export function getWallet() {
+  const state = replayLedger(listLedger());
+  return { ...state, valueVnd: walletValueVnd(state) };
+}
+
+export function addTopup(input: {
+  cny: number;
+  vndPaid: number;
+  note?: string | null;
+}): LineActionResult {
+  if (!(input.cny > 0)) return { ok: false, reason: "Số tệ phải lớn hơn 0" };
+  if (!(input.vndPaid > 0))
+    return { ok: false, reason: "Số tiền trả phải lớn hơn 0" };
+
+  sqlite
+    .prepare(
+      `INSERT INTO cny_ledger (kind, cny_delta, vnd_paid, note)
+       VALUES ('nap', ?, ?, ?)`,
+    )
+    .run(input.cny, Math.round(input.vndPaid), input.note ?? null);
+  return { ok: true };
+}
+
+/**
+ * Chỉ cho xoá dòng 'nap' — dòng 'chi' sinh tự động từ trạng thái đơn.
+ * Sửa = xoá rồi nạp lại: số dư chạy lại từ sổ nên kết quả giống hệt.
+ */
+export function deleteLedgerEntry(id: number): LineActionResult {
+  const row = sqlite
+    .prepare("SELECT kind FROM cny_ledger WHERE id = ?")
+    .get(id) as { kind: LedgerKind } | undefined;
+  if (!row) return { ok: false, reason: "Không tìm thấy dòng sổ" };
+  if (row.kind !== "nap")
+    return {
+      ok: false,
+      reason:
+        "Chỉ xoá được đợt nạp. Dòng mua hàng sửa bằng cách ghi điều chỉnh.",
+    };
+  sqlite.prepare("DELETE FROM cny_ledger WHERE id = ?").run(id);
+  return { ok: true };
+}
+
+// ---------- Sổ chi phí (v3-B) ----------
+
+export async function listExpenses(limit = 100) {
+  return db
+    .select()
+    .from(expenses)
+    .orderBy(desc(expenses.spentAt))
+    .limit(limit);
+}
+
+export type AddExpenseInput = {
+  spentAt: Date;
+  category: ExpenseCategory;
+  amountVnd: number;
+  orderId?: number | null;
+  method: PaymentMethod;
+  note?: string | null;
+};
+
+export function addExpense(input: AddExpenseInput): LineActionResult {
+  if (!(input.amountVnd > 0))
+    return { ok: false, reason: "Số tiền phải lớn hơn 0" };
+  if (input.orderId != null) {
+    const exists = sqlite
+      .prepare("SELECT 1 AS x FROM orders WHERE id = ?")
+      .get(input.orderId);
+    if (!exists) return { ok: false, reason: "Đơn không tồn tại" };
+  }
+  sqlite
+    .prepare(
+      `INSERT INTO expenses (spent_at, category, amount_vnd, order_id, method, note)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      Math.floor(input.spentAt.getTime() / 1000),
+      input.category,
+      Math.round(input.amountVnd),
+      input.orderId ?? null,
+      input.method,
+      input.note ?? null,
+    );
+  return { ok: true };
+}
+
+export function deleteExpense(id: number): LineActionResult {
+  sqlite.prepare("DELETE FROM expenses WHERE id = ?").run(id);
+  return { ok: true };
 }
 
 // ---------- Đổi trạng thái (kèm side-effect tồn kho) ----------
@@ -554,12 +784,348 @@ export function changeOrderStatus(
         .run(`Từng bom hàng (đơn #${id})`, order.customer_id);
     }
 
+    // Đã mua hàng TQ → trừ ví ¥ và CHỐT CỨNG giá vốn tại thời điểm này.
+    // Nạp ¥ đợt sau rẻ hơn không được làm đổi lãi/lỗ của đơn đã mua rồi.
+    // goods_total_cny = 0 (chưa nhập giá ¥) → không ghi dòng chi vô nghĩa.
+    if (to === "da_mua_tq" && order.goods_total_cny > 0) {
+      const rate = Math.round(currentRate(listLedger()));
+      sqlite
+        .prepare(
+          `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
+           VALUES ('chi', ?, ?, ?, ?)`,
+        )
+        .run(-order.goods_total_cny, rate, id, `Mua hàng đơn #${id}`);
+    }
+
     sqlite.exec("COMMIT");
     return { ok: true };
   } catch (err) {
     sqlite.exec("ROLLBACK");
     throw err;
   }
+}
+
+// ---------- Bóc lớp giá theo dòng (v3-A) ----------
+
+type OrderMoneyRow = {
+  exchange_rate: number;
+  shipping_fee: number;
+  deposit: number;
+};
+
+function readOrderMoneyRow(orderId: number): OrderMoneyRow {
+  const row = sqlite
+    .prepare(
+      "SELECT exchange_rate, shipping_fee, deposit FROM orders WHERE id = ?",
+    )
+    .get(orderId) as OrderMoneyRow | undefined;
+  if (!row) throw new Error("Không tìm thấy đơn");
+  return row;
+}
+
+/**
+ * Đồng bộ khối tiền cấp đơn từ các dòng. Gọi BÊN TRONG transaction đang mở.
+ * goods_total_cny và margin_vnd ở cấp đơn là số DẪN XUẤT từ order_items.
+ */
+export function recomputeOrderMoneyRow(
+  orderId: number,
+  order: OrderMoneyRow,
+): void {
+  const agg = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(quantity * unit_price_cny), 0) AS cny,
+              COALESCE(SUM(margin_vnd), 0) AS margin
+         FROM order_items WHERE order_id = ?`,
+    )
+    .get(orderId) as { cny: number; margin: number };
+
+  const money = computeOrderMoney({
+    goodsTotalCny: agg.cny,
+    exchangeRate: order.exchange_rate,
+    serviceFee: agg.margin,
+    shippingFee: order.shipping_fee,
+    deposit: order.deposit,
+  });
+
+  sqlite
+    .prepare(
+      "UPDATE orders SET goods_total_cny = ?, margin_vnd = ?, amount_due = ? WHERE id = ?",
+    )
+    .run(agg.cny, agg.margin, money.amountDue, orderId);
+}
+
+/**
+ * Nhập hoặc sửa giá ¥ của một dòng. Total giữ nguyên (khách đã đồng ý), lời
+ * được rải lại cho toàn bộ dòng. Chạm vào ô này = xác nhận giá vốn.
+ */
+export function updateLineCost(
+  orderId: number,
+  itemId: number,
+  unitPriceCny: number,
+): LineActionResult {
+  if (!(unitPriceCny >= 0))
+    return { ok: false, reason: "Giá tệ không được âm" };
+
+  sqlite.exec("BEGIN");
+  try {
+    const order = readOrderMoneyRow(orderId);
+    const quoted = sqlite
+      .prepare("SELECT quoted_total_vnd AS total FROM orders WHERE id = ?")
+      .get(orderId) as { total: number };
+
+    sqlite
+      .prepare(
+        "UPDATE order_items SET unit_price_cny = ?, cost_confirmed = 1 WHERE id = ? AND order_id = ?",
+      )
+      .run(unitPriceCny, itemId, orderId);
+
+    // Giá vốn đổi → lời phải rải lại để Σ giá bán vẫn đúng bằng Total.
+    const rows = sqlite
+      .prepare(
+        "SELECT id, quantity, unit_price_cny, margin_vnd FROM order_items WHERE order_id = ? ORDER BY id",
+      )
+      .all(orderId) as {
+      id: number;
+      quantity: number;
+      unit_price_cny: number;
+      margin_vnd: number;
+    }[];
+    const margins = allocateMargins(
+      quoted.total,
+      rows.map((r) => ({
+        quantity: r.quantity,
+        unitPriceCny: r.unit_price_cny,
+        marginVnd: r.margin_vnd,
+      })),
+      order.exchange_rate,
+      getSettings().defaultMarginVnd,
+    );
+    const stmt = sqlite.prepare(
+      "UPDATE order_items SET margin_vnd = ? WHERE id = ?",
+    );
+    rows.forEach((r, i) => stmt.run(margins[i], r.id));
+
+    // Đơn đã mua hàng rồi mà giá ¥ mới sửa → ghi dòng điều chỉnh bằng phần
+    // chênh vào ví. Sổ ví là append-only: không bao giờ sửa quá khứ.
+    const spent = sqlite
+      .prepare(
+        `SELECT COALESCE(SUM(-cny_delta), 0) AS cny
+           FROM cny_ledger WHERE order_id = ? AND kind IN ('chi','dieu_chinh')`,
+      )
+      .get(orderId) as { cny: number };
+
+    if (spent.cny > 0) {
+      const agg = sqlite
+        .prepare(
+          "SELECT COALESCE(SUM(quantity * unit_price_cny), 0) AS cny FROM order_items WHERE order_id = ?",
+        )
+        .get(orderId) as { cny: number };
+      const diff = agg.cny - spent.cny;
+      if (Math.abs(diff) > 0.0001) {
+        const rate = Math.round(currentRate(listLedger()));
+        sqlite
+          .prepare(
+            `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
+             VALUES ('dieu_chinh', ?, ?, ?, ?)`,
+          )
+          .run(-diff, rate, orderId, `Sửa giá ¥ đơn #${orderId}`);
+      }
+    }
+
+    recomputeOrderMoneyRow(orderId, order);
+    sqlite.exec("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/** Kéo lời của một dòng; các dòng khác bù lại để Total giữ nguyên. */
+export function updateLineMargin(
+  orderId: number,
+  itemId: number,
+  marginVnd: number,
+): LineActionResult {
+  sqlite.exec("BEGIN");
+  try {
+    const order = readOrderMoneyRow(orderId);
+    const quoted = sqlite
+      .prepare("SELECT quoted_total_vnd AS total FROM orders WHERE id = ?")
+      .get(orderId) as { total: number };
+
+    const rows = sqlite
+      .prepare(
+        "SELECT id, quantity, unit_price_cny FROM order_items WHERE order_id = ? ORDER BY id",
+      )
+      .all(orderId) as {
+      id: number;
+      quantity: number;
+      unit_price_cny: number;
+    }[];
+    const idx = rows.findIndex((r) => r.id === itemId);
+    if (idx === -1) throw new Error("Không tìm thấy dòng sản phẩm");
+
+    const margins = redistribute(
+      rows.map((r) => ({
+        quantity: r.quantity,
+        unitPriceCny: r.unit_price_cny,
+        marginVnd: 0,
+      })),
+      idx,
+      marginVnd,
+      quoted.total,
+      order.exchange_rate,
+    );
+
+    const stmt = sqlite.prepare(
+      "UPDATE order_items SET margin_vnd = ? WHERE id = ?",
+    );
+    rows.forEach((r, i) => stmt.run(margins[i], r.id));
+
+    recomputeOrderMoneyRow(orderId, order);
+    sqlite.exec("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/** Nhập phí ship khi hàng về VN (hoặc đánh dấu freeship). */
+export function setShipFee(
+  orderId: number,
+  shipStatus: ShipStatus,
+  shippingFee: number,
+): LineActionResult {
+  if (!(shippingFee >= 0))
+    return { ok: false, reason: "Phí ship không được âm" };
+  const fee = shipStatus === "set" ? Math.round(shippingFee) : 0;
+
+  sqlite.exec("BEGIN");
+  try {
+    const order = readOrderMoneyRow(orderId);
+    sqlite
+      .prepare(
+        "UPDATE orders SET ship_status = ?, shipping_fee = ? WHERE id = ?",
+      )
+      .run(shipStatus, fee, orderId);
+
+    recomputeOrderMoneyRow(orderId, { ...order, shipping_fee: fee });
+    sqlite.exec("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/** Đổi nhãn ảnh (người dùng sửa lại khi AI phân loại sai). */
+export function updatePhotoLabel(photoId: number, label: PhotoLabel): void {
+  sqlite
+    .prepare("UPDATE photos SET label = ? WHERE id = ?")
+    .run(label, photoId);
+}
+
+// ---------- Sổ thu tiền (v3-B) ----------
+
+export async function listPaymentsForOrder(orderId: number) {
+  return db
+    .select()
+    .from(payments)
+    .where(eq(payments.orderId, orderId))
+    .orderBy(payments.paidAt, payments.id);
+}
+
+/** Số tiền đề xuất cho khoản "thu nốt": đúng bằng phần còn phải thu. */
+export function suggestFinalPayment(orderId: number): number {
+  const row = sqlite
+    .prepare(
+      `SELECT o.quoted_total_vnd AS total, o.shipping_fee AS ship,
+              COALESCE((SELECT SUM(p.amount_vnd) FROM payments p
+                         WHERE p.order_id = o.id), 0) AS paid
+         FROM orders o WHERE o.id = ?`,
+    )
+    .get(orderId) as
+    | { total: number; ship: number; paid: number }
+    | undefined;
+  if (!row) return 0;
+  return row.total + row.ship - row.paid;
+}
+
+export type AddPaymentInput = {
+  orderId: number;
+  amountVnd: number;
+  paidAt: Date;
+  kind: PaymentKind;
+  method: PaymentMethod;
+  note?: string | null;
+};
+
+export function addPayment(input: AddPaymentInput): LineActionResult {
+  // Hoàn trả lưu số ÂM; các khoản thu phải dương.
+  const amount =
+    input.kind === "hoan_tra"
+      ? -Math.abs(Math.round(input.amountVnd))
+      : Math.round(input.amountVnd);
+  if (amount === 0) return { ok: false, reason: "Số tiền phải khác 0" };
+
+  sqlite.exec("BEGIN");
+  try {
+    sqlite
+      .prepare(
+        `INSERT INTO payments (order_id, amount_vnd, paid_at, kind, method, note)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.orderId,
+        amount,
+        Math.floor(input.paidAt.getTime() / 1000),
+        input.kind,
+        input.method,
+        input.note ?? null,
+      );
+    syncOrderDeposit(input.orderId);
+    sqlite.exec("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+export function deletePayment(id: number, orderId: number): LineActionResult {
+  sqlite.exec("BEGIN");
+  try {
+    sqlite
+      .prepare("DELETE FROM payments WHERE id = ? AND order_id = ?")
+      .run(id, orderId);
+    syncOrderDeposit(orderId);
+    sqlite.exec("COMMIT");
+    return { ok: true };
+  } catch (err) {
+    sqlite.exec("ROLLBACK");
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/**
+ * Đồng bộ orders.deposit từ sổ thu tiền rồi tính lại khối tiền của đơn.
+ * Gọi BÊN TRONG transaction đang mở.
+ */
+function syncOrderDeposit(orderId: number): void {
+  const row = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(amount_vnd), 0) AS paid FROM payments WHERE order_id = ?`,
+    )
+    .get(orderId) as { paid: number };
+
+  sqlite
+    .prepare("UPDATE orders SET deposit = ? WHERE id = ?")
+    .run(row.paid, orderId);
+
+  const order = readOrderMoneyRow(orderId);
+  recomputeOrderMoneyRow(orderId, order);
 }
 
 // ---------- Ba luồng ngoại lệ theo dòng sản phẩm ----------
@@ -651,13 +1217,19 @@ export async function listOrders(query?: string): Promise<OrderListRow[]> {
       customerName: customers.name,
     })
     .from(orders)
-    .innerJoin(customers, eq(orders.customerId, customers.id))
+    // leftJoin, KHÔNG phải innerJoin: đơn chưa gắn khách vẫn phải hiện ra —
+    // nếu không thì đơn thiếu thông tin lại là đơn bị giấu đi, đúng chỗ cần thấy nhất.
+    .leftJoin(customers, eq(orders.customerId, customers.id))
     .orderBy(desc(orders.createdAt));
 
   const threshold = config.staleOrderDays;
   const q = query?.trim().toLowerCase();
 
   return rows
+    .map((r) => ({
+      ...r,
+      customerName: r.customerName ?? "— chưa có khách —",
+    }))
     .filter((r) => {
       if (!q) return true;
       return (
@@ -829,7 +1401,7 @@ export function sellFromStock(input: SellFromStockInput): SellResult {
         .prepare(
           `INSERT INTO orders
              (customer_id, order_type, status, exchange_rate, goods_total_cny,
-              service_fee, shipping_fee, deposit, amount_due, sale_cost, status_changed_at)
+              margin_vnd, shipping_fee, deposit, amount_due, sale_cost, status_changed_at)
            VALUES (?, 'ban_tu_kho', 'da_giao_khach', 1, ?, 0, 0, ?, ?, ?, unixepoch())`,
         )
         .run(
@@ -859,4 +1431,198 @@ export function sellFromStock(input: SellFromStockInput): SellResult {
     sqlite.exec("ROLLBACK");
     throw err;
   }
+}
+
+/** Danh sách đơn kèm cờ "cần bổ sung" (v3-A). */
+export async function listOrdersWithGaps(): Promise<
+  (OrderListRow & { gaps: GapCode[] })[]
+> {
+  const rows = await listOrders();
+  const meta = sqlite
+    .prepare(
+      `SELECT o.id                                         AS id,
+              o.order_type                                 AS orderType,
+              o.status                                     AS status,
+              o.customer_id                                AS customerId,
+              o.ship_status                                AS shipStatus,
+              c.phone                                      AS phone,
+              c.address                                    AS address,
+              (SELECT COUNT(*) FROM order_items i
+                WHERE i.order_id = o.id AND i.cost_confirmed = 0) AS unconfirmed,
+              (SELECT COUNT(*) FROM photos p
+                WHERE p.order_id = o.id AND p.label = 'product')  AS productPhotos
+         FROM orders o LEFT JOIN customers c ON c.id = o.customer_id`,
+    )
+    .all() as {
+    id: number;
+    orderType: OrderType;
+    status: OrderStatus;
+    customerId: number | null;
+    shipStatus: ShipStatus;
+    phone: string | null;
+    address: string | null;
+    unconfirmed: number;
+    productPhotos: number;
+  }[];
+
+  const byId = new Map(meta.map((m) => [m.id, m]));
+  return rows.map((r) => {
+    const m = byId.get(r.id);
+    if (!m) return { ...r, gaps: [] as GapCode[] };
+    return {
+      ...r,
+      gaps: orderGaps(
+        {
+          orderType: m.orderType,
+          status: m.status,
+          customerId: m.customerId,
+          customerPhone: m.phone,
+          customerAddress: m.address,
+          shipStatus: m.shipStatus,
+        },
+        Array.from({ length: m.unconfirmed }, () => ({ costConfirmed: false })),
+        Array.from({ length: m.productPhotos }, () => ({
+          label: "product" as const,
+        })),
+      ),
+    };
+  });
+}
+
+// ---------- Dữ liệu cho 3 báo cáo (v3-B) ----------
+
+function monthRange(year: number, month: number): [number, number] {
+  const from = Math.floor(Date.UTC(year, month - 1, 1) / 1000);
+  const to = Math.floor(Date.UTC(year, month, 1) / 1000);
+  return [from, to];
+}
+
+/**
+ * Đơn HOÀN TẤT trong tháng — ngày lấy từ order_status_history, không từ
+ * orders.status_changed_at (cột đó chỉ giữ lần đổi gần nhất).
+ */
+export function getPnlData(
+  year: number,
+  month: number,
+): { orders: PnlOrder[]; expenses: PnlExpense[]; bomDepositsVnd: number } {
+  const [from, to] = monthRange(year, month);
+
+  const rows = sqlite
+    .prepare(
+      `SELECT o.id                     AS id,
+              o.order_type             AS orderType,
+              o.quoted_total_vnd       AS quotedTotalVnd,
+              o.shipping_fee           AS shippingFee,
+              o.goods_total_cny        AS goodsTotalCny,
+              o.exchange_rate          AS sellRate,
+              o.sale_cost              AS saleCost,
+              (SELECT l.rate_snapshot FROM cny_ledger l
+                WHERE l.order_id = o.id AND l.kind = 'chi'
+                ORDER BY l.id LIMIT 1)                        AS costRate,
+              (SELECT COALESCE(SUM(i.margin_vnd), 0) FROM order_items i
+                WHERE i.order_id = o.id)                      AS marginVnd,
+              (SELECT COUNT(*) = 0 FROM order_items i
+                WHERE i.order_id = o.id AND i.cost_confirmed = 0) AS costConfirmedRaw
+         FROM orders o
+        WHERE EXISTS (SELECT 1 FROM order_status_history h
+                       WHERE h.order_id = o.id AND h.to_status = 'hoan_tat'
+                         AND h.changed_at >= ? AND h.changed_at < ?)`,
+    )
+    .all(from, to) as (Omit<PnlOrder, "costConfirmed"> & {
+    costConfirmedRaw: number;
+  })[];
+
+  const orders: PnlOrder[] = rows.map((r) => ({
+    ...r,
+    costConfirmed: r.costConfirmedRaw === 1,
+  }));
+
+  const expenseRows = sqlite
+    .prepare(
+      `SELECT amount_vnd AS amountVnd, category, order_id AS orderId
+         FROM expenses WHERE spent_at >= ? AND spent_at < ?`,
+    )
+    .all(from, to) as PnlExpense[];
+
+  // Cọc giữ được từ đơn chuyển sang khách bom trong tháng.
+  const bom = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(p.amount_vnd), 0) AS total
+         FROM payments p
+        WHERE p.order_id IN (
+              SELECT h.order_id FROM order_status_history h
+               WHERE h.to_status = 'khach_bom'
+                 AND h.changed_at >= ? AND h.changed_at < ?)`,
+    )
+    .get(from, to) as { total: number };
+
+  return { orders, expenses: expenseRows, bomDepositsVnd: bom.total };
+}
+
+export function getCashFlow(year: number, month: number) {
+  const [from, to] = monthRange(year, month);
+
+  const inflow = sqlite
+    .prepare(
+      `SELECT method, COALESCE(SUM(amount_vnd), 0) AS total
+         FROM payments WHERE paid_at >= ? AND paid_at < ? GROUP BY method`,
+    )
+    .all(from, to) as { method: PaymentMethod; total: number }[];
+
+  const topups = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(vnd_paid), 0) AS total FROM cny_ledger
+        WHERE kind = 'nap' AND created_at >= ? AND created_at < ?`,
+    )
+    .get(from, to) as { total: number };
+
+  const spend = sqlite
+    .prepare(
+      `SELECT method, COALESCE(SUM(amount_vnd), 0) AS total
+         FROM expenses WHERE spent_at >= ? AND spent_at < ? GROUP BY method`,
+    )
+    .all(from, to) as { method: PaymentMethod; total: number }[];
+
+  const sum = (rows: { total: number }[]) =>
+    rows.reduce((s, r) => s + r.total, 0);
+
+  return {
+    inflow,
+    inflowTotal: sum(inflow),
+    topupsVnd: topups.total,
+    spend,
+    spendTotal: sum(spend),
+    netVnd: sum(inflow) - topups.total - sum(spend),
+  };
+}
+
+export function getAssetSnapshot() {
+  const wallet = getWallet();
+  const stock = sqlite
+    .prepare(
+      "SELECT COALESCE(SUM(quantity * avg_cost), 0) AS total FROM inventory",
+    )
+    .get() as { total: number };
+  const receivable = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(amount_due), 0) AS total FROM orders
+        WHERE status NOT IN ('hoan_tat','huy','khach_bom')`,
+    )
+    .get() as { total: number };
+  // Cọc của đơn CHƯA giao — tiền này nằm trong tài khoản nhưng chưa phải của mình.
+  const heldDeposits = sqlite
+    .prepare(
+      `SELECT COALESCE(SUM(p.amount_vnd), 0) AS total FROM payments p
+         JOIN orders o ON o.id = p.order_id
+        WHERE o.status NOT IN ('da_giao_khach','hoan_tat','huy','khach_bom')`,
+    )
+    .get() as { total: number };
+
+  return {
+    walletCny: wallet.balance,
+    walletVnd: wallet.valueVnd,
+    stockVnd: stock.total,
+    receivableVnd: receivable.total,
+    heldDepositsVnd: heldDeposits.total,
+  };
 }

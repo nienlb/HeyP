@@ -78,3 +78,125 @@ export function itemAttributes(it: ZaloExtractItem): string {
   if (it.size) parts.push(`size ${it.size}`);
   return parts.join(" - ");
 }
+
+/* ---------- Đọc NHIỀU ảnh trong một lần (v3-A) ---------- */
+
+export const IMAGE_KINDS = ["chot_don", "thong_tin_khach", "san_pham"] as const;
+export type ImageKind = (typeof IMAGE_KINDS)[number];
+
+export const IMAGE_KIND_LABELS: Record<ImageKind, string> = {
+  chot_don: "Ảnh chốt đơn",
+  thong_tin_khach: "Ảnh thông tin khách",
+  san_pham: "Ảnh sản phẩm",
+};
+
+export type ClassifiedImage = { index: number; kind: ImageKind };
+export type ZaloBatchExtract = {
+  images: ClassifiedImage[];
+  order: ZaloExtract;
+};
+
+export const ZALO_BATCH_PROMPT = `${ZALO_EXTRACT_PROMPT}
+
+Lần này bạn nhận NHIỀU ảnh cùng lúc, đánh số từ 0 theo thứ tự gửi. Với MỖI ảnh, xác định loại:
+- "chot_don": ảnh chụp tin nhắn chốt đơn (có "Tên sp:", "Total", "Đã cọc"). Áp dụng mọi quy tắc ở trên để trích dữ liệu đơn.
+- "thong_tin_khach": ảnh chứa tên / số điện thoại / địa chỉ giao hàng của khách. Có thể là ảnh chụp màn hình Zalo HOẶC ảnh chụp giấy/sổ bằng điện thoại (chữ viết tay cũng tính). Lấy customerName, customerPhone, customerAddress từ đây.
+- "san_pham": ảnh chụp sản phẩm (giày, dép, túi...). KHÔNG trích gì từ ảnh loại này.
+
+Trả về mảng "images" có ĐÚNG một phần tử cho mỗi ảnh nhận được, kèm index. Gộp toàn bộ dữ liệu đơn đọc được từ mọi ảnh vào một đối tượng "order" duy nhất.
+Nếu không chắc ảnh thuộc loại nào → chọn "san_pham" (chỉ lưu, không đọc). Thà bỏ sót còn hơn đọc bừa.`;
+
+export const ZALO_BATCH_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    images: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          index: { type: "INTEGER" },
+          kind: { type: "STRING", enum: [...IMAGE_KINDS] },
+        },
+        required: ["index", "kind"],
+      },
+    },
+    order: ZALO_RESPONSE_SCHEMA,
+  },
+  required: ["images", "order"],
+} as const;
+
+const EMPTY_EXTRACT: ZaloExtract = {
+  items: [],
+  totalVnd: null,
+  depositVnd: null,
+  shipVnd: null,
+  shipFree: false,
+  shipUnknown: false,
+  customerName: null,
+  customerPhone: null,
+  customerAddress: null,
+  notes: null,
+};
+
+function toNumOrNull(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function toStrOrNull(v: unknown): string | null {
+  const s = String(v ?? "").trim();
+  return s === "" || s.toLowerCase() === "null" ? null : s;
+}
+
+/**
+ * Chuẩn hoá phản hồi batch của Gemini về cấu trúc chắc chắn dùng được.
+ * Nguyên tắc: ảnh nào không rõ loại thì coi là "san_pham" — chỉ lưu, không đọc.
+ * Thà bỏ sót còn hơn bịa dữ liệu vào đơn có tiền thật.
+ */
+export function normalizeBatch(
+  raw: unknown,
+  imageCount: number,
+): ZaloBatchExtract {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+
+  const kinds = new Array<ImageKind>(imageCount).fill("san_pham");
+  const rawImages = Array.isArray(obj.images) ? obj.images : [];
+  for (const entry of rawImages) {
+    const e = (entry ?? {}) as Record<string, unknown>;
+    const idx = Number(e.index);
+    const kind = String(e.kind ?? "");
+    if (!Number.isInteger(idx) || idx < 0 || idx >= imageCount) continue;
+    if ((IMAGE_KINDS as readonly string[]).includes(kind)) {
+      kinds[idx] = kind as ImageKind;
+    }
+  }
+
+  const o = (obj.order ?? {}) as Record<string, unknown>;
+  const rawItems = Array.isArray(o.items) ? o.items : [];
+  const order: ZaloExtract = {
+    ...EMPTY_EXTRACT,
+    items: rawItems.map((it) => {
+      const i = (it ?? {}) as Record<string, unknown>;
+      const qty = Number(i.quantity);
+      return {
+        name: String(i.name ?? "").trim(),
+        color: toStrOrNull(i.color),
+        size: toStrOrNull(i.size),
+        quantity: qty > 0 ? qty : 1,
+      };
+    }),
+    totalVnd: toNumOrNull(o.totalVnd),
+    depositVnd: toNumOrNull(o.depositVnd),
+    shipVnd: toNumOrNull(o.shipVnd),
+    shipFree: Boolean(o.shipFree),
+    shipUnknown: Boolean(o.shipUnknown),
+    customerName: toStrOrNull(o.customerName),
+    customerPhone: toStrOrNull(o.customerPhone),
+    customerAddress: toStrOrNull(o.customerAddress),
+    notes: toStrOrNull(o.notes),
+  };
+
+  return {
+    images: kinds.map((kind, index) => ({ index, kind })),
+    order,
+  };
+}
