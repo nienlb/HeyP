@@ -10,9 +10,10 @@ import {
   listOrdersWithGaps,
 } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
-import { STATUS_LABELS } from "@/lib/order-status";
+import { MAIN_CHAIN, STATUS_LABELS } from "@/lib/order-status";
 import { GAP_CODES, GAP_LABELS } from "@/lib/order-gaps";
 import { computePnl } from "@/lib/pnl";
+import { StatusIcon } from "./_components/status-icon";
 
 export default async function HomePage() {
   const session = await requireAuth();
@@ -106,19 +107,36 @@ export default async function HomePage() {
           {statusCounts.length === 0 ? (
             <p className="muted">Chưa có đơn nào.</p>
           ) : (
-            <div className="dash-chips">
-              {statusCounts.map((s) => (
-                <Link
-                  key={s.status}
-                  href="/orders"
-                  className={`dash-chip status-${s.status}`}
-                >
-                  <span className="dash-chip-count">{s.count}</span>
-                  <span className="dash-chip-label">
-                    {STATUS_LABELS[s.status]}
-                  </span>
-                </Link>
-              ))}
+            <div className="status-cards">
+              {statusCounts.map((s) => {
+                const chainIdx = (MAIN_CHAIN as readonly string[]).indexOf(
+                  s.status,
+                );
+                const progress =
+                  chainIdx >= 0
+                    ? ((chainIdx + 1) / MAIN_CHAIN.length) * 100
+                    : null;
+                return (
+                  <Link
+                    key={s.status}
+                    href="/orders"
+                    className={`status-card status-card--${s.status}`}
+                  >
+                    <span className="status-card-icon">
+                      <StatusIcon status={s.status} size={16} />
+                    </span>
+                    <span className="status-card-count">{s.count}</span>
+                    <span className="status-card-label">
+                      {STATUS_LABELS[s.status]}
+                    </span>
+                    {progress !== null && (
+                      <span className="status-card-progress">
+                        <span style={{ width: `${progress}%` }} />
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </section>

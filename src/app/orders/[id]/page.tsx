@@ -5,7 +5,7 @@ import { AppShell } from "../../_components/app-shell";
 import { CopyButton } from "../../_components/copy-button";
 import { PhotoUpload } from "../../_components/photo-upload";
 import { PhotoGallery } from "../../_components/photo-gallery";
-import { changeStatusAction, lineExceptionAction } from "../actions";
+import { lineExceptionAction } from "../actions";
 import {
   getOrderDetail,
   getPackagesForOrder,
@@ -17,11 +17,34 @@ import { computeOrderMoney } from "@/lib/money";
 import { buildQuoteText, formatCny, formatDateTime, formatVnd } from "@/lib/format";
 import {
   allowedNextStatuses,
+  earliestOriginFor,
+  MAIN_CHAIN,
   ORDER_TYPE_LABELS,
   STATUS_LABELS,
+  type OrderStatus,
 } from "@/lib/order-status";
 import { GAP_LABELS, orderGaps } from "@/lib/order-gaps";
 import { LinePricingTable } from "./line-pricing-table";
+import { OrderJourney } from "./order-journey";
+
+/**
+ * Mốc trên trục chính để định vị bước hiện tại trên stepper. Đơn đang ở
+ * chính trục chính thì dùng luôn; đang ở nhánh (sự cố/khách bom/huỷ) thì
+ * tìm mốc main-chain gần nhất trước khi rẽ nhánh, từ lịch sử trạng thái.
+ * Lịch sử không ghi đủ bước trung gian (dữ liệu demo/cũ) → neo về mốc SỚM
+ * NHẤT hợp lệ theo luật (earliestOriginFor), không phải "cho_bao_gia" —
+ * neo sai kiểu đó khiến một đơn "khách bom" (chỉ xảy ra từ về kho VN trở
+ * đi) trông như còn ở bước đầu tiên, chưa làm gì.
+ */
+function journeyPosition(
+  status: OrderStatus,
+  history: { toStatus: OrderStatus }[],
+): OrderStatus {
+  const chain = MAIN_CHAIN as readonly string[];
+  if (chain.includes(status)) return status;
+  const lastMain = history.find((h) => chain.includes(h.toStatus));
+  return lastMain ? lastMain.toStatus : earliestOriginFor(status);
+}
 
 export default async function OrderDetailPage({
   params,
@@ -49,6 +72,7 @@ export default async function OrderDetailPage({
     deposit: order.deposit,
   });
   const nextStatuses = allowedNextStatuses(order.orderType, order.status);
+  const positionStatus = journeyPosition(order.status, history);
   const isStockSale = order.orderType === "ban_tu_kho";
   const gaps = orderGaps(
     {
@@ -128,32 +152,14 @@ export default async function OrderDetailPage({
           </div>
         )}
 
-        {/* Chuyển trạng thái một chạm */}
-        <section className="card">
-          <h2 className="card-title">Chuyển trạng thái</h2>
-          {nextStatuses.length === 0 ? (
-            <p className="muted">Đơn đã ở trạng thái cuối, không thể chuyển tiếp.</p>
-          ) : (
-            <div className="status-actions">
-              {nextStatuses.map((to) => (
-                <form key={to} action={changeStatusAction}>
-                  <input type="hidden" name="orderId" value={order.id} />
-                  <input type="hidden" name="to" value={to} />
-                  <button
-                    type="submit"
-                    className={`btn ${
-                      to === "su_co" || to === "khach_bom" || to === "huy"
-                        ? "btn-warn"
-                        : ""
-                    }`}
-                  >
-                    {STATUS_LABELS[to]}
-                  </button>
-                </form>
-              ))}
-            </div>
-          )}
-        </section>
+        {/* Hành trình đơn hàng: stepper + hành động chuyển trạng thái */}
+        <OrderJourney
+          orderId={order.id}
+          orderType={order.orderType}
+          status={order.status}
+          positionStatus={positionStatus}
+          nextStatuses={nextStatuses}
+        />
 
         <div className="two-col">
           {/* Khách + tiền */}
