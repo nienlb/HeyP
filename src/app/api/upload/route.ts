@@ -1,12 +1,14 @@
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
 import { getSession } from "@/lib/auth";
-import { config } from "@/lib/config";
 import { addPhoto } from "@/db/queries";
 import { PHOTO_LABELS, type PhotoLabel } from "@/lib/photos";
 import { downsizeImage } from "@/lib/image";
+import { uploadPhotoFile } from "@/lib/storage";
+
+// sharp là native module → bắt buộc Node runtime, không chạy được trên edge.
+export const runtime = "nodejs";
+// Resize nhiều ảnh + đẩy lên Storage có thể vượt 10s mặc định của Hobby.
+export const maxDuration = 60;
 
 const MAX_BYTES = 15 * 1024 * 1024; // 15MB
 
@@ -30,9 +32,6 @@ export async function POST(req: Request): Promise<Response> {
   if (files.length === 0)
     return Response.json({ ok: false, error: "Không có ảnh" }, { status: 400 });
 
-  const dir = resolve(process.cwd(), config.uploadsPath);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-
   const ids: number[] = [];
   for (const file of files) {
     if (!file.type.startsWith("image/")) continue;
@@ -44,10 +43,8 @@ export async function POST(req: Request): Promise<Response> {
     const buf = Buffer.from(await file.arrayBuffer());
     const downsized = await downsizeImage(buf, file.type);
     const fname = `${Date.now()}-${randomBytes(6).toString("hex")}.${downsized.ext}`;
-    await writeFile(join(dir, fname), downsized.buffer);
-    ids.push(
-      addPhoto({ filePath: fname, label, orderId, inventoryId }),
-    );
+    await uploadPhotoFile(fname, downsized.buffer, downsized.mimeType);
+    ids.push(await addPhoto({ filePath: fname, label, orderId, inventoryId }));
   }
 
   if (ids.length === 0)
