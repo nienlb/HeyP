@@ -1,11 +1,10 @@
 "use server";
 
-import { unlink } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
+import { basename } from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { config } from "@/lib/config";
+import { deletePhotoFile } from "@/lib/storage";
 import {
   changeOrderStatus,
   createOrder,
@@ -369,10 +368,9 @@ export async function deletePhotoAction(
   if (!removed) return { ok: false };
 
   try {
-    const dir = resolve(process.cwd(), config.uploadsPath);
-    await unlink(join(dir, basename(removed.filePath)));
+    await deletePhotoFile(basename(removed.filePath));
   } catch {
-    // File đã mất/không tồn tại trên đĩa — DB đã sạch là đủ, không chặn.
+    // File đã mất/không tồn tại trên Storage — DB đã sạch là đủ, không chặn.
   }
 
   return { ok: true };
