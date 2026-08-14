@@ -1,5 +1,5 @@
 /**
- * Schema CSDL (Drizzle + SQLite) — 6 bảng chính theo spec mục 5,
+ * Schema CSDL (Drizzle + Postgres/Supabase) — 6 bảng chính theo spec mục 5,
  * cộng bảng nối Kiện↔Đơn (nhiều-nhiều) và bảng lịch sử trạng thái (timeline).
  *
  * Nguồn chân lý cho enum trạng thái & loại đơn: src/lib/order-status.ts
@@ -7,12 +7,15 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  boolean,
+  customType,
+  doublePrecision,
   integer,
+  pgTable,
   primaryKey,
-  real,
-  sqliteTable,
+  serial,
   text,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 import { ORDER_STATUSES, ORDER_TYPES } from "@/lib/order-status";
 import { PHOTO_LABELS } from "@/lib/photos";
 import {
@@ -32,36 +35,50 @@ export const INVENTORY_SOURCES = [
   "bom", // Hàng bom
 ] as const;
 
-const createdAt = () =>
-  integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`);
+/**
+ * Thời gian lưu bằng epoch-seconds (bigint), KHÔNG dùng timestamptz: tầng báo
+ * cáo tiền đang so sánh epoch số nguyên trong SQL thô, đổi kiểu sẽ phải viết
+ * lại toàn bộ chỗ đó. Lớp này giữ giao diện Date cho app code.
+ */
+const epochSeconds = customType<{ data: Date; driverData: string | number }>({
+  dataType() {
+    return "bigint";
+  },
+  fromDriver(value) {
+    return new Date(Number(value) * 1000);
+  },
+  toDriver(value) {
+    return Math.floor(value.getTime() / 1000);
+  },
+});
+
+const NOW_EPOCH = sql`(EXTRACT(EPOCH FROM now())::bigint)`;
+
+const createdAt = () => epochSeconds("created_at").notNull().default(NOW_EPOCH);
 
 // 1) Khách hàng
-export const customers = sqliteTable("customers", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const customers = pgTable("customers", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   phone: text("phone"),
   address: text("address"),
   note: text("note"),
-  warningFlag: integer("warning_flag", { mode: "boolean" })
-    .notNull()
-    .default(false),
+  warningFlag: boolean("warning_flag").notNull().default(false),
   warningReason: text("warning_reason"),
   createdAt: createdAt(),
 });
 
 // 2) Đơn hàng
-export const orders = sqliteTable("orders", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
   customerId: integer("customer_id").references(() => customers.id),
   orderType: text("order_type", { enum: ORDER_TYPES }).notNull(),
   status: text("status", { enum: ORDER_STATUSES })
     .notNull()
     .default("cho_bao_gia"),
   // Khối tiền — CNY & tỷ giá là số thực; các khoản VND là số nguyên đồng.
-  exchangeRate: real("exchange_rate").notNull().default(0),
-  goodsTotalCny: real("goods_total_cny").notNull().default(0),
+  exchangeRate: doublePrecision("exchange_rate").notNull().default(0),
+  goodsTotalCny: doublePrecision("goods_total_cny").notNull().default(0),
   marginVnd: integer("margin_vnd").notNull().default(0),
   shippingFee: integer("shipping_fee").notNull().default(0),
   deposit: integer("deposit").notNull().default(0),
@@ -70,9 +87,9 @@ export const orders = sqliteTable("orders", {
   saleCost: integer("sale_cost"),
   note: text("note"),
   createdAt: createdAt(),
-  statusChangedAt: integer("status_changed_at", { mode: "timestamp" })
+  statusChangedAt: epochSeconds("status_changed_at")
     .notNull()
-    .default(sql`(unixepoch())`),
+    .default(NOW_EPOCH),
   quotedTotalVnd: integer("quoted_total_vnd").notNull().default(0),
   shipStatus: text("ship_status", { enum: SHIP_STATUSES })
     .notNull()
@@ -80,8 +97,8 @@ export const orders = sqliteTable("orders", {
 });
 
 // 3) Sản phẩm trong đơn
-export const orderItems = sqliteTable("order_items", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const orderItems = pgTable("order_items", {
+  id: serial("id").primaryKey(),
   orderId: integer("order_id")
     .notNull()
     .references(() => orders.id, { onDelete: "cascade" }),
@@ -89,35 +106,31 @@ export const orderItems = sqliteTable("order_items", {
   name: text("name").notNull(),
   attributes: text("attributes"),
   quantity: integer("quantity").notNull().default(1),
-  unitPriceCny: real("unit_price_cny").notNull().default(0),
+  unitPriceCny: doublePrecision("unit_price_cny").notNull().default(0),
   cnOrderCode: text("cn_order_code"),
   lineStatus: text("line_status", { enum: LINE_STATUSES })
     .notNull()
     .default("normal"),
   marginVnd: integer("margin_vnd").notNull().default(0),
-  costConfirmed: integer("cost_confirmed", { mode: "boolean" })
-    .notNull()
-    .default(false),
+  costConfirmed: boolean("cost_confirmed").notNull().default(false),
   createdAt: createdAt(),
 });
 
 // 4) Kiện vận chuyển
-export const packages = sqliteTable("packages", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const packages = pgTable("packages", {
+  id: serial("id").primaryKey(),
   trackingCode: text("tracking_code").notNull(),
   carrier: text("carrier"),
-  weightKg: real("weight_kg"),
+  weightKg: doublePrecision("weight_kg"),
   trackingStatus: text("tracking_status"),
-  lastCheckedAt: integer("last_checked_at", { mode: "timestamp" }),
+  lastCheckedAt: epochSeconds("last_checked_at"),
   mode: text("mode", { enum: PACKAGE_MODES }).notNull().default("manual"),
-  needsManualCheck: integer("needs_manual_check", { mode: "boolean" })
-    .notNull()
-    .default(false),
+  needsManualCheck: boolean("needs_manual_check").notNull().default(false),
   createdAt: createdAt(),
 });
 
 // Bảng nối Kiện ↔ Đơn (nhiều-nhiều): 1 đơn nhiều kiện, 1 kiện gộp nhiều đơn.
-export const orderPackages = sqliteTable(
+export const orderPackages = pgTable(
   "order_packages",
   {
     orderId: integer("order_id")
@@ -131,19 +144,19 @@ export const orderPackages = sqliteTable(
 );
 
 // 5) Tồn kho
-export const inventory = sqliteTable("inventory", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const inventory = pgTable("inventory", {
+  id: serial("id").primaryKey(),
   productName: text("product_name").notNull(),
   quantity: integer("quantity").notNull().default(0),
   avgCost: integer("avg_cost").notNull().default(0), // giá vốn bình quân (VND)
   source: text("source", { enum: INVENTORY_SOURCES }).notNull(),
-  lastImportedAt: integer("last_imported_at", { mode: "timestamp" }),
+  lastImportedAt: epochSeconds("last_imported_at"),
   createdAt: createdAt(),
 });
 
-// 6) Ảnh — DB chỉ lưu đường dẫn, file nằm trong uploads/
-export const photos = sqliteTable("photos", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+// 6) Ảnh — DB chỉ lưu tên file, file nằm trên Supabase Storage
+export const photos = pgTable("photos", {
+  id: serial("id").primaryKey(),
   filePath: text("file_path").notNull(),
   label: text("label", { enum: PHOTO_LABELS }).notNull(),
   orderId: integer("order_id").references(() => orders.id, {
@@ -155,37 +168,33 @@ export const photos = sqliteTable("photos", {
   inventoryId: integer("inventory_id").references(() => inventory.id, {
     onDelete: "cascade",
   }),
-  uploadedAt: integer("uploaded_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  uploadedAt: epochSeconds("uploaded_at").notNull().default(NOW_EPOCH),
 });
 
 // Lịch sử chuyển trạng thái (timeline: ai đổi, lúc nào).
-export const orderStatusHistory = sqliteTable("order_status_history", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const orderStatusHistory = pgTable("order_status_history", {
+  id: serial("id").primaryKey(),
   orderId: integer("order_id")
     .notNull()
     .references(() => orders.id, { onDelete: "cascade" }),
   fromStatus: text("from_status", { enum: ORDER_STATUSES }),
   toStatus: text("to_status", { enum: ORDER_STATUSES }).notNull(),
   changedBy: text("changed_by"),
-  changedAt: integer("changed_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  changedAt: epochSeconds("changed_at").notNull().default(NOW_EPOCH),
   note: text("note"),
 });
 
 // 7) Tham số nghiệp vụ đổi được lúc chạy (tỷ giá bán, lời mặc định).
-export const settings = sqliteTable("settings", {
+export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
 });
 
 // 8) Sổ ví ¥ — số dư và giá vốn bq KHÔNG lưu, tính lại từ sổ.
-export const cnyLedger = sqliteTable("cny_ledger", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const cnyLedger = pgTable("cny_ledger", {
+  id: serial("id").primaryKey(),
   kind: text("kind", { enum: LEDGER_KINDS }).notNull(),
-  cnyDelta: real("cny_delta").notNull(),
+  cnyDelta: doublePrecision("cny_delta").notNull(),
   vndPaid: integer("vnd_paid"),
   rateSnapshot: integer("rate_snapshot"),
   orderId: integer("order_id").references(() => orders.id),
@@ -194,11 +203,9 @@ export const cnyLedger = sqliteTable("cny_ledger", {
 });
 
 // 9) Chi phí VND. order_id NULL = chi phí theo kỳ.
-export const expenses = sqliteTable("expenses", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  spentAt: integer("spent_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+export const expenses = pgTable("expenses", {
+  id: serial("id").primaryKey(),
+  spentAt: epochSeconds("spent_at").notNull().default(NOW_EPOCH),
   category: text("category", { enum: EXPENSE_CATEGORIES }).notNull(),
   amountVnd: integer("amount_vnd").notNull(),
   orderId: integer("order_id").references(() => orders.id),
@@ -209,15 +216,13 @@ export const expenses = sqliteTable("expenses", {
 });
 
 // 10) Sổ thu tiền — orders.deposit là Σ của bảng này.
-export const payments = sqliteTable("payments", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
   orderId: integer("order_id")
     .notNull()
     .references(() => orders.id, { onDelete: "cascade" }),
   amountVnd: integer("amount_vnd").notNull(),
-  paidAt: integer("paid_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`),
+  paidAt: epochSeconds("paid_at").notNull().default(NOW_EPOCH),
   kind: text("kind", { enum: PAYMENT_KINDS }).notNull(),
   method: text("method", { enum: PAYMENT_METHODS })
     .notNull()
