@@ -1,0 +1,23 @@
+name: tracking-sweep
+
+on:
+  schedule:
+    # Mỗi 4 tiếng — thay cho setInterval cũ (TRACKING_SWEEP_MINUTES=240).
+    # Cũng giữ cho project Supabase khỏi tự pause sau 7 ngày không có request.
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gọi /api/cron/track
+        run: |
+          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' -X POST \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/track")
+          cat /tmp/out.json
+          if [ "$code" != "200" ]; then
+            echo "Quét tracking thất bại, HTTP $code"
+            exit 1
+          fi

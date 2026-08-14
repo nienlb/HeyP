@@ -1,11 +1,14 @@
 "use server";
 
+import { basename } from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { deletePhotoFile } from "@/lib/storage";
 import {
   changeOrderStatus,
   createOrder,
+  deletePhoto,
   linkPhotoToOrder,
   addPayment,
   deletePayment,
@@ -134,7 +137,7 @@ export async function createOrderAction(
 
   let orderId: number;
   try {
-    orderId = createOrder({
+    orderId = await createOrder({
       customerId,
       newCustomer,
       orderType,
@@ -155,7 +158,7 @@ export async function createOrderAction(
   const zaloPhotoId = Number(formData.get("zaloPhotoId"));
   if (zaloPhotoId > 0) {
     try {
-      linkPhotoToOrder(zaloPhotoId, orderId);
+      await linkPhotoToOrder(zaloPhotoId, orderId);
     } catch {
       // không chặn tạo đơn nếu gắn ảnh lỗi
     }
@@ -175,7 +178,7 @@ export async function changeStatusAction(formData: FormData): Promise<void> {
     redirect(`/orders/${orderId}?err=${encodeURIComponent("Yêu cầu không hợp lệ")}`);
   }
 
-  const result = changeOrderStatus(
+  const result = await changeOrderStatus(
     orderId,
     toRaw as OrderStatus,
     session.username,
@@ -202,9 +205,9 @@ export async function lineExceptionAction(formData: FormData): Promise<void> {
 
   const result =
     kind === "defect"
-      ? markLineDefect(orderId, itemId)
+      ? await markLineDefect(orderId, itemId)
       : kind === "return"
-        ? returnLine(orderId, itemId)
+        ? await returnLine(orderId, itemId)
         : ({ ok: false, reason: "Loại thao tác không hợp lệ" } as const);
 
   if (!result.ok) {
@@ -223,7 +226,11 @@ export async function updateLineCostAction(formData: FormData): Promise<void> {
 
   const orderId = Number(formData.get("orderId"));
   const itemId = Number(formData.get("itemId"));
-  const result = updateLineCost(orderId, itemId, num(formData.get("unitPriceCny")));
+  const result = await updateLineCost(
+    orderId,
+    itemId,
+    num(formData.get("unitPriceCny")),
+  );
 
   if (!result.ok)
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
@@ -239,7 +246,11 @@ export async function updateLineMarginAction(formData: FormData): Promise<void> 
 
   const orderId = Number(formData.get("orderId"));
   const itemId = Number(formData.get("itemId"));
-  const result = updateLineMargin(orderId, itemId, num(formData.get("marginVnd")));
+  const result = await updateLineMargin(
+    orderId,
+    itemId,
+    num(formData.get("marginVnd")),
+  );
 
   if (!result.ok)
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
@@ -260,7 +271,11 @@ export async function setShipFeeAction(formData: FormData): Promise<void> {
     ? (raw as ShipStatus)
     : "set";
 
-  const result = setShipFee(orderId, shipStatus, num(formData.get("shippingFee")));
+  const result = await setShipFee(
+    orderId,
+    shipStatus,
+    num(formData.get("shippingFee")),
+  );
 
   if (!result.ok)
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
@@ -278,7 +293,7 @@ export async function suggestCnyAction(
 ): Promise<(number | null)[]> {
   const session = await getSession();
   if (!session) return names.map(() => null);
-  return names.map((n) => suggestCnyFromHistory(n));
+  return Promise.all(names.map((n) => suggestCnyFromHistory(n)));
 }
 
 function parseDateInput(v: FormDataEntryValue | null): Date {
@@ -307,7 +322,7 @@ export async function addPaymentAction(formData: FormData): Promise<void> {
     ? (methodRaw as "chuyen_khoan" | "tien_mat")
     : "chuyen_khoan";
 
-  const result = addPayment({
+  const result = await addPayment({
     orderId,
     amountVnd: num(formData.get("amountVnd")),
     paidAt: parseDateInput(formData.get("paidAt")),
@@ -329,11 +344,34 @@ export async function deletePaymentAction(formData: FormData): Promise<void> {
 
   const orderId = Number(formData.get("orderId"));
   const paymentId = Number(formData.get("paymentId"));
-  const result = deletePayment(paymentId, orderId);
+  const result = await deletePayment(paymentId, orderId);
 
   if (!result.ok)
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}`);
+}
+
+/**
+ * Xoá một ảnh đã thả lên nhưng chưa gắn đơn nào — dùng khi thả nhầm ở màn
+ * tạo đơn từ Zalo (trước khi bấm Lưu đơn). Gọi trực tiếp từ client, không
+ * qua <form>, vì đơn chưa tồn tại nên không có orderId để redirect về.
+ */
+export async function deletePhotoAction(
+  photoId: number,
+): Promise<{ ok: boolean }> {
+  const session = await getSession();
+  if (!session) return { ok: false };
+
+  const removed = await deletePhoto(photoId);
+  if (!removed) return { ok: false };
+
+  try {
+    await deletePhotoFile(basename(removed.filePath));
+  } catch {
+    // File đã mất/không tồn tại trên Storage — DB đã sạch là đủ, không chặn.
+  }
+
+  return { ok: true };
 }

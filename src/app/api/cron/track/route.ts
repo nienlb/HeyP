@@ -1,6 +1,9 @@
 import { getSession } from "@/lib/auth";
 import { runTrackingSweep } from "@/db/queries";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 /**
  * Kích hoạt tra tracking (cho cron ngoài khi lên VPS, hoặc gọi tay).
  * Cho phép nếu đã đăng nhập, HOẶC có ?secret= khớp CRON_SECRET.

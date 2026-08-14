@@ -7,7 +7,7 @@ import { NewOrderForm } from "./new-order-form";
 export default async function NewOrderPage() {
   const session = await requireAuth();
   const customers = await listCustomers();
-  const settings = getSettings();
+  const settings = await getSettings();
 
   return (
     <AppShell username={session.username}>

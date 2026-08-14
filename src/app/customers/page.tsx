@@ -5,7 +5,7 @@ import { formatVnd } from "@/lib/format";
 
 export default async function CustomersPage() {
   const session = await requireAuth();
-  const customers = listCustomersWithTotals();
+  const customers = await listCustomersWithTotals();
 
   return (
     <AppShell username={session.username}>

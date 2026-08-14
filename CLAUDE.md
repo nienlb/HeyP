@@ -2,13 +2,21 @@
 
 Ứng dụng nội bộ (2 người dùng) quản lý dịch vụ **order hộ hàng Trung Quốc** cho shop HeyP (bán giày/dép/thời trang): báo giá → chốt đơn → mua hộ → gom kho → vận chuyển về VN → giao khách → thu tiền. Kèm bán hàng tồn kho và đọc ảnh chốt đơn Zalo bằng AI.
 
-**Trạng thái:** MVP xong (Phase 0–7). **v2 xong** — giao diện "Boutique atelier" (navy + giấy ấm + camel + serif), sidebar (desktop) / bottom tab+FAB+sheet (mobile), màn Tổng quan. Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`. **v3 xong** (A + B) — bóc lớp giá theo món (¥/giá vốn/lời tách riêng từng dòng sản phẩm), luồng nhập đơn 3 mảnh (ảnh chốt đơn + thông tin khách + ảnh sản phẩm), ví ¥, sổ chi phí, sổ thu tiền, 3 báo cáo tài chính. Spec: `docs/2026-08-11-heyp-v3a-gia-va-nhap-don-design.md`, `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`. Logo: chưa có `public/logo.png` → đang dùng wordmark serif fallback (`src/lib/logo.ts` tự chuyển sang ảnh khi có file, không cần sửa code).
+**Trạng thái:** MVP xong (Phase 0–7). **v2 xong** — giao diện "Boutique atelier" (navy + giấy ấm + camel + serif), sidebar (desktop) / bottom tab+FAB+sheet (mobile), màn Tổng quan. Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`. **v3 xong** (A + B) — bóc lớp giá theo món (¥/giá vốn/lời tách riêng từng dòng sản phẩm), luồng nhập đơn 3 mảnh (ảnh chốt đơn + thông tin khách + ảnh sản phẩm), ví ¥, sổ chi phí, sổ thu tiền, 3 báo cáo tài chính. Spec: `docs/2026-08-11-heyp-v3a-gia-va-nhap-don-design.md`, `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`. **Đã chuyển hosting sang Vercel + Supabase** (14/08) — xem mục Hosting bên dưới. Logo: chưa có `public/logo.png` → đang dùng wordmark serif fallback (`src/lib/logo.ts` tự chuyển sang ảnh khi có file, không cần sửa code).
 
 ## Stack
 
 - **Next.js 15** (App Router) + **React 19** + **TypeScript**. `package.json` có `"type": "module"`.
-- **SQLite qua `node:sqlite`** (built-in của Node) + **Drizzle ORM** (driver `sqlite-proxy`). CSS **thuần** (`src/app/globals.css`), không framework UI.
-- **Node 26**. Test bằng `node:test` built-in (không có thư viện test).
+- **Postgres (Supabase)** qua **Drizzle ORM** (driver `postgres-js`). CSS **thuần** (`src/app/globals.css`), không framework UI.
+- **Node 26** (local dev/script). Runtime production là Node trên Vercel (không dùng Edge cho các route đụng DB/Storage). Test bằng `node:test` built-in (không có thư viện test).
+
+## Hosting (Vercel + Supabase)
+
+- **DB:** Postgres trên Supabase, kết nối qua Supavisor. `DATABASE_URL` = **Transaction pooler** (port 6543, dùng cho runtime app). `DIRECT_URL` = **Session pooler** (port 5432, dùng cho migration/`pg_dump`). **KHÔNG** dùng "Direct connection" thật (host `db.xxx.supabase.co`) — free tier chỉ chạy IPv6, còn Vercel/GitHub Actions chỉ có IPv4.
+- **Ảnh:** Supabase Storage, bucket `photos` (private). App luôn đi qua route đã xác thực (`/api/photo/[id]`, `src/lib/storage.ts`), không dùng signed URL public.
+- **Job nền:** không còn tiến trình `setInterval` trong app (Vercel serverless không giữ tiến trình sống). Thay bằng GitHub Actions (`.github/workflows/tracking-sweep.yml`, mỗi 4h) gọi `POST /api/cron/track` — route này vẫn nhận cả session đăng nhập lẫn `?secret=`/header `x-cron-secret` khớp `CRON_SECRET`. Cùng lịch này giữ cho Supabase free tier khỏi tự pause sau 7 ngày im lặng.
+- **Backup:** Supabase free không có backup tự động/PITR. `.github/workflows/db-backup.yml` chạy `pg_dump` hằng ngày, lưu 30 ngày trong GitHub Actions Artifacts. Khôi phục: `psql "$DIRECT_URL" -f file.sql`.
+- **Vercel Hobby là gói non-commercial theo ToS** — HeyP vận hành business thật, đây là rủi ro đã biết (cân nhắc Pro nếu cần chắc chân).
 
 ## Lệnh hay dùng
 
@@ -16,29 +24,26 @@
 npm run dev            # chạy dev (port 3000)
 npm test               # unit test (node --test 'tests/**/*.test.ts')
 npx tsc --noEmit       # typecheck
-npm run db:migrate     # áp migration SQL trong drizzle/
-npm run db:seed-demo   # tạo dữ liệu demo
-npm run db:backup      # sao lưu thủ công
-npm run db:restore -- --list   # xem/khôi phục backup
+npm run db:migrate     # drizzle-kit migrate — áp migration trong drizzle/, cần DIRECT_URL
+npm run db:generate    # drizzle-kit generate — sinh migration mới từ src/db/schema.ts
 ```
 
 Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ preview của harness (xem `.claude/launch.json`).
 
 ## LƯU Ý QUAN TRỌNG (gotchas — đọc trước khi sửa)
 
-- **Dùng `node:sqlite`, KHÔNG dùng `better-sqlite3`** — better-sqlite3 không build được trên Node 26. Đừng thêm lại.
-- **Đọc/ghi DB:** ĐỌC bằng Drizzle (`db` trong `src/db/index.ts`); GHI có transaction bằng `sqlite` (DatabaseSync) thô — vì sqlite-proxy async không hỗ trợ transaction. Xem `src/db/queries.ts`.
-- **`node:sqlite` bind số JS thành REAL** → nối chuỗi trong SQL cho ra `"2.0"`. Dựng chuỗi trong JS rồi truyền tham số, đừng `|| số ||` trong SQL.
-- **Migration:** viết tay SQL trong `drizzle/*.sql`, áp bằng `npm run db:migrate` (`scripts/migrate.ts`, có bảng `_migrations`). **KHÔNG** dùng `drizzle-kit migrate/push` (esbuild bị chặn install-script). `db:generate` cần esbuild nên có thể lỗi.
-- **`src/db/schema.ts` dùng alias `@/`** → chỉ Next/tsc nạp được. Script chạy bằng `node` KHÔNG import được schema → phải viết SQL thô.
+- **SQL thô đi qua lớp `Exec`** (`src/db/raw.ts`: `raw.all/get/run`, `withTx`) — SQL viết placeholder kiểu SQLite (`?`), lớp này tự đổi sang `$1,$2` của Postgres. Trong transaction (`withTx`) **PHẢI** dùng `x` được truyền vào, KHÔNG dùng `raw` toàn cục — dùng nhầm thì câu đó chạy ngoài transaction, không rollback theo.
+- **Alias camelCase trong SQL thô phải bọc nháy kép** (`AS "orderType"`, không phải `AS orderType`) — Postgres hạ chữ thường alias không nháy kép, code JS đọc `undefined`. Bug loại này không lỗi cú pháp, chỉ âm thầm trả sai dữ liệu.
+- **`SUM()`/`COUNT()` trên cột `integer` phải ép `::int`** — nếu không, kiểu trả về của Postgres qua postgres-js là `bigint`→string, JS `+` sẽ nối chuỗi thay vì cộng số. Cột `double precision` (giá ¥, tỷ giá) không cần ép.
+- **Runtime bắt buộc đi qua Supavisor pooler với `prepare: false`** (`src/db/index.ts`) — pooler transaction mode không hỗ trợ prepared statement.
+- **`max` của pool KHÔNG để 1** — từng để `max: 1` (đúng lý thuyết "1 request/instance" của serverless) nhưng gây treo request 150s+ ngay ở `next dev` vì nhiều request nội bộ của Next.js xếp hàng chờ đúng 1 connection. App có 2 người dùng thật, request đồng thời là bình thường. Đang để `max: 5`.
+- **Thời gian lưu epoch-seconds `bigint`** (không phải `timestamptz`) — quyết định có chủ đích để tầng báo cáo tiền (so sánh epoch số nguyên) không phải viết lại. `src/db/schema.ts` có `customType` `epochSeconds` chuyển đổi qua lại với `Date` cho app code; SQL thô dùng `EXTRACT(EPOCH FROM now())::bigint` (hằng số `NOW_EPOCH_SQL` trong `raw.ts`) thay `unixepoch()` của SQLite cũ.
+- **Boolean là `boolean` thật** (SQLite cũ giả lập bằng 0/1) — so sánh trong SQL thô dùng `= true`/`= false`, JS so `=== true`.
+- **`src/db/schema.ts` dùng alias `@/`** → chỉ Next/tsc nạp được. Script chạy bằng `node` KHÔNG import được schema → viết SQL thô hoặc import trực tiếp `drizzle-orm/pg-core` (xem `scripts/migrate-to-postgres.ts`).
 - **Test import module bằng đuôi `.ts` tường minh** (vd `../src/lib/money.ts`); `tsconfig` đã bật `allowImportingTsExtensions`. Module thuần dùng cho test không được import file khác có alias `@/`.
-- **Job nền / instrumentation:** code dùng `node:*` phải nằm trong `src/instrumentation-node.ts` và chỉ import khi `NEXT_RUNTIME==='nodejs'` — nếu để trong `instrumentation.ts` sẽ vỡ build **edge** (webpack không xử lý `node:fs`).
 - **Điều hướng (v2):** mọi trang có đăng nhập bọc bằng `<AppShell username={...}>` (`src/app/_components/app-shell.tsx`), KHÔNG dùng `AppHeader` nữa (đã xoá). Sidebar/bottom-tab đọc mục điều hướng từ `nav-config.ts` — thêm màn mới thì sửa 1 chỗ đó, không sửa từng component.
-- **KHÔNG `rm data/app.sqlite` để reset** — DB đang có **dữ liệu thật** của Niên. Chỉ xoá chọn lọc bằng SQL.
-- **`.env` gitignored** (chứa `GEMINI_API_KEY`, `SESSION_SECRET`). Mọi cấu hình đọc từ env qua `src/lib/config.ts`. Mẫu ở `.env.example`.
-- **Backups & uploads** gitignored (`/backups/`, `/uploads/`).
-- **DB chạy `journal_mode=wal`** → dry-run migration KHÔNG được `cp data/app.sqlite` (bản sao có thể thiếu commit gần nhất). Dùng `VACUUM INTO`, cùng cách `src/lib/backup.ts` đang dùng.
-- **Driver `sqlite-proxy` (`src/db/index.ts`) có lỗi có sẵn:** `.get()` khi không tìm thấy hàng trả `{ rows: [] }` thay vì `undefined`, khiến `if (!row) notFound()` không hoạt động — mọi trang chi tiết (đơn, khách...) trả lỗi 500 thay vì 404 khi ID không tồn tại. Chưa sửa (ngoài phạm vi v3), xem task đã gắn cờ.
+- **`.env` gitignored** (chứa `GEMINI_API_KEY`, `SESSION_SECRET`, `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`...). Mọi cấu hình đọc từ env qua `src/lib/config.ts`. Mẫu ở `.env.example`.
+- **`data/app.sqlite` là bản lùi lịch sử** (KHÔNG còn là nguồn dữ liệu chính — dữ liệu thật đã chuyển sang Supabase 14/08) — vẫn giữ lại phòng khi cần đối chiếu, đừng xoá.
 - **Tiền v3-A:** `orders.service_fee` đã đổi tên thành `margin_vnd` và mang nghĩa **tổng lời** (= Σ `order_items.margin_vnd`). `quoted_total_vnd` là Total đã chốt với khách, **bất biến** và **không gồm ship**. Sửa ¥ thì lời được rải lại, Total giữ nguyên — luật này khoá bởi `tests/line-pricing.test.ts`.
 - **Tham số nghiệp vụ v3-A** (tỷ giá bán, lời mặc định) nằm ở bảng `settings`, không phải `.env` — đổi được lúc chạy, không cần khởi động lại app.
 - **Ví ¥ (v3-B):** số dư và giá vốn bq **không lưu trong DB** — chạy lại `cny_ledger` bằng `src/lib/cny-wallet.ts`. Đừng thêm cột `balance`. Dòng `chi` giữ `rate_snapshot` đã chốt cứng lúc mua; sửa giá ¥ sau khi mua thì **ghi dòng `dieu_chinh`**, không sửa dòng cũ.
@@ -60,7 +65,7 @@ Test bắt buộc phải xanh cho **công thức tiền** và **luật trạng t
 - **UI tiếng Việt.** Đơn vị tiền VND (₫), tệ (¥).
 - **Commit:** tin nhắn tiếng Việt, kết thúc bằng `Co-Authored-By: Claude ...`. **Push sau mỗi phase.**
 - **Verify** thay đổi qua preview trình duyệt (chụp màn hình) + `npm test` + `tsc` trước khi commit.
-- Cấu hình sẵn sàng lên VPS chỉ bằng đổi `.env` (không hard-code đường dẫn/khoá).
+- Cấu hình đổi giữa các môi trường chỉ bằng đổi `.env` (không hard-code đường dẫn/khoá).
 
 ## Tài liệu
 
@@ -71,3 +76,5 @@ Test bắt buộc phải xanh cho **công thức tiền** và **luật trạng t
 - Thiết kế v2: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`
 - Thiết kế v3-A (giá & nhập đơn): `docs/2026-08-11-heyp-v3a-gia-va-nhap-don-design.md`, kế hoạch: `docs/2026-08-11-heyp-v3a-implementation-plan.md`
 - Thiết kế v3-B (tài chính): `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`, kế hoạch: `docs/2026-08-11-heyp-v3b-implementation-plan.md`
+- Kế hoạch chuyển hosting Vercel + Supabase: `docs/superpowers/plans/2026-08-14-migrate-vercel-supabase.md`
+- Hướng dẫn vận hành Vercel + Supabase (backup, unpause, ngưỡng free tier): `docs/2026-08-14-huong-dan-van-hanh-vercel-supabase.md`

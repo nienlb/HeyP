@@ -63,7 +63,7 @@ export default async function OrderDetailPage({
   if (!detail || !detail.order) notFound();
 
   const { order, customer, items, history, photos, payments } = detail;
-  const orderPackages = getPackagesForOrder(orderId);
+  const orderPackages = await getPackagesForOrder(orderId);
   const money = computeOrderMoney({
     goodsTotalCny: order.goodsTotalCny,
     exchangeRate: order.exchangeRate,
@@ -86,7 +86,7 @@ export default async function OrderDetailPage({
     items.map((it) => ({ costConfirmed: it.costConfirmed })),
     photos.map((p) => ({ label: p.label })),
   );
-  const sellRate = order.exchangeRate || getSettings().sellRate;
+  const sellRate = order.exchangeRate || (await getSettings()).sellRate;
   const saleProfit = money.goodsTotalVnd - (order.saleCost ?? 0);
   // Khi nào cho tách dòng: lỗi NCC ở khâu lưu thông, đổi/trả sau khi giao.
   const canDefect = (
@@ -298,7 +298,7 @@ export default async function OrderDetailPage({
           rows={payments}
           quotedTotalVnd={order.quotedTotalVnd}
           shippingFee={order.shippingFee}
-          suggestedFinal={suggestFinalPayment(order.id)}
+          suggestedFinal={await suggestFinalPayment(order.id)}
         />
 
         {/* Sản phẩm */}

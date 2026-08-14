@@ -3,6 +3,7 @@
 import { useActionState, useMemo, useRef, useState } from "react";
 import {
   createOrderAction,
+  deletePhotoAction,
   suggestCnyAction,
   type CreateOrderState,
 } from "../actions";
@@ -18,6 +19,7 @@ import {
   type ImageKind,
   type ZaloExtract,
 } from "@/lib/zalo-extract";
+import { mergeItems, mergeMoneyFields } from "@/lib/zalo-merge";
 import { CopyButton } from "../../_components/copy-button";
 
 type ItemRow = {
@@ -39,8 +41,11 @@ const emptyItem: ItemRow = {
   costConfirmed: true,
 };
 
-/** Ảnh đã thả lên, kèm loại AI phân ra (sửa được). */
+/** Ảnh ĐÃ ĐỌC XONG (đã lưu server, có id thật), kèm loại AI phân ra (sửa được). */
 type DroppedPhoto = { id: number; kind: ImageKind; name: string };
+
+/** Ảnh mới thả/chọn, CHƯA gửi lên server — chỉ nằm trong hàng chờ của trình duyệt. */
+type PendingPhoto = { file: File; url: string };
 
 export function NewOrderForm({
   customers,
@@ -79,9 +84,12 @@ export function NewOrderForm({
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [newCustomerAddress, setNewCustomerAddress] = useState("");
 
-  // Đọc ảnh chốt đơn Zalo (Gemini)
+  // Đọc ảnh chốt đơn Zalo (Gemini). Ảnh mới thả nằm ở `pendingPhotos` — CHƯA
+  // gửi lên server, chỉ gửi khi bấm "Đọc ảnh". Xem ghi chú dài ở
+  // src/lib/zalo-merge.ts vì sao không còn gộp nhiều ảnh vào một lần gọi.
   const zaloInputRef = useRef<HTMLInputElement>(null);
   const [zaloPhotoId, setZaloPhotoId] = useState("");
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [zaloBusy, setZaloBusy] = useState(false);
   const [zaloError, setZaloError] = useState<string | null>(null);
   const [zaloInfo, setZaloInfo] = useState<string | null>(null);
@@ -89,135 +97,177 @@ export function NewOrderForm({
 
   const num = (s: string) => Number(String(s).replace(/[,\s]/g, "")) || 0;
 
-  /**
-   * Đổ dữ liệu AI đọc được vào form.
-   *
-   * Total là DỮ KIỆN (khách đã đồng ý). Giá ¥ thì gợi ý: ưu tiên lần gần nhất
-   * đã bán món cùng tên, không có thì suy ngược từ Total. Mọi số gợi ý đều
-   * mang cost_confirmed = false để không lẻn vào báo cáo như sự thật.
-   */
-  async function applyExtract(d: ZaloExtract) {
-    // GỘP, KHÔNG GHI ĐÈ: mỗi lần thả ảnh chỉ điền thêm những gì đọc được lần
-    // này. Ảnh thứ 2 (vd chỉ có thông tin khách, không có Total/sản phẩm)
-    // trước đây làm trắng xoá hết dữ liệu đã điền từ ảnh chốt đơn thả trước
-    // — lỗi mất dữ liệu thật, phát hiện khi dùng thật. Nguyên tắc sửa: chỉ
-    // set một trường khi lần đọc NÀY thực sự có giá trị cho trường đó.
-    const found: string[] = [];
-
-    if (d.customerName || d.customerPhone || d.customerAddress) {
-      setCustomerMode("new");
-      if (d.customerName) setNewCustomerName(d.customerName);
-      if (d.customerPhone) setNewCustomerPhone(d.customerPhone);
-      if (d.customerAddress) setNewCustomerAddress(d.customerAddress);
-      found.push("thông tin khách");
-    }
-
-    if (d.totalVnd != null) {
-      setQuotedTotal(String(d.totalVnd));
-      found.push(`Total ${d.totalVnd.toLocaleString("vi-VN")}₫`);
-    }
-    if (d.depositVnd != null) {
-      setDeposit(String(d.depositVnd));
-      found.push(`Cọc ${d.depositVnd.toLocaleString("vi-VN")}₫`);
-    }
-
-    // Kiểm shipUnknown TRƯỚC: Gemini có thể trả shipVnd:0 (không phải null)
-    // ngay cả khi thật ra chưa biết ship — "+ ship" không kèm số trong ảnh.
-    // shipUnknown hoặc ảnh này không nhắc gì tới ship → GIỮ NGUYÊN trạng
-    // thái ship hiện có, đừng ghi đè về "chưa biết".
-    if (d.shipFree) {
-      setShipStatus("free");
-      setShippingFee("0");
-      found.push("freeship");
-    } else if (!d.shipUnknown && d.shipVnd != null) {
-      setShipStatus("set");
-      setShippingFee(String(d.shipVnd));
-      found.push(`ship ${d.shipVnd.toLocaleString("vi-VN")}₫`);
-    }
-
-    if (d.items.length > 0) {
-      // Gợi ý ¥: lịch sử trước, không có thì suy ngược từ Total — dùng Total
-      // ĐANG CÓ trên form (có thể đến từ một lần thả ảnh trước đó), không
-      // chỉ riêng Total của lần đọc này.
-      let fromHistory: (number | null)[] = d.items.map(() => null);
-      try {
-        fromHistory = await suggestCnyAction(d.items.map((it) => it.name));
-      } catch {
-        // Tra lịch sử hỏng thì vẫn còn cách suy ngược — không chặn.
-      }
-      const totalForFallback = d.totalVnd ?? num(quotedTotal);
-      const fallbackCny = suggestCnyFromTotal(
-        totalForFallback,
-        d.items.length,
-        defaultExchangeRate,
-        defaultMarginVnd,
-      );
-
-      const newRows: ItemRow[] = d.items.map((it, i) => {
-        const cny = fromHistory[i] ?? fallbackCny;
-        return {
-          name: it.name,
-          productUrl: "",
-          attributes: itemAttributes(it),
-          quantity: String(it.quantity || 1),
-          unitPriceCny: cny > 0 ? String(cny) : "",
-          costConfirmed: false,
-        };
-      });
-
-      // Dòng sản phẩm hiện tại còn là dòng trống ban đầu → điền vào đó.
-      // Đã có dữ liệu thật (từ lần thả trước) → nối thêm, không xoá.
-      setItems((prev) => {
-        const untouched = prev.length === 1 && prev[0].name.trim() === "";
-        return untouched ? newRows : [...prev, ...newRows];
-      });
-      found.push(`sản phẩm: ${d.items.map((i) => i.name).join(", ")}`);
-    }
-
-    setZaloInfo(
-      found.length > 0
-        ? `Đã đọc thêm: ${found.join(" · ")}`
-        : "Ảnh này không đọc được thông tin nào — kiểm tra lại bằng mắt hoặc nhập tay.",
-    );
+  /** Áp một patch (từ mergeMoneyFields) vào state form — chỉ set trường có mặt. */
+  function applyMoneyPatch(patch: ReturnType<typeof mergeMoneyFields>["patch"]) {
+    if (patch.customerMode) setCustomerMode(patch.customerMode);
+    if (patch.newCustomerName !== undefined)
+      setNewCustomerName(patch.newCustomerName);
+    if (patch.newCustomerPhone !== undefined)
+      setNewCustomerPhone(patch.newCustomerPhone);
+    if (patch.newCustomerAddress !== undefined)
+      setNewCustomerAddress(patch.newCustomerAddress);
+    if (patch.quotedTotal !== undefined) setQuotedTotal(patch.quotedTotal);
+    if (patch.deposit !== undefined) setDeposit(patch.deposit);
+    if (patch.shipStatus !== undefined) setShipStatus(patch.shipStatus);
+    if (patch.shippingFee !== undefined) setShippingFee(patch.shippingFee);
   }
 
-  /** Thả bao nhiêu ảnh cũng được — AI phân loại rồi trả về từng ảnh. */
-  async function readZaloFiles(fileList: FileList | File[]) {
+  /**
+   * Gợi ý giá ¥ cho sản phẩm đọc được rồi gộp vào danh sách hiện có.
+   *
+   * `currentTotalStr` truyền tay (KHÔNG đọc state `quotedTotal` qua closure):
+   * hàm này chạy trong vòng lặp `readPendingFiles`, và React không cập nhật
+   * lại closure của một async function đang chạy dở dù đã `setQuotedTotal`
+   * ở ảnh trước — dùng biến cục bộ theo dõi xuyên suốt vòng lặp mới đúng.
+   */
+  async function applyItemsFromExtract(
+    order: ZaloExtract,
+    currentTotalStr: string,
+  ) {
+    let fromHistory: (number | null)[] = order.items.map(() => null);
+    try {
+      fromHistory = await suggestCnyAction(order.items.map((it) => it.name));
+    } catch {
+      // Tra lịch sử hỏng thì vẫn còn cách suy ngược — không chặn.
+    }
+    const totalForFallback = order.totalVnd ?? num(currentTotalStr);
+    const fallbackCny = suggestCnyFromTotal(
+      totalForFallback,
+      order.items.length,
+      defaultExchangeRate,
+      defaultMarginVnd,
+    );
+
+    const newRows: ItemRow[] = order.items.map((it, i) => {
+      const cny = fromHistory[i] ?? fallbackCny;
+      return {
+        name: it.name,
+        productUrl: "",
+        attributes: itemAttributes(it),
+        quantity: String(it.quantity || 1),
+        unitPriceCny: cny > 0 ? String(cny) : "",
+        costConfirmed: false,
+      };
+    });
+    setItems((prev) => mergeItems(prev, newRows));
+  }
+
+  /** Thêm ảnh mới thả/chọn vào hàng chờ — CHƯA gửi đi đâu, chỉ xem trước. */
+  function addPending(fileList: FileList | File[]) {
     const files = [...fileList].filter((f) => f.type.startsWith("image/"));
     if (files.length === 0) return;
-
-    setZaloBusy(true);
     setZaloError(null);
-    setZaloInfo(null);
-    const fd = new FormData();
-    for (const f of files) fd.append("files", f);
+    setPendingPhotos((prev) => [
+      ...prev,
+      ...files.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    ]);
+  }
 
-    try {
-      const res = await fetch("/api/read-zalo", { method: "POST", body: fd });
-      const data = await res.json().catch(() => ({}));
+  /** Bỏ một ảnh khỏi hàng chờ trước khi đọc — thả nhầm thì gỡ, không tốn gì cả. */
+  function removePending(url: string) {
+    setPendingPhotos((prev) => {
+      const target = prev.find((p) => p.url === url);
+      if (target) URL.revokeObjectURL(target.url);
+      return prev.filter((p) => p.url !== url);
+    });
+  }
 
-      if (Array.isArray(data.photos)) {
-        setPhotos((prev) => [...prev, ...(data.photos as DroppedPhoto[])]);
-      }
-      if (data.photoId) setZaloPhotoId(String(data.photoId));
-
-      if (!res.ok || !data.ok) {
-        setZaloError(
-          (data.error ?? "Đọc ảnh thất bại") + " — bạn nhập tay giúp nhé.",
+  /** Xoá một ảnh ĐÃ đọc/lưu — thả/đọc nhầm vẫn gỡ được, xoá cả trên server. */
+  async function removePhoto(id: number) {
+    setPhotos((prev) => prev.filter((p) => p.id !== id));
+    if (String(id) === zaloPhotoId) {
+      setZaloPhotoId((prevIdStr) => {
+        const remaining = photos.filter(
+          (p) => p.id !== id && p.kind === "chot_don",
         );
-      } else {
-        await applyExtract(data.data.order as ZaloExtract);
-      }
+        return remaining[0] ? String(remaining[0].id) : "";
+      });
+    }
+    try {
+      await deletePhotoAction(id);
     } catch {
-      setZaloError("Lỗi mạng khi đọc ảnh — bạn nhập tay giúp nhé.");
-    } finally {
-      setZaloBusy(false);
-      if (zaloInputRef.current) zaloInputRef.current.value = "";
+      // Xoá server lỗi thì ảnh vẫn đã biến mất khỏi form — không chặn người dùng,
+      // ảnh mồ côi (chưa gắn đơn) không gây hại gì thêm.
     }
   }
 
   function setPhotoKind(id: number, kind: ImageKind) {
     setPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, kind } : p)));
+  }
+
+  /**
+   * Đọc TỪNG ảnh trong hàng chờ — TUẦN TỰ, mỗi ảnh một lần gọi Gemini riêng.
+   * Đây là nút bấm tường minh (không tự chạy khi thả ảnh) — bấm lại được bao
+   * nhiêu lần cũng được, kể cả sau khi đã đọc xong một đợt trước đó.
+   */
+  async function readPendingFiles() {
+    if (zaloBusy) return; // chặn bấm chồng trong lúc đang chạy
+    const queue = pendingPhotos;
+    if (queue.length === 0) return;
+
+    setZaloBusy(true);
+    setZaloError(null);
+    setZaloInfo(null);
+
+    const foundAll: string[] = [];
+    const errors: string[] = [];
+    let currentTotal = quotedTotal;
+    let confirmDonId: string | null = zaloPhotoId || null;
+
+    for (let i = 0; i < queue.length; i++) {
+      const { file, url } = queue[i];
+      setZaloInfo(`🤖 Đang đọc ảnh ${i + 1}/${queue.length}: ${file.name}…`);
+
+      const fd = new FormData();
+      fd.append("files", file);
+
+      try {
+        const res = await fetch("/api/read-zalo", { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+
+        if (Array.isArray(data.photos) && data.photos.length > 0) {
+          const saved = data.photos[0] as DroppedPhoto;
+          setPhotos((prev) => [...prev, saved]);
+          // Ảnh chốt đơn ĐẦU TIÊN đọc được mới gắn làm bằng chứng của đơn —
+          // ảnh sản phẩm/thông tin khách đọc sau không được ghi đè lên đây.
+          if (saved.kind === "chot_don" && !confirmDonId) {
+            confirmDonId = String(saved.id);
+            setZaloPhotoId(confirmDonId);
+          }
+        }
+
+        if (!res.ok || !data.ok) {
+          errors.push(`${file.name}: ${data.error ?? "đọc thất bại"}`);
+        } else {
+          const order = data.data.order as ZaloExtract;
+          const { patch, found } = mergeMoneyFields(order);
+          applyMoneyPatch(patch);
+          if (patch.quotedTotal !== undefined) currentTotal = patch.quotedTotal;
+          if (order.items.length > 0) {
+            await applyItemsFromExtract(order, currentTotal);
+          }
+          foundAll.push(...found);
+        }
+      } catch {
+        errors.push(`${file.name}: lỗi mạng`);
+      } finally {
+        URL.revokeObjectURL(url);
+        setPendingPhotos((prev) => prev.filter((p) => p.url !== url));
+      }
+    }
+
+    setZaloBusy(false);
+    if (errors.length > 0) {
+      setZaloError(`${errors.join(" · ")} — bạn kiểm tra/nhập tay giúp nhé.`);
+    }
+    setZaloInfo(
+      foundAll.length > 0
+        ? `Đã đọc: ${foundAll.join(" · ")}`
+        : errors.length === 0
+          ? "Không đọc được thông tin nào từ ảnh vừa rồi — kiểm tra lại bằng mắt hoặc nhập tay."
+          : null,
+    );
+    if (zaloInputRef.current) zaloInputRef.current.value = "";
   }
 
   const parsedItems = useMemo(
@@ -307,8 +357,8 @@ export function NewOrderForm({
         <h2 className="card-title">🤖 Đọc ảnh chốt đơn Zalo</h2>
         <p className="muted" style={{ margin: "0 0 10px" }}>
           Thả <strong>tất cả ảnh đang có</strong> — ảnh chốt đơn, ảnh thông tin
-          khách, ảnh sản phẩm. AI tự phân loại và điền sẵn form; thiếu gì bổ
-          sung sau cũng được.
+          khách, ảnh sản phẩm. Thả xong xem lại, gỡ ảnh nào thả nhầm, rồi bấm{" "}
+          <strong>Đọc ảnh</strong> khi sẵn sàng — thiếu gì bổ sung sau cũng được.
         </p>
         <div
           className={`dropzone${zaloDragOver ? " over" : ""}`}
@@ -320,16 +370,62 @@ export function NewOrderForm({
           onDrop={(e) => {
             e.preventDefault();
             setZaloDragOver(false);
-            if (e.dataTransfer.files.length) readZaloFiles(e.dataTransfer.files);
+            if (e.dataTransfer.files.length) addPending(e.dataTransfer.files);
           }}
           onClick={() => zaloInputRef.current?.click()}
           role="button"
           tabIndex={0}
         >
-          {zaloBusy
-            ? "🤖 Đang đọc ảnh…"
-            : "Kéo-thả ảnh vào đây, hoặc bấm để chọn (chọn được nhiều ảnh)"}
+          Kéo-thả ảnh vào đây, hoặc bấm để chọn (chọn được nhiều ảnh)
         </div>
+        <input
+          ref={zaloInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            if (e.target.files?.length) addPending(e.target.files);
+            e.target.value = "";
+          }}
+        />
+
+        {pendingPhotos.length > 0 && (
+          <>
+            <div className="photo-kinds" style={{ marginTop: 12 }}>
+              {pendingPhotos.map((p) => (
+                <div key={p.url} className="photo-kind photo-kind-pending">
+                  <img src={p.url} alt="" />
+                  <span className="photo-pending-name" title={p.file.name}>
+                    {p.file.name}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline"
+                    onClick={() => removePending(p.url)}
+                    disabled={zaloBusy}
+                  >
+                    Xoá
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="btn"
+              style={{ marginTop: 12 }}
+              onClick={readPendingFiles}
+              disabled={zaloBusy}
+            >
+              {zaloBusy
+                ? "🤖 Đang đọc…"
+                : photos.length > 0
+                  ? `Đọc lại (${pendingPhotos.length} ảnh)`
+                  : `Đọc ${pendingPhotos.length} ảnh`}
+            </button>
+          </>
+        )}
+
         {zaloError && (
           <div className="error" style={{ marginTop: 10 }}>
             {zaloError}
@@ -337,17 +433,9 @@ export function NewOrderForm({
         )}
         {zaloInfo && (
           <div className="zalo-info" style={{ marginTop: 10 }}>
-            ✓ {zaloInfo} — kiểm tra lại bên dưới nhé.
+            {zaloBusy ? zaloInfo : `✓ ${zaloInfo} — kiểm tra lại bên dưới nhé.`}
           </div>
         )}
-        <input
-          ref={zaloInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          hidden
-          onChange={(e) => e.target.files?.length && readZaloFiles(e.target.files)}
-        />
 
         {quoteImages.length > 1 && (
           <div className="warn-flag" style={{ marginTop: 10 }}>
@@ -357,7 +445,7 @@ export function NewOrderForm({
         )}
 
         {photos.length > 0 && (
-          <div className="photo-kinds">
+          <div className="photo-kinds" style={{ marginTop: 12 }}>
             {photos.map((ph) => (
               <div key={ph.id} className="photo-kind">
                 <img src={`/api/photo/${ph.id}`} alt="" />
@@ -371,6 +459,13 @@ export function NewOrderForm({
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  onClick={() => removePhoto(ph.id)}
+                >
+                  Xoá
+                </button>
               </div>
             ))}
           </div>

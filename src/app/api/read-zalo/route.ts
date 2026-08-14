@@ -1,14 +1,16 @@
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
 import { getSession } from "@/lib/auth";
-import { config } from "@/lib/config";
 import { addPhoto } from "@/db/queries";
 import type { PhotoLabel } from "@/lib/photos";
 import { readZaloBatch } from "@/lib/gemini";
 import { downsizeImage } from "@/lib/image";
+import { uploadPhotoFile } from "@/lib/storage";
 import type { ImageKind } from "@/lib/zalo-extract";
+
+// sharp là native module → bắt buộc Node runtime, không chạy được trên edge.
+export const runtime = "nodejs";
+// Gemini đọc ảnh thường mất 5-20s, cộng resize + upload — vượt xa 10s mặc định.
+export const maxDuration = 60;
 
 const MAX_BYTES = 15 * 1024 * 1024;
 
@@ -77,17 +79,14 @@ export async function POST(req: Request): Promise<Response> {
     ? result.data.images.map((im) => im.kind)
     : files.map((_, i) => (i === 0 ? "chot_don" : "san_pham"));
 
-  const dir = resolve(process.cwd(), config.uploadsPath);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-
   const photos: { id: number; kind: ImageKind; name: string }[] = [];
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     const fname = `${Date.now()}-${randomBytes(6).toString("hex")}.${downsized[i].ext}`;
-    await writeFile(join(dir, fname), downsized[i].buffer);
+    await uploadPhotoFile(fname, downsized[i].buffer, downsized[i].mimeType);
     const kind = kinds[i] ?? "san_pham";
     photos.push({
-      id: addPhoto({ filePath: fname, label: LABEL_OF[kind] }),
+      id: await addPhoto({ filePath: fname, label: LABEL_OF[kind] }),
       kind,
       name: file.name,
     });

@@ -9,7 +9,7 @@ import { runSweepAction, updatePackageStatusAction } from "./actions";
 
 export default async function TrackingPage() {
   const session = await requireAuth();
-  const pkgs = listPackages();
+  const pkgs = await listPackages();
   const carriers = knownCarriers();
   const needAttention = pkgs.filter((p) => p.needsManualCheck);
 

@@ -22,7 +22,7 @@ export default async function HomePage() {
     listOrdersWithGaps(),
     countOrdersByStatus(),
   ]);
-  const customers = listCustomersWithTotals();
+  const customers = await listCustomersWithTotals();
 
   const attention = orders
     .filter((o) => o.needsAttention)
@@ -42,9 +42,11 @@ export default async function HomePage() {
     count: needInfo.filter((o) => o.gaps.includes(code)).length,
   })).filter((g) => g.count > 0);
 
-  const wallet = getWallet();
+  const wallet = await getWallet();
   const now = new Date();
-  const pnl = computePnl(getPnlData(now.getFullYear(), now.getMonth() + 1));
+  const pnl = computePnl(
+    await getPnlData(now.getFullYear(), now.getMonth() + 1),
+  );
 
   return (
     <AppShell username={session.username}>

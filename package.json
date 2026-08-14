@@ -9,16 +9,15 @@
     "start": "next start",
     "lint": "next lint",
     "test": "node --test 'tests/**/*.test.ts'",
-    "db:migrate": "node --env-file-if-exists=.env scripts/migrate.ts",
-    "db:seed-demo": "node --env-file-if-exists=.env scripts/seed-demo.ts",
-    "db:backup": "node --env-file-if-exists=.env scripts/backup.ts",
-    "db:restore": "node --env-file-if-exists=.env scripts/restore.ts",
+    "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "drizzle-orm": "^0.38.3",
     "next": "^15.1.6",
+    "postgres": "^3.4.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sharp": "^0.35.3"

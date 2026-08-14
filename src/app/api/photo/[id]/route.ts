@@ -1,10 +1,10 @@
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
+import { basename } from "node:path";
 import { getSession } from "@/lib/auth";
-import { config } from "@/lib/config";
 import { getPhoto } from "@/db/queries";
 import { contentTypeFromName } from "@/lib/photos";
+import { downloadPhotoFile } from "@/lib/storage";
+
+export const runtime = "nodejs";
 
 export async function GET(
   req: Request,
@@ -14,16 +14,13 @@ export async function GET(
   if (!session) return new Response("Chưa đăng nhập", { status: 401 });
 
   const { id } = await ctx.params;
-  const photo = getPhoto(Number(id));
+  const photo = await getPhoto(Number(id));
   if (!photo) return new Response("Không tìm thấy ảnh", { status: 404 });
 
   // Chống path traversal: chỉ dùng tên file cơ sở.
-  const dir = resolve(process.cwd(), config.uploadsPath);
-  const filePath = join(dir, basename(photo.file_path));
-  if (!existsSync(filePath))
-    return new Response("File ảnh không tồn tại", { status: 404 });
+  const buf = await downloadPhotoFile(basename(photo.file_path));
+  if (!buf) return new Response("File ảnh không tồn tại", { status: 404 });
 
-  const buf = await readFile(filePath);
   const headers = new Headers({
     "Content-Type": contentTypeFromName(photo.file_path),
     "Cache-Control": "private, max-age=3600",

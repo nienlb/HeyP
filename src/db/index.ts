@@ -1,47 +1,26 @@
 import "server-only";
-import { existsSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { drizzle } from "drizzle-orm/sqlite-proxy";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { config } from "@/lib/config";
 import * as schema from "./schema";
 
-const dbPath = resolve(process.cwd(), config.databasePath);
-
-// Đảm bảo thư mục chứa file SQLite tồn tại trước khi mở kết nối.
-const dir = dirname(dbPath);
-if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+if (!config.databaseUrl) {
+  throw new Error("Thiếu DATABASE_URL — không kết nối được Postgres/Supabase");
+}
 
 /**
- * Dùng SQLite built-in của Node (node:sqlite) — không cần biên dịch native,
- * chạy được trên Node mới nhất. Kết nối vào Drizzle qua driver sqlite-proxy.
+ * Supavisor transaction pooler (port 6543) không hỗ trợ prepared statement
+ * → BẮT BUỘC prepare: false, nếu không sẽ lỗi ngẫu nhiên khi có tải.
+ * max: 1 gây treo hàng chục giây khi có >1 request đồng thời trên cùng tiến
+ * trình (đã tái hiện được lúc chạy `next dev` — nhiều request nội bộ của
+ * Next.js xếp hàng chờ đúng 1 connection). App có 2 người dùng thật, hai
+ * tab/hai người dùng cùng lúc là bình thường, không phải trường hợp hiếm —
+ * để vài connection cho pool tránh nghẽn cổ chai này.
  */
-export const sqlite = new DatabaseSync(dbPath);
-sqlite.exec("PRAGMA journal_mode = WAL;");
-sqlite.exec("PRAGMA foreign_keys = ON;");
+export const sqlClient = postgres(config.databaseUrl, {
+  prepare: false,
+  max: 5,
+  idle_timeout: 20,
+});
 
-export const db = drizzle(
-  async (sql, params, method) => {
-    const stmt = sqlite.prepare(sql);
-
-    if (method === "run") {
-      stmt.run(...(params as never[]));
-      return { rows: [] };
-    }
-
-    // node:sqlite trả object theo tên cột; sqlite-proxy cần mảng giá trị
-    // theo đúng thứ tự cột trong câu SELECT → dùng Object.values.
-    const rowsAsObjects = stmt.all(...(params as never[])) as Record<
-      string,
-      unknown
-    >[];
-    const rows = rowsAsObjects.map((r) => Object.values(r));
-
-    // 'get' cần một hàng phẳng; 'all'/'values' cần mảng các hàng.
-    if (method === "get") {
-      return { rows: rows[0] ?? [] };
-    }
-    return { rows };
-  },
-  { schema },
-);
+export const db = drizzle(sqlClient, { schema });

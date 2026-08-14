@@ -32,9 +32,9 @@ export default async function ReportsPage({
   const year = Number(y) || now.getFullYear();
   const month = Number(m) || now.getMonth() + 1;
 
-  const cashFlow = getCashFlow(year, month);
-  const pnl = computePnl(getPnlData(year, month));
-  const assets = getAssetSnapshot();
+  const cashFlow = await getCashFlow(year, month);
+  const pnl = computePnl(await getPnlData(year, month));
+  const assets = await getAssetSnapshot();
 
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;

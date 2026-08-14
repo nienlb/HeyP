@@ -19,7 +19,7 @@ export async function saveSettingsAction(formData: FormData): Promise<void> {
   const sellRate = num(formData.get("sellRate"));
   const defaultMarginVnd = num(formData.get("defaultMarginVnd"));
 
-  saveSettings({
+  await saveSettings({
     sellRate: sellRate > 0 ? sellRate : SETTING_DEFAULTS.sellRate,
     defaultMarginVnd:
       defaultMarginVnd >= 0
