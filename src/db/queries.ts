@@ -144,7 +144,7 @@ export type NewOrderInput = {
   changedBy?: string | null;
 };
 
-export function createOrder(input: NewOrderInput): number {
+export async function createOrder(input: NewOrderInput): Promise<number> {
   const goodsTotalCny = sumLineItemsCny(input.items);
   const pricingLines = input.items.map((it) => ({
     quantity: it.quantity,
@@ -159,7 +159,7 @@ export function createOrder(input: NewOrderInput): number {
         input.quotedTotalVnd,
         pricingLines,
         input.exchangeRate,
-        getSettings().defaultMarginVnd,
+        (await getSettings()).defaultMarginVnd,
       );
   const marginTotal = margins.reduce((s, m) => s + m, 0);
 
@@ -171,33 +171,30 @@ export function createOrder(input: NewOrderInput): number {
     deposit: input.deposit,
   });
 
-  sqlite.exec("BEGIN");
-  try {
+  return withTx(async (x) => {
     let customerId = input.customerId ?? null;
     if (!customerId && input.newCustomer) {
-      const info = sqlite
-        .prepare(
-          "INSERT INTO customers(name, phone, address) VALUES(?, ?, ?)",
-        )
-        .run(
+      const c = await x.get<{ id: number }>(
+        "INSERT INTO customers(name, phone, address) VALUES(?, ?, ?) RETURNING id",
+        [
           input.newCustomer.name,
           input.newCustomer.phone ?? null,
           input.newCustomer.address ?? null,
-        );
-      customerId = Number(info.lastInsertRowid);
+        ],
+      );
+      customerId = c!.id;
     }
     // Đơn ĐƯỢC PHÉP chưa có khách (tiền cọc đã về thật, thông tin tới sau).
     // Cờ `thieu_khach` của order-gaps lo phần nhắc bổ sung.
 
-    const info = sqlite
-      .prepare(
-        `INSERT INTO orders
-           (customer_id, order_type, status, exchange_rate, goods_total_cny,
-            margin_vnd, shipping_fee, deposit, amount_due, note,
-            quoted_total_vnd, ship_status)
-         VALUES (?, ?, 'cho_bao_gia', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+    const o = await x.get<{ id: number }>(
+      `INSERT INTO orders
+         (customer_id, order_type, status, exchange_rate, goods_total_cny,
+          margin_vnd, shipping_fee, deposit, amount_due, note,
+          quoted_total_vnd, ship_status)
+       VALUES (?, ?, 'cho_bao_gia', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING id`,
+      [
         customerId,
         input.orderType,
         input.exchangeRate,
@@ -209,53 +206,48 @@ export function createOrder(input: NewOrderInput): number {
         input.note ?? null,
         Math.round(input.quotedTotalVnd),
         input.shipStatus,
-      );
-    const orderId = Number(info.lastInsertRowid);
-
-    const itemStmt = sqlite.prepare(
-      `INSERT INTO order_items
-         (order_id, product_url, name, attributes, quantity, unit_price_cny,
-          margin_vnd, cost_confirmed)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ],
     );
-    input.items.forEach((it, i) => {
-      itemStmt.run(
-        orderId,
-        it.productUrl ?? null,
-        it.name,
-        it.attributes ?? null,
-        it.quantity,
-        it.unitPriceCny,
-        margins[i],
-        it.costConfirmed ? 1 : 0,
-      );
-    });
+    const orderId = o!.id;
 
-    sqlite
-      .prepare(
-        `INSERT INTO order_status_history
-           (order_id, from_status, to_status, changed_by, note)
-         VALUES (?, NULL, 'cho_bao_gia', ?, 'Tạo đơn')`,
-      )
-      .run(orderId, input.changedBy ?? null);
+    for (const [i, it] of input.items.entries()) {
+      await x.run(
+        `INSERT INTO order_items
+           (order_id, product_url, name, attributes, quantity, unit_price_cny,
+            margin_vnd, cost_confirmed)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          orderId,
+          it.productUrl ?? null,
+          it.name,
+          it.attributes ?? null,
+          it.quantity,
+          it.unitPriceCny,
+          margins[i],
+          it.costConfirmed ?? false,
+        ],
+      );
+    }
+
+    await x.run(
+      `INSERT INTO order_status_history
+         (order_id, from_status, to_status, changed_by, note)
+       VALUES (?, NULL, 'cho_bao_gia', ?, 'Tạo đơn')`,
+      [orderId, input.changedBy ?? null],
+    );
 
     // Cọc đọc từ ảnh Zalo → một dòng thu tiền, không ghi thẳng vào
     // orders.deposit nữa (deposit là số dẫn xuất — spec v3-B mục 3).
     if (input.deposit > 0) {
-      sqlite
-        .prepare(
-          `INSERT INTO payments (order_id, amount_vnd, paid_at, kind, method, note)
-           VALUES (?, ?, unixepoch(), 'coc', 'chuyen_khoan', NULL)`,
-        )
-        .run(orderId, Math.round(input.deposit));
+      await x.run(
+        `INSERT INTO payments (order_id, amount_vnd, paid_at, kind, method, note)
+         VALUES (?, ?, ${NOW_EPOCH_SQL}, 'coc', 'chuyen_khoan', NULL)`,
+        [orderId, Math.round(input.deposit)],
+      );
     }
 
-    sqlite.exec("COMMIT");
     return orderId;
-  } catch (err) {
-    sqlite.exec("ROLLBACK");
-    throw err;
-  }
+  });
 }
 
 // ---------- Chi tiết đơn ----------
@@ -554,57 +546,52 @@ type OrderItemRow = {
 };
 
 /** Cộng hàng vào kho, gộp theo (tên, nguồn) với giá vốn bình quân. */
-function _addStock(
+async function _addStock(
+  x: Exec,
   name: string,
   source: InventorySource,
   qty: number,
   unitCost: number,
-): void {
-  const row = sqlite
-    .prepare(
-      "SELECT id, quantity, avg_cost FROM inventory WHERE product_name = ? AND source = ?",
-    )
-    .get(name, source) as
-    | { id: number; quantity: number; avg_cost: number }
-    | undefined;
+): Promise<void> {
+  const row = await x.get<{ id: number; quantity: number; avg_cost: number }>(
+    "SELECT id, quantity, avg_cost FROM inventory WHERE product_name = ? AND source = ?",
+    [name, source],
+  );
   if (row) {
     const after = applyStockIn(
       { quantity: row.quantity, avgCost: row.avg_cost },
       qty,
       unitCost,
     );
-    sqlite
-      .prepare(
-        "UPDATE inventory SET quantity = ?, avg_cost = ?, last_imported_at = unixepoch() WHERE id = ?",
-      )
-      .run(after.quantity, after.avgCost, row.id);
+    await x.run(
+      `UPDATE inventory SET quantity = ?, avg_cost = ?,
+              last_imported_at = ${NOW_EPOCH_SQL} WHERE id = ?`,
+      [after.quantity, after.avgCost, row.id],
+    );
   } else {
-    sqlite
-      .prepare(
-        `INSERT INTO inventory(product_name, quantity, avg_cost, source, last_imported_at)
-         VALUES (?, ?, ?, ?, unixepoch())`,
-      )
-      .run(name, qty, unitCost, source);
+    await x.run(
+      `INSERT INTO inventory(product_name, quantity, avg_cost, source, last_imported_at)
+       VALUES (?, ?, ?, ?, ${NOW_EPOCH_SQL})`,
+      [name, qty, unitCost, source],
+    );
   }
 }
 
 /** Tính lại tiền đơn từ các dòng còn "normal" (loại bỏ dòng lỗi/đã trả). */
-function _recomputeOrderMoney(orderId: number): void {
-  const order = sqlite
-    .prepare(
-      "SELECT exchange_rate, margin_vnd, shipping_fee, deposit FROM orders WHERE id = ?",
-    )
-    .get(orderId) as {
+async function _recomputeOrderMoney(x: Exec, orderId: number): Promise<void> {
+  const order = (await x.get<{
     exchange_rate: number;
     margin_vnd: number;
     shipping_fee: number;
     deposit: number;
-  };
-  const rows = sqlite
-    .prepare(
-      "SELECT quantity, unit_price_cny FROM order_items WHERE order_id = ? AND line_status = 'normal'",
-    )
-    .all(orderId) as { quantity: number; unit_price_cny: number }[];
+  }>(
+    "SELECT exchange_rate, margin_vnd, shipping_fee, deposit FROM orders WHERE id = ?",
+    [orderId],
+  ))!;
+  const rows = await x.all<{ quantity: number; unit_price_cny: number }>(
+    "SELECT quantity, unit_price_cny FROM order_items WHERE order_id = ? AND line_status = 'normal'",
+    [orderId],
+  );
   const goodsTotalCny = rows.reduce(
     (s, r) => s + r.quantity * r.unit_price_cny,
     0,
@@ -616,9 +603,10 @@ function _recomputeOrderMoney(orderId: number): void {
     shippingFee: order.shipping_fee,
     deposit: order.deposit,
   });
-  sqlite
-    .prepare("UPDATE orders SET goods_total_cny = ?, amount_due = ? WHERE id = ?")
-    .run(goodsTotalCny, money.amountDue, orderId);
+  await x.run(
+    "UPDATE orders SET goods_total_cny = ?, amount_due = ? WHERE id = ?",
+    [goodsTotalCny, money.amountDue, orderId],
+  );
 }
 
 // ---------- Ví ¥ (v3-B) ----------
@@ -740,59 +728,54 @@ export type ChangeStatusResult =
   | { ok: true }
   | { ok: false; reason: string };
 
-export function changeOrderStatus(
+export async function changeOrderStatus(
   id: number,
   to: OrderStatus,
   changedBy?: string | null,
   note?: string | null,
-): ChangeStatusResult {
-  const order = sqlite
-    .prepare(
-      `SELECT order_type, status, exchange_rate, goods_total_cny,
-              shipping_fee, deposit, customer_id
-         FROM orders WHERE id = ?`,
-    )
-    .get(id) as
-    | {
-        order_type: OrderType;
-        status: OrderStatus;
-        exchange_rate: number;
-        goods_total_cny: number;
-        shipping_fee: number;
-        deposit: number;
-        customer_id: number;
-      }
-    | undefined;
+): Promise<ChangeStatusResult> {
+  const order = await raw.get<{
+    order_type: OrderType;
+    status: OrderStatus;
+    exchange_rate: number;
+    goods_total_cny: number;
+    shipping_fee: number;
+    deposit: number;
+    customer_id: number;
+  }>(
+    `SELECT order_type, status, exchange_rate, goods_total_cny,
+            shipping_fee, deposit, customer_id
+       FROM orders WHERE id = ?`,
+    [id],
+  );
   if (!order) return { ok: false, reason: "Không tìm thấy đơn" };
 
   const result = transition(order.order_type, order.status, to);
   if (!result.ok) return { ok: false, reason: result.reason };
 
-  sqlite.exec("BEGIN");
-  try {
-    sqlite
-      .prepare(
-        "UPDATE orders SET status = ?, status_changed_at = unixepoch() WHERE id = ?",
-      )
-      .run(to, id);
-    sqlite
-      .prepare(
-        `INSERT INTO order_status_history
-           (order_id, from_status, to_status, changed_by, note)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(id, order.status, to, changedBy ?? null, note ?? null);
+  return withTx(async (x) => {
+    await x.run(
+      `UPDATE orders SET status = ?, status_changed_at = ${NOW_EPOCH_SQL}
+        WHERE id = ?`,
+      [to, id],
+    );
+    await x.run(
+      `INSERT INTO order_status_history
+         (order_id, from_status, to_status, changed_by, note)
+       VALUES (?, ?, ?, ?, ?)`,
+      [id, order.status, to, changedBy ?? null, note ?? null],
+    );
 
-    const normalItems = sqlite
-      .prepare(
-        "SELECT id, name, quantity, unit_price_cny, line_status FROM order_items WHERE order_id = ? AND line_status = 'normal'",
-      )
-      .all(id) as OrderItemRow[];
+    const normalItems = await x.all<OrderItemRow>(
+      "SELECT id, name, quantity, unit_price_cny, line_status FROM order_items WHERE order_id = ? AND line_status = 'normal'",
+      [id],
+    );
 
     // Đơn Nhập kho về tới kho VN → cộng tồn (nguồn Nhập chủ động).
     if (to === "ve_kho_vn" && order.order_type === "nhap_kho") {
       for (const it of normalItems) {
-        _addStock(
+        await _addStock(
+          x,
           it.name,
           "active",
           it.quantity,
@@ -808,37 +791,31 @@ export function changeOrderStatus(
       const totalQty = normalItems.reduce((s, it) => s + it.quantity, 0);
       const perUnit = totalQty > 0 ? Math.round(basis / totalQty) : basis;
       for (const it of normalItems) {
-        _addStock(it.name, "bom", it.quantity, perUnit);
+        await _addStock(x, it.name, "bom", it.quantity, perUnit);
       }
-      sqlite
-        .prepare(
-          `UPDATE customers
-             SET warning_flag = 1,
-                 warning_reason = COALESCE(warning_reason, ?)
-           WHERE id = ?`,
-        )
-        .run(`Từng bom hàng (đơn #${id})`, order.customer_id);
+      await x.run(
+        `UPDATE customers
+           SET warning_flag = true,
+               warning_reason = COALESCE(warning_reason, ?)
+         WHERE id = ?`,
+        [`Từng bom hàng (đơn #${id})`, order.customer_id],
+      );
     }
 
     // Đã mua hàng TQ → trừ ví ¥ và CHỐT CỨNG giá vốn tại thời điểm này.
     // Nạp ¥ đợt sau rẻ hơn không được làm đổi lãi/lỗ của đơn đã mua rồi.
     // goods_total_cny = 0 (chưa nhập giá ¥) → không ghi dòng chi vô nghĩa.
     if (to === "da_mua_tq" && order.goods_total_cny > 0) {
-      const rate = Math.round(currentRate(listLedger()));
-      sqlite
-        .prepare(
-          `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
-           VALUES ('chi', ?, ?, ?, ?)`,
-        )
-        .run(-order.goods_total_cny, rate, id, `Mua hàng đơn #${id}`);
+      const rate = Math.round(currentRate(await listLedger()));
+      await x.run(
+        `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
+         VALUES ('chi', ?, ?, ?, ?)`,
+        [-order.goods_total_cny, rate, id, `Mua hàng đơn #${id}`],
+      );
     }
 
-    sqlite.exec("COMMIT");
-    return { ok: true };
-  } catch (err) {
-    sqlite.exec("ROLLBACK");
-    throw err;
-  }
+    return { ok: true } as ChangeStatusResult;
+  });
 }
 
 // ---------- Bóc lớp giá theo dòng (v3-A) ----------
