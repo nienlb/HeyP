@@ -611,15 +611,8 @@ async function _recomputeOrderMoney(x: Exec, orderId: number): Promise<void> {
 
 // ---------- Ví ¥ (v3-B) ----------
 
-export function listLedger() {
-  return sqlite
-    .prepare(
-      `SELECT id, kind, cny_delta AS cnyDelta, vnd_paid AS vndPaid,
-              rate_snapshot AS rateSnapshot, order_id AS orderId, note,
-              created_at AS createdAt
-         FROM cny_ledger ORDER BY created_at, id`,
-    )
-    .all() as {
+export async function listLedger() {
+  return raw.all<{
     id: number;
     kind: LedgerKind;
     cnyDelta: number;
@@ -628,29 +621,33 @@ export function listLedger() {
     orderId: number | null;
     note: string | null;
     createdAt: number;
-  }[];
+  }>(
+    `SELECT id, kind, cny_delta AS "cnyDelta", vnd_paid AS "vndPaid",
+            rate_snapshot AS "rateSnapshot", order_id AS "orderId", note,
+            created_at::int AS "createdAt"
+       FROM cny_ledger ORDER BY created_at, id`,
+  );
 }
 
-export function getWallet() {
-  const state = replayLedger(listLedger());
+export async function getWallet() {
+  const state = replayLedger(await listLedger());
   return { ...state, valueVnd: walletValueVnd(state) };
 }
 
-export function addTopup(input: {
+export async function addTopup(input: {
   cny: number;
   vndPaid: number;
   note?: string | null;
-}): LineActionResult {
+}): Promise<LineActionResult> {
   if (!(input.cny > 0)) return { ok: false, reason: "Số tệ phải lớn hơn 0" };
   if (!(input.vndPaid > 0))
     return { ok: false, reason: "Số tiền trả phải lớn hơn 0" };
 
-  sqlite
-    .prepare(
-      `INSERT INTO cny_ledger (kind, cny_delta, vnd_paid, note)
-       VALUES ('nap', ?, ?, ?)`,
-    )
-    .run(input.cny, Math.round(input.vndPaid), input.note ?? null);
+  await raw.run(
+    `INSERT INTO cny_ledger (kind, cny_delta, vnd_paid, note)
+     VALUES ('nap', ?, ?, ?)`,
+    [input.cny, Math.round(input.vndPaid), input.note ?? null],
+  );
   return { ok: true };
 }
 
@@ -658,10 +655,11 @@ export function addTopup(input: {
  * Chỉ cho xoá dòng 'nap' — dòng 'chi' sinh tự động từ trạng thái đơn.
  * Sửa = xoá rồi nạp lại: số dư chạy lại từ sổ nên kết quả giống hệt.
  */
-export function deleteLedgerEntry(id: number): LineActionResult {
-  const row = sqlite
-    .prepare("SELECT kind FROM cny_ledger WHERE id = ?")
-    .get(id) as { kind: LedgerKind } | undefined;
+export async function deleteLedgerEntry(id: number): Promise<LineActionResult> {
+  const row = await raw.get<{ kind: LedgerKind }>(
+    "SELECT kind FROM cny_ledger WHERE id = ?",
+    [id],
+  );
   if (!row) return { ok: false, reason: "Không tìm thấy dòng sổ" };
   if (row.kind !== "nap")
     return {
@@ -669,7 +667,7 @@ export function deleteLedgerEntry(id: number): LineActionResult {
       reason:
         "Chỉ xoá được đợt nạp. Dòng mua hàng sửa bằng cách ghi điều chỉnh.",
     };
-  sqlite.prepare("DELETE FROM cny_ledger WHERE id = ?").run(id);
+  await raw.run("DELETE FROM cny_ledger WHERE id = ?", [id]);
   return { ok: true };
 }
 
@@ -692,33 +690,34 @@ export type AddExpenseInput = {
   note?: string | null;
 };
 
-export function addExpense(input: AddExpenseInput): LineActionResult {
+export async function addExpense(
+  input: AddExpenseInput,
+): Promise<LineActionResult> {
   if (!(input.amountVnd > 0))
     return { ok: false, reason: "Số tiền phải lớn hơn 0" };
   if (input.orderId != null) {
-    const exists = sqlite
-      .prepare("SELECT 1 AS x FROM orders WHERE id = ?")
-      .get(input.orderId);
+    const exists = await raw.get("SELECT 1 AS x FROM orders WHERE id = ?", [
+      input.orderId,
+    ]);
     if (!exists) return { ok: false, reason: "Đơn không tồn tại" };
   }
-  sqlite
-    .prepare(
-      `INSERT INTO expenses (spent_at, category, amount_vnd, order_id, method, note)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
+  await raw.run(
+    `INSERT INTO expenses (spent_at, category, amount_vnd, order_id, method, note)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
       Math.floor(input.spentAt.getTime() / 1000),
       input.category,
       Math.round(input.amountVnd),
       input.orderId ?? null,
       input.method,
       input.note ?? null,
-    );
+    ],
+  );
   return { ok: true };
 }
 
-export function deleteExpense(id: number): LineActionResult {
-  sqlite.prepare("DELETE FROM expenses WHERE id = ?").run(id);
+export async function deleteExpense(id: number): Promise<LineActionResult> {
+  await raw.run("DELETE FROM expenses WHERE id = ?", [id]);
   return { ok: true };
 }
 
@@ -1052,17 +1051,14 @@ export async function listPaymentsForOrder(orderId: number) {
 }
 
 /** Số tiền đề xuất cho khoản "thu nốt": đúng bằng phần còn phải thu. */
-export function suggestFinalPayment(orderId: number): number {
-  const row = sqlite
-    .prepare(
-      `SELECT o.quoted_total_vnd AS total, o.shipping_fee AS ship,
-              COALESCE((SELECT SUM(p.amount_vnd) FROM payments p
-                         WHERE p.order_id = o.id), 0) AS paid
-         FROM orders o WHERE o.id = ?`,
-    )
-    .get(orderId) as
-    | { total: number; ship: number; paid: number }
-    | undefined;
+export async function suggestFinalPayment(orderId: number): Promise<number> {
+  const row = await raw.get<{ total: number; ship: number; paid: number }>(
+    `SELECT o.quoted_total_vnd AS total, o.shipping_fee AS ship,
+            COALESCE((SELECT SUM(p.amount_vnd) FROM payments p
+                       WHERE p.order_id = o.id), 0)::int AS paid
+       FROM orders o WHERE o.id = ?`,
+    [orderId],
+  );
   if (!row) return 0;
   return row.total + row.ship - row.paid;
 }
@@ -1076,7 +1072,9 @@ export type AddPaymentInput = {
   note?: string | null;
 };
 
-export function addPayment(input: AddPaymentInput): LineActionResult {
+export async function addPayment(
+  input: AddPaymentInput,
+): Promise<LineActionResult> {
   // Hoàn trả lưu số ÂM; các khoản thu phải dương.
   const amount =
     input.kind === "hoan_tra"
@@ -1084,41 +1082,42 @@ export function addPayment(input: AddPaymentInput): LineActionResult {
       : Math.round(input.amountVnd);
   if (amount === 0) return { ok: false, reason: "Số tiền phải khác 0" };
 
-  sqlite.exec("BEGIN");
   try {
-    sqlite
-      .prepare(
+    return await withTx(async (x) => {
+      await x.run(
         `INSERT INTO payments (order_id, amount_vnd, paid_at, kind, method, note)
          VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        input.orderId,
-        amount,
-        Math.floor(input.paidAt.getTime() / 1000),
-        input.kind,
-        input.method,
-        input.note ?? null,
+        [
+          input.orderId,
+          amount,
+          Math.floor(input.paidAt.getTime() / 1000),
+          input.kind,
+          input.method,
+          input.note ?? null,
+        ],
       );
-    syncOrderDeposit(input.orderId);
-    sqlite.exec("COMMIT");
-    return { ok: true };
+      await syncOrderDeposit(x, input.orderId);
+      return { ok: true } as LineActionResult;
+    });
   } catch (err) {
-    sqlite.exec("ROLLBACK");
     return { ok: false, reason: (err as Error).message };
   }
 }
 
-export function deletePayment(id: number, orderId: number): LineActionResult {
-  sqlite.exec("BEGIN");
+export async function deletePayment(
+  id: number,
+  orderId: number,
+): Promise<LineActionResult> {
   try {
-    sqlite
-      .prepare("DELETE FROM payments WHERE id = ? AND order_id = ?")
-      .run(id, orderId);
-    syncOrderDeposit(orderId);
-    sqlite.exec("COMMIT");
-    return { ok: true };
+    return await withTx(async (x) => {
+      await x.run("DELETE FROM payments WHERE id = ? AND order_id = ?", [
+        id,
+        orderId,
+      ]);
+      await syncOrderDeposit(x, orderId);
+      return { ok: true } as LineActionResult;
+    });
   } catch (err) {
-    sqlite.exec("ROLLBACK");
     return { ok: false, reason: (err as Error).message };
   }
 }
@@ -1127,19 +1126,19 @@ export function deletePayment(id: number, orderId: number): LineActionResult {
  * Đồng bộ orders.deposit từ sổ thu tiền rồi tính lại khối tiền của đơn.
  * Gọi BÊN TRONG transaction đang mở.
  */
-function syncOrderDeposit(orderId: number): void {
-  const row = sqlite
-    .prepare(
-      `SELECT COALESCE(SUM(amount_vnd), 0) AS paid FROM payments WHERE order_id = ?`,
-    )
-    .get(orderId) as { paid: number };
+async function syncOrderDeposit(x: Exec, orderId: number): Promise<void> {
+  const row = (await x.get<{ paid: number }>(
+    `SELECT COALESCE(SUM(amount_vnd), 0)::int AS paid FROM payments WHERE order_id = ?`,
+    [orderId],
+  ))!;
 
-  sqlite
-    .prepare("UPDATE orders SET deposit = ? WHERE id = ?")
-    .run(row.paid, orderId);
+  await x.run("UPDATE orders SET deposit = ? WHERE id = ?", [
+    row.paid,
+    orderId,
+  ]);
 
-  const order = readOrderMoneyRow(orderId);
-  recomputeOrderMoneyRow(orderId, order);
+  const order = await readOrderMoneyRow(x, orderId);
+  await recomputeOrderMoneyRow(x, orderId, order);
 }
 
 // ---------- Ba luồng ngoại lệ theo dòng sản phẩm ----------
