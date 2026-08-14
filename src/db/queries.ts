@@ -1282,32 +1282,30 @@ export type CustomerListRow = {
   orderCount: number;
 };
 
-export function listCustomersWithTotals(): CustomerListRow[] {
-  const rows = sqlite
-    .prepare(
-      `SELECT c.id, c.name, c.phone, c.warning_flag, c.warning_reason,
-              COALESCE(SUM(CASE WHEN o.status NOT IN ('hoan_tat','huy','khach_bom')
-                                THEN o.amount_due ELSE 0 END), 0) AS outstanding,
-              COUNT(o.id) AS order_count
-         FROM customers c
-         LEFT JOIN orders o ON o.customer_id = c.id
-        GROUP BY c.id
-        ORDER BY outstanding DESC, c.name`,
-    )
-    .all() as {
+export async function listCustomersWithTotals(): Promise<CustomerListRow[]> {
+  const rows = await raw.all<{
     id: number;
     name: string;
     phone: string | null;
-    warning_flag: number;
+    warning_flag: boolean;
     warning_reason: string | null;
     outstanding: number;
     order_count: number;
-  }[];
+  }>(
+    `SELECT c.id, c.name, c.phone, c.warning_flag, c.warning_reason,
+            COALESCE(SUM(CASE WHEN o.status NOT IN ('hoan_tat','huy','khach_bom')
+                              THEN o.amount_due ELSE 0 END), 0)::int AS outstanding,
+            COUNT(o.id)::int AS order_count
+       FROM customers c
+       LEFT JOIN orders o ON o.customer_id = c.id
+      GROUP BY c.id
+      ORDER BY outstanding DESC, c.name`,
+  );
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     phone: r.phone,
-    warningFlag: r.warning_flag === 1,
+    warningFlag: r.warning_flag === true,
     warningReason: r.warning_reason,
     outstanding: r.outstanding,
     orderCount: r.order_count,
@@ -1430,22 +1428,7 @@ export async function listOrdersWithGaps(): Promise<
   (OrderListRow & { gaps: GapCode[] })[]
 > {
   const rows = await listOrders();
-  const meta = sqlite
-    .prepare(
-      `SELECT o.id                                         AS id,
-              o.order_type                                 AS orderType,
-              o.status                                     AS status,
-              o.customer_id                                AS customerId,
-              o.ship_status                                AS shipStatus,
-              c.phone                                      AS phone,
-              c.address                                    AS address,
-              (SELECT COUNT(*) FROM order_items i
-                WHERE i.order_id = o.id AND i.cost_confirmed = 0) AS unconfirmed,
-              (SELECT COUNT(*) FROM photos p
-                WHERE p.order_id = o.id AND p.label = 'product')  AS productPhotos
-         FROM orders o LEFT JOIN customers c ON c.id = o.customer_id`,
-    )
-    .all() as {
+  const meta = await raw.all<{
     id: number;
     orderType: OrderType;
     status: OrderStatus;
@@ -1455,7 +1438,20 @@ export async function listOrdersWithGaps(): Promise<
     address: string | null;
     unconfirmed: number;
     productPhotos: number;
-  }[];
+  }>(
+    `SELECT o.id                                         AS id,
+            o.order_type                                 AS "orderType",
+            o.status                                     AS status,
+            o.customer_id                                AS "customerId",
+            o.ship_status                                AS "shipStatus",
+            c.phone                                      AS phone,
+            c.address                                    AS address,
+            (SELECT COUNT(*)::int FROM order_items i
+              WHERE i.order_id = o.id AND i.cost_confirmed = false) AS unconfirmed,
+            (SELECT COUNT(*)::int FROM photos p
+              WHERE p.order_id = o.id AND p.label = 'product')      AS "productPhotos"
+       FROM orders o LEFT JOIN customers c ON c.id = o.customer_id`,
+  );
 
   const byId = new Map(meta.map((m) => [m.id, m]));
   return rows.map((r) => {
@@ -1493,87 +1489,85 @@ function monthRange(year: number, month: number): [number, number] {
  * Đơn HOÀN TẤT trong tháng — ngày lấy từ order_status_history, không từ
  * orders.status_changed_at (cột đó chỉ giữ lần đổi gần nhất).
  */
-export function getPnlData(
+export async function getPnlData(
   year: number,
   month: number,
-): { orders: PnlOrder[]; expenses: PnlExpense[]; bomDepositsVnd: number } {
+): Promise<{
+  orders: PnlOrder[];
+  expenses: PnlExpense[];
+  bomDepositsVnd: number;
+}> {
   const [from, to] = monthRange(year, month);
 
-  const rows = sqlite
-    .prepare(
-      `SELECT o.id                     AS id,
-              o.order_type             AS orderType,
-              o.quoted_total_vnd       AS quotedTotalVnd,
-              o.shipping_fee           AS shippingFee,
-              o.goods_total_cny        AS goodsTotalCny,
-              o.exchange_rate          AS sellRate,
-              o.sale_cost              AS saleCost,
-              (SELECT l.rate_snapshot FROM cny_ledger l
-                WHERE l.order_id = o.id AND l.kind = 'chi'
-                ORDER BY l.id LIMIT 1)                        AS costRate,
-              (SELECT COALESCE(SUM(i.margin_vnd), 0) FROM order_items i
-                WHERE i.order_id = o.id)                      AS marginVnd,
-              (SELECT COUNT(*) = 0 FROM order_items i
-                WHERE i.order_id = o.id AND i.cost_confirmed = 0) AS costConfirmedRaw
-         FROM orders o
-        WHERE EXISTS (SELECT 1 FROM order_status_history h
-                       WHERE h.order_id = o.id AND h.to_status = 'hoan_tat'
-                         AND h.changed_at >= ? AND h.changed_at < ?)`,
-    )
-    .all(from, to) as (Omit<PnlOrder, "costConfirmed"> & {
-    costConfirmedRaw: number;
-  })[];
+  const rows = await raw.all<
+    Omit<PnlOrder, "costConfirmed"> & { costConfirmedRaw: boolean }
+  >(
+    `SELECT o.id                     AS id,
+            o.order_type             AS "orderType",
+            o.quoted_total_vnd       AS "quotedTotalVnd",
+            o.shipping_fee           AS "shippingFee",
+            o.goods_total_cny        AS "goodsTotalCny",
+            o.exchange_rate          AS "sellRate",
+            o.sale_cost              AS "saleCost",
+            (SELECT l.rate_snapshot FROM cny_ledger l
+              WHERE l.order_id = o.id AND l.kind = 'chi'
+              ORDER BY l.id LIMIT 1)                        AS "costRate",
+            (SELECT COALESCE(SUM(i.margin_vnd), 0)::int FROM order_items i
+              WHERE i.order_id = o.id)                      AS "marginVnd",
+            (SELECT COUNT(*) = 0 FROM order_items i
+              WHERE i.order_id = o.id AND i.cost_confirmed = false) AS "costConfirmedRaw"
+       FROM orders o
+      WHERE EXISTS (SELECT 1 FROM order_status_history h
+                     WHERE h.order_id = o.id AND h.to_status = 'hoan_tat'
+                       AND h.changed_at >= ? AND h.changed_at < ?)`,
+    [from, to],
+  );
 
   const orders: PnlOrder[] = rows.map((r) => ({
     ...r,
-    costConfirmed: r.costConfirmedRaw === 1,
+    costConfirmed: r.costConfirmedRaw === true,
   }));
 
-  const expenseRows = sqlite
-    .prepare(
-      `SELECT amount_vnd AS amountVnd, category, order_id AS orderId
-         FROM expenses WHERE spent_at >= ? AND spent_at < ?`,
-    )
-    .all(from, to) as PnlExpense[];
+  const expenseRows = await raw.all<PnlExpense>(
+    `SELECT amount_vnd AS "amountVnd", category, order_id AS "orderId"
+       FROM expenses WHERE spent_at >= ? AND spent_at < ?`,
+    [from, to],
+  );
 
   // Cọc giữ được từ đơn chuyển sang khách bom trong tháng.
-  const bom = sqlite
-    .prepare(
-      `SELECT COALESCE(SUM(p.amount_vnd), 0) AS total
-         FROM payments p
-        WHERE p.order_id IN (
-              SELECT h.order_id FROM order_status_history h
-               WHERE h.to_status = 'khach_bom'
-                 AND h.changed_at >= ? AND h.changed_at < ?)`,
-    )
-    .get(from, to) as { total: number };
+  const bom = (await raw.get<{ total: number }>(
+    `SELECT COALESCE(SUM(p.amount_vnd), 0)::int AS total
+       FROM payments p
+      WHERE p.order_id IN (
+            SELECT h.order_id FROM order_status_history h
+             WHERE h.to_status = 'khach_bom'
+               AND h.changed_at >= ? AND h.changed_at < ?)`,
+    [from, to],
+  ))!;
 
   return { orders, expenses: expenseRows, bomDepositsVnd: bom.total };
 }
 
-export function getCashFlow(year: number, month: number) {
+export async function getCashFlow(year: number, month: number) {
   const [from, to] = monthRange(year, month);
 
-  const inflow = sqlite
-    .prepare(
-      `SELECT method, COALESCE(SUM(amount_vnd), 0) AS total
-         FROM payments WHERE paid_at >= ? AND paid_at < ? GROUP BY method`,
-    )
-    .all(from, to) as { method: PaymentMethod; total: number }[];
+  const inflow = await raw.all<{ method: PaymentMethod; total: number }>(
+    `SELECT method, COALESCE(SUM(amount_vnd), 0)::int AS total
+       FROM payments WHERE paid_at >= ? AND paid_at < ? GROUP BY method`,
+    [from, to],
+  );
 
-  const topups = sqlite
-    .prepare(
-      `SELECT COALESCE(SUM(vnd_paid), 0) AS total FROM cny_ledger
-        WHERE kind = 'nap' AND created_at >= ? AND created_at < ?`,
-    )
-    .get(from, to) as { total: number };
+  const topups = (await raw.get<{ total: number }>(
+    `SELECT COALESCE(SUM(vnd_paid), 0)::int AS total FROM cny_ledger
+      WHERE kind = 'nap' AND created_at >= ? AND created_at < ?`,
+    [from, to],
+  ))!;
 
-  const spend = sqlite
-    .prepare(
-      `SELECT method, COALESCE(SUM(amount_vnd), 0) AS total
-         FROM expenses WHERE spent_at >= ? AND spent_at < ? GROUP BY method`,
-    )
-    .all(from, to) as { method: PaymentMethod; total: number }[];
+  const spend = await raw.all<{ method: PaymentMethod; total: number }>(
+    `SELECT method, COALESCE(SUM(amount_vnd), 0)::int AS total
+       FROM expenses WHERE spent_at >= ? AND spent_at < ? GROUP BY method`,
+    [from, to],
+  );
 
   const sum = (rows: { total: number }[]) =>
     rows.reduce((s, r) => s + r.total, 0);
@@ -1588,27 +1582,21 @@ export function getCashFlow(year: number, month: number) {
   };
 }
 
-export function getAssetSnapshot() {
-  const wallet = getWallet();
-  const stock = sqlite
-    .prepare(
-      "SELECT COALESCE(SUM(quantity * avg_cost), 0) AS total FROM inventory",
-    )
-    .get() as { total: number };
-  const receivable = sqlite
-    .prepare(
-      `SELECT COALESCE(SUM(amount_due), 0) AS total FROM orders
-        WHERE status NOT IN ('hoan_tat','huy','khach_bom')`,
-    )
-    .get() as { total: number };
+export async function getAssetSnapshot() {
+  const wallet = await getWallet();
+  const stock = (await raw.get<{ total: number }>(
+    "SELECT COALESCE(SUM(quantity * avg_cost), 0)::int AS total FROM inventory",
+  ))!;
+  const receivable = (await raw.get<{ total: number }>(
+    `SELECT COALESCE(SUM(amount_due), 0)::int AS total FROM orders
+      WHERE status NOT IN ('hoan_tat','huy','khach_bom')`,
+  ))!;
   // Cọc của đơn CHƯA giao — tiền này nằm trong tài khoản nhưng chưa phải của mình.
-  const heldDeposits = sqlite
-    .prepare(
-      `SELECT COALESCE(SUM(p.amount_vnd), 0) AS total FROM payments p
-         JOIN orders o ON o.id = p.order_id
-        WHERE o.status NOT IN ('da_giao_khach','hoan_tat','huy','khach_bom')`,
-    )
-    .get() as { total: number };
+  const heldDeposits = (await raw.get<{ total: number }>(
+    `SELECT COALESCE(SUM(p.amount_vnd), 0)::int AS total FROM payments p
+       JOIN orders o ON o.id = p.order_id
+      WHERE o.status NOT IN ('da_giao_khach','hoan_tat','huy','khach_bom')`,
+  ))!;
 
   return {
     walletCny: wallet.balance,
