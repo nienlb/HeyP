@@ -32,7 +32,7 @@ export async function addTopupAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const result = addTopup({
+  const result = await addTopup({
     cny: num(formData.get("cny")),
     vndPaid: num(formData.get("vndPaid")),
     note: String(formData.get("note") ?? "").trim() || null,
@@ -48,7 +48,7 @@ export async function deleteLedgerAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const result = deleteLedgerEntry(Number(formData.get("id")));
+  const result = await deleteLedgerEntry(Number(formData.get("id")));
   if (!result.ok)
     redirect(`/finance?err=${encodeURIComponent(result.reason)}`);
   revalidatePath("/finance");
@@ -71,7 +71,7 @@ export async function addExpenseAction(formData: FormData): Promise<void> {
     : "chuyen_khoan";
   const orderIdRaw = num(formData.get("orderId"));
 
-  const result = addExpense({
+  const result = await addExpense({
     spentAt: parseDate(formData.get("spentAt")),
     category,
     amountVnd: num(formData.get("amountVnd")),
@@ -90,7 +90,7 @@ export async function deleteExpenseAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  deleteExpense(Number(formData.get("id")));
+  await deleteExpense(Number(formData.get("id")));
   revalidatePath("/finance");
   redirect("/finance");
 }

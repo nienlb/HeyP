@@ -28,8 +28,8 @@ export default async function FinancePage({
   const session = await requireAuth();
   const { err } = await searchParams;
 
-  const wallet = getWallet();
-  const ledger = listLedger();
+  const wallet = await getWallet();
+  const ledger = await listLedger();
   const expenseRows = await listExpenses();
 
   return (

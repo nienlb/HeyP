@@ -10,7 +10,7 @@ export default async function SettingsPage({
 }) {
   const session = await requireAuth();
   const { ok } = await searchParams;
-  const s = getSettings();
+  const s = await getSettings();
 
   return (
     <AppShell username={session.username}>

@@ -30,7 +30,7 @@ export async function createPackageAction(
     .map((s) => Number(s.replace(/[^0-9]/g, "")))
     .filter((n) => Number.isInteger(n) && n > 0);
 
-  const result = createPackage({
+  const result = await createPackage({
     trackingCode,
     carrier,
     weightKg: weightKg && Number.isFinite(weightKg) ? weightKg : null,
@@ -51,7 +51,7 @@ export async function updatePackageStatusAction(
 
   const id = Number(formData.get("packageId"));
   const status = String(formData.get("status") ?? "").trim();
-  if (id && status) updatePackageStatusManual(id, status);
+  if (id && status) await updatePackageStatusManual(id, status);
 
   revalidatePath("/tracking");
   redirect("/tracking");

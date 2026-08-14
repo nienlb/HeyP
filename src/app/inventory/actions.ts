@@ -29,7 +29,7 @@ export async function sellFromStockAction(
   if (quantity <= 0) return { error: "Số lượng bán phải lớn hơn 0." };
   if (salePriceVnd <= 0) return { error: "Giá bán phải lớn hơn 0." };
 
-  const result = sellFromStock({
+  const result = await sellFromStock({
     inventoryId,
     quantity,
     salePriceVnd,
