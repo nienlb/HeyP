@@ -390,18 +390,8 @@ export type PackageRow = {
   orderIds: number[];
 };
 
-export function listPackages(): PackageRow[] {
-  const rows = sqlite
-    .prepare(
-      `SELECT p.id, p.tracking_code, p.carrier, p.weight_kg, p.tracking_status,
-              p.last_checked_at, p.mode, p.needs_manual_check,
-              GROUP_CONCAT(op.order_id) AS order_ids
-         FROM packages p
-         LEFT JOIN order_packages op ON op.package_id = p.id
-        GROUP BY p.id
-        ORDER BY p.needs_manual_check DESC, p.created_at DESC`,
-    )
-    .all() as {
+export async function listPackages(): Promise<PackageRow[]> {
+  const rows = await raw.all<{
     id: number;
     tracking_code: string;
     carrier: string | null;
@@ -409,9 +399,17 @@ export function listPackages(): PackageRow[] {
     tracking_status: string | null;
     last_checked_at: number | null;
     mode: "auto" | "manual";
-    needs_manual_check: number;
+    needs_manual_check: boolean;
     order_ids: string | null;
-  }[];
+  }>(
+    `SELECT p.id, p.tracking_code, p.carrier, p.weight_kg, p.tracking_status,
+            p.last_checked_at::int AS last_checked_at, p.mode, p.needs_manual_check,
+            string_agg(op.order_id::text, ',') AS order_ids
+       FROM packages p
+       LEFT JOIN order_packages op ON op.package_id = p.id
+      GROUP BY p.id
+      ORDER BY p.needs_manual_check DESC, p.created_at DESC`,
+  );
   return rows.map((r) => ({
     id: r.id,
     trackingCode: r.tracking_code,
@@ -420,15 +418,16 @@ export function listPackages(): PackageRow[] {
     trackingStatus: r.tracking_status,
     lastCheckedAt: r.last_checked_at,
     mode: r.mode,
-    needsManualCheck: r.needs_manual_check === 1,
-    orderIds: r.order_ids
-      ? r.order_ids.split(",").map((s) => Number(s))
-      : [],
+    needsManualCheck: r.needs_manual_check === true,
+    orderIds: r.order_ids ? r.order_ids.split(",").map((s) => Number(s)) : [],
   }));
 }
 
-export function getPackagesForOrder(orderId: number): PackageRow[] {
-  return listPackages().filter((p) => p.orderIds.includes(orderId));
+export async function getPackagesForOrder(
+  orderId: number,
+): Promise<PackageRow[]> {
+  const all = await listPackages();
+  return all.filter((p) => p.orderIds.includes(orderId));
 }
 
 export type CreatePackageInput = {
@@ -443,48 +442,47 @@ export type PackageResult =
   | { ok: true; id: number }
   | { ok: false; reason: string };
 
-export function createPackage(input: CreatePackageInput): PackageResult {
+export async function createPackage(
+  input: CreatePackageInput,
+): Promise<PackageResult> {
   const code = input.trackingCode.trim();
   if (!code) return { ok: false, reason: "Thiếu mã vận đơn" };
 
-  sqlite.exec("BEGIN");
-  try {
-    const id = Number(
-      sqlite
-        .prepare(
-          `INSERT INTO packages(tracking_code, carrier, weight_kg, mode)
-           VALUES (?, ?, ?, ?)`,
-        )
-        .run(code, input.carrier ?? null, input.weightKg ?? null, input.mode)
-        .lastInsertRowid,
+  return withTx(async (x) => {
+    const p = await x.get<{ id: number }>(
+      `INSERT INTO packages(tracking_code, carrier, weight_kg, mode)
+       VALUES (?, ?, ?, ?) RETURNING id`,
+      [code, input.carrier ?? null, input.weightKg ?? null, input.mode],
     );
-    const linkStmt = sqlite.prepare(
-      "INSERT OR IGNORE INTO order_packages(order_id, package_id) VALUES (?, ?)",
-    );
+    const id = p!.id;
     for (const orderId of input.orderIds) {
-      const exists = sqlite
-        .prepare("SELECT 1 FROM orders WHERE id = ?")
-        .get(orderId);
-      if (exists) linkStmt.run(orderId, id);
+      const exists = await x.get("SELECT 1 AS x FROM orders WHERE id = ?", [
+        orderId,
+      ]);
+      if (exists) {
+        await x.run(
+          `INSERT INTO order_packages(order_id, package_id) VALUES (?, ?)
+           ON CONFLICT DO NOTHING`,
+          [orderId, id],
+        );
+      }
     }
-    sqlite.exec("COMMIT");
-    return { ok: true, id };
-  } catch (err) {
-    sqlite.exec("ROLLBACK");
-    throw err;
-  }
+    return { ok: true, id } as PackageResult;
+  });
 }
 
 /** Cập nhật trạng thái kiện bằng tay (xoá cờ tra tay). */
-export function updatePackageStatusManual(id: number, status: string): void {
-  sqlite
-    .prepare(
-      `UPDATE packages
-          SET tracking_status = ?, last_checked_at = unixepoch(),
-              needs_manual_check = 0
-        WHERE id = ?`,
-    )
-    .run(status.trim(), id);
+export async function updatePackageStatusManual(
+  id: number,
+  status: string,
+): Promise<void> {
+  await raw.run(
+    `UPDATE packages
+        SET tracking_status = ?, last_checked_at = ${NOW_EPOCH_SQL},
+            needs_manual_check = false
+      WHERE id = ?`,
+    [status.trim(), id],
+  );
 }
 
 export type SweepResult = { checked: number; updated: number; flagged: number };
@@ -494,18 +492,14 @@ export type SweepResult = { checked: number; updated: number; flagged: number };
  * Không có adapter / tra lỗi → gắn cờ "tra tay". Chạy được cả từ job nền lẫn nút bấm.
  */
 export async function runTrackingSweep(): Promise<SweepResult> {
-  const pkgs = sqlite
-    .prepare(
-      "SELECT id, tracking_code, carrier FROM packages WHERE mode = 'auto'",
-    )
-    .all() as { id: number; tracking_code: string; carrier: string | null }[];
+  const pkgs = await raw.all<{
+    id: number;
+    tracking_code: string;
+    carrier: string | null;
+  }>("SELECT id, tracking_code, carrier FROM packages WHERE mode = 'auto'");
 
-  const flag = sqlite.prepare(
-    "UPDATE packages SET needs_manual_check = 1, last_checked_at = unixepoch() WHERE id = ?",
-  );
-  const save = sqlite.prepare(
-    "UPDATE packages SET tracking_status = ?, last_checked_at = unixepoch(), needs_manual_check = 0 WHERE id = ?",
-  );
+  const FLAG = `UPDATE packages SET needs_manual_check = true, last_checked_at = ${NOW_EPOCH_SQL} WHERE id = ?`;
+  const SAVE = `UPDATE packages SET tracking_status = ?, last_checked_at = ${NOW_EPOCH_SQL}, needs_manual_check = false WHERE id = ?`;
 
   let checked = 0;
   let updated = 0;
@@ -514,21 +508,21 @@ export async function runTrackingSweep(): Promise<SweepResult> {
     checked++;
     const adapter = getAdapter(p.carrier);
     if (!adapter) {
-      flag.run(p.id);
+      await raw.run(FLAG, [p.id]);
       flagged++;
       continue;
     }
     try {
       const r = await adapter.lookup(p.tracking_code);
       if (r.ok) {
-        save.run(r.status, p.id);
+        await raw.run(SAVE, [r.status, p.id]);
         updated++;
       } else {
-        flag.run(p.id);
+        await raw.run(FLAG, [p.id]);
         flagged++;
       }
     } catch {
-      flag.run(p.id);
+      await raw.run(FLAG, [p.id]);
       flagged++;
     }
   }
@@ -1146,59 +1140,57 @@ async function syncOrderDeposit(x: Exec, orderId: number): Promise<void> {
 export type LineActionResult = { ok: true } | { ok: false; reason: string };
 
 /** Đánh dấu 1 dòng "lỗi NCC": tách khỏi đơn, nhập kho nhãn Lỗi NCC. */
-export function markLineDefect(
+export async function markLineDefect(
   orderId: number,
   itemId: number,
-): LineActionResult {
+): Promise<LineActionResult> {
   return _returnLineToStock(orderId, itemId, "supplier_defect");
 }
 
 /** Khách đổi/trả 1 dòng: tách khỏi đơn (hoàn/trừ tiền), nhập kho nhãn Đổi trả. */
-export function returnLine(
+export async function returnLine(
   orderId: number,
   itemId: number,
-): LineActionResult {
+): Promise<LineActionResult> {
   return _returnLineToStock(orderId, itemId, "exchange_return");
 }
 
-function _returnLineToStock(
+async function _returnLineToStock(
   orderId: number,
   itemId: number,
   source: Extract<InventorySource, "supplier_defect" | "exchange_return">,
-): LineActionResult {
-  const item = sqlite
-    .prepare(
-      "SELECT id, name, quantity, unit_price_cny, line_status FROM order_items WHERE id = ? AND order_id = ?",
-    )
-    .get(itemId, orderId) as OrderItemRow | undefined;
+): Promise<LineActionResult> {
+  const item = await raw.get<OrderItemRow>(
+    "SELECT id, name, quantity, unit_price_cny, line_status FROM order_items WHERE id = ? AND order_id = ?",
+    [itemId, orderId],
+  );
   if (!item) return { ok: false, reason: "Không tìm thấy dòng sản phẩm" };
   if (item.line_status !== "normal")
     return { ok: false, reason: "Dòng này đã được tách trước đó" };
 
-  const order = sqlite
-    .prepare("SELECT exchange_rate FROM orders WHERE id = ?")
-    .get(orderId) as { exchange_rate: number } | undefined;
+  const order = await raw.get<{ exchange_rate: number }>(
+    "SELECT exchange_rate FROM orders WHERE id = ?",
+    [orderId],
+  );
   if (!order) return { ok: false, reason: "Không tìm thấy đơn" };
 
-  sqlite.exec("BEGIN");
-  try {
-    const newStatus = source === "supplier_defect" ? "supplier_defect" : "returned";
-    sqlite
-      .prepare("UPDATE order_items SET line_status = ? WHERE id = ?")
-      .run(newStatus, itemId);
-    _addStock(
+  return withTx(async (x) => {
+    const newStatus =
+      source === "supplier_defect" ? "supplier_defect" : "returned";
+    await x.run("UPDATE order_items SET line_status = ? WHERE id = ?", [
+      newStatus,
+      itemId,
+    ]);
+    await _addStock(
+      x,
       item.name,
       source,
       item.quantity,
       unitGoodsCostVnd(item.unit_price_cny, order.exchange_rate),
     );
-    _recomputeOrderMoney(orderId);
-    sqlite.exec("COMMIT");
-    return { ok: true };
-  } catch (err) {
-    sqlite.exec("ROLLBACK");
-    throw err;
-  }
+    await _recomputeOrderMoney(x, orderId);
+    return { ok: true } as LineActionResult;
+  });
 }
 
 // ---------- Danh sách đơn ----------
@@ -1331,20 +1323,17 @@ export async function listInventory() {
     .orderBy(inventory.source, inventory.productName);
 }
 
-export function getInventoryItem(id: number) {
-  return sqlite
-    .prepare(
-      "SELECT id, product_name, quantity, avg_cost, source FROM inventory WHERE id = ?",
-    )
-    .get(id) as
-    | {
-        id: number;
-        product_name: string;
-        quantity: number;
-        avg_cost: number;
-        source: string;
-      }
-    | undefined;
+export async function getInventoryItem(id: number) {
+  return raw.get<{
+    id: number;
+    product_name: string;
+    quantity: number;
+    avg_cost: number;
+    source: string;
+  }>(
+    "SELECT id, product_name, quantity, avg_cost, source FROM inventory WHERE id = ?",
+    [id],
+  );
 }
 
 export type SellFromStockInput = {
@@ -1362,8 +1351,10 @@ export type SellResult =
   | { ok: false; reason: string };
 
 /** Bán từ kho: trừ tồn, tạo đơn ban_tu_kho (đã giao khách), snapshot giá vốn. */
-export function sellFromStock(input: SellFromStockInput): SellResult {
-  const inv = getInventoryItem(input.inventoryId);
+export async function sellFromStock(
+  input: SellFromStockInput,
+): Promise<SellResult> {
+  const inv = await getInventoryItem(input.inventoryId);
   if (!inv) return { ok: false, reason: "Không tìm thấy hàng trong kho" };
   if (input.quantity <= 0) return { ok: false, reason: "Số lượng phải > 0" };
   if (input.quantity > inv.quantity)
@@ -1376,74 +1367,62 @@ export function sellFromStock(input: SellFromStockInput): SellResult {
   const amountDue = Math.round(input.salePriceVnd) - Math.round(input.deposit);
   const unitPrice = Math.round(input.salePriceVnd / input.quantity);
 
-  sqlite.exec("BEGIN");
-  try {
+  return withTx(async (x) => {
     // Khách: có sẵn / mới / khách lẻ.
     let customerId = input.customerId ?? null;
     if (!customerId && input.newCustomer?.name) {
-      customerId = Number(
-        sqlite
-          .prepare("INSERT INTO customers(name, phone) VALUES(?, ?)")
-          .run(input.newCustomer.name, input.newCustomer.phone ?? null)
-          .lastInsertRowid,
+      const c = await x.get<{ id: number }>(
+        "INSERT INTO customers(name, phone) VALUES(?, ?) RETURNING id",
+        [input.newCustomer.name, input.newCustomer.phone ?? null],
       );
+      customerId = c!.id;
     }
     if (!customerId) {
-      const walkin = sqlite
-        .prepare("SELECT id FROM customers WHERE name = 'Khách lẻ'")
-        .get() as { id: number } | undefined;
-      customerId =
-        walkin?.id ??
-        Number(
-          sqlite
-            .prepare("INSERT INTO customers(name) VALUES('Khách lẻ')")
-            .run().lastInsertRowid,
+      const walkin = await x.get<{ id: number }>(
+        "SELECT id FROM customers WHERE name = 'Khách lẻ'",
+      );
+      if (walkin) {
+        customerId = walkin.id;
+      } else {
+        const created = await x.get<{ id: number }>(
+          "INSERT INTO customers(name) VALUES('Khách lẻ') RETURNING id",
         );
+        customerId = created!.id;
+      }
     }
 
     const after = applyStockOut(
       { quantity: inv.quantity, avgCost: inv.avg_cost },
       input.quantity,
     );
-    sqlite
-      .prepare("UPDATE inventory SET quantity = ? WHERE id = ?")
-      .run(after.quantity, inv.id);
+    await x.run("UPDATE inventory SET quantity = ? WHERE id = ?", [
+      after.quantity,
+      inv.id,
+    ]);
 
-    const orderId = Number(
-      sqlite
-        .prepare(
-          `INSERT INTO orders
-             (customer_id, order_type, status, exchange_rate, goods_total_cny,
-              margin_vnd, shipping_fee, deposit, amount_due, sale_cost, status_changed_at)
-           VALUES (?, 'ban_tu_kho', 'da_giao_khach', 1, ?, 0, 0, ?, ?, ?, unixepoch())`,
-        )
-        .run(
-          customerId,
-          input.salePriceVnd,
-          input.deposit,
-          amountDue,
-          saleCost,
-        ).lastInsertRowid,
+    const o = await x.get<{ id: number }>(
+      `INSERT INTO orders
+         (customer_id, order_type, status, exchange_rate, goods_total_cny,
+          margin_vnd, shipping_fee, deposit, amount_due, sale_cost, status_changed_at)
+       VALUES (?, 'ban_tu_kho', 'da_giao_khach', 1, ?, 0, 0, ?, ?, ?, ${NOW_EPOCH_SQL})
+       RETURNING id`,
+      [customerId, input.salePriceVnd, input.deposit, amountDue, saleCost],
     );
-    sqlite
-      .prepare(
-        `INSERT INTO order_items(order_id, name, quantity, unit_price_cny)
-         VALUES (?, ?, ?, ?)`,
-      )
-      .run(orderId, inv.product_name, input.quantity, unitPrice);
-    sqlite
-      .prepare(
-        `INSERT INTO order_status_history(order_id, to_status, changed_by, note)
-         VALUES (?, 'da_giao_khach', ?, 'Bán từ kho')`,
-      )
-      .run(orderId, input.changedBy ?? null);
+    const orderId = o!.id;
 
-    sqlite.exec("COMMIT");
-    return { ok: true, orderId };
-  } catch (err) {
-    sqlite.exec("ROLLBACK");
-    throw err;
-  }
+    await x.run(
+      `INSERT INTO order_items(order_id, name, quantity, unit_price_cny)
+       VALUES (?, ?, ?, ?)`,
+      [orderId, inv.product_name, input.quantity, unitPrice],
+    );
+    await x.run(
+      `INSERT INTO order_status_history(order_id, to_status, changed_by, note)
+       VALUES (?, 'da_giao_khach', ?, 'Bán từ kho')`,
+      [orderId, input.changedBy ?? null],
+    );
+
+    return { ok: true, orderId } as SellResult;
+  });
 }
 
 /** Danh sách đơn kèm cờ "cần bổ sung" (v3-A). */
