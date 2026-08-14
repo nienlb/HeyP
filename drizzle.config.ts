@@ -1,12 +1,12 @@
 import { defineConfig } from "drizzle-kit";
 
-const databasePath = process.env.DATABASE_PATH ?? "./data/app.sqlite";
-
 export default defineConfig({
-  dialect: "sqlite",
+  dialect: "postgresql",
   schema: "./src/db/schema.ts",
   out: "./drizzle",
+  // Migration phải đi đường Session pooler / direct (5432) — transaction
+  // pooler không chạy được migration nhiều câu lệnh trong một transaction.
   dbCredentials: {
-    url: databasePath,
+    url: process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "",
   },
 });

@@ -23,18 +23,17 @@ function parseAccounts(raw: string | undefined): Account[] {
 }
 
 export const config = {
-  databasePath: process.env.DATABASE_PATH ?? "./data/app.sqlite",
-  uploadsPath: process.env.UPLOADS_PATH ?? "./uploads",
+  databaseUrl: process.env.DATABASE_URL ?? "",
   accounts: parseAccounts(process.env.APP_ACCOUNTS),
   sessionSecret: process.env.SESSION_SECRET ?? "insecure-dev-secret-doi-di",
   staleOrderDays: Number(process.env.STALE_ORDER_DAYS ?? "7"),
   // Phase 5 — đọc ảnh chốt đơn Zalo bằng Gemini (Google AI Studio).
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   geminiModel: process.env.GEMINI_MODEL ?? "gemini-flash-latest",
-  // Phase 7 — sao lưu.
-  backupPath: process.env.BACKUP_PATH ?? "./backups",
-  backupKeep: Number(process.env.BACKUP_KEEP ?? "30"),
-  backupMinHours: Number(process.env.BACKUP_MIN_HOURS ?? "20"),
+  // Ảnh nằm trên Supabase Storage, không còn thư mục cục bộ.
+  supabaseUrl: process.env.SUPABASE_URL ?? "",
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  storageBucket: process.env.SUPABASE_STORAGE_BUCKET ?? "photos",
 } as const;
 
 export function findAccount(username: string, password: string): Account | null {
