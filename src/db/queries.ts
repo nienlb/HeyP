@@ -1,6 +1,7 @@
 import "server-only";
 import { desc, eq } from "drizzle-orm";
-import { db, sqlite } from "./index";
+import { db } from "./index";
+import { NOW_EPOCH_SQL, raw, withTx, type Exec } from "./raw";
 import {
   customers,
   expenses,
@@ -56,22 +57,22 @@ import { ageInDays } from "@/lib/format";
 
 // ---------- Tham số nghiệp vụ (bảng settings) ----------
 
-export function getSettings(): AppSettings {
-  const rows = sqlite.prepare("SELECT key, value FROM settings").all() as {
-    key: string;
-    value: string;
-  }[];
+export async function getSettings(): Promise<AppSettings> {
+  const rows = await raw.all<{ key: string; value: string }>(
+    "SELECT key, value FROM settings",
+  );
   return parseSettings(rows);
 }
 
-export function saveSettings(next: AppSettings): void {
-  const stmt = sqlite.prepare(
-    `INSERT INTO settings(key, value) VALUES(?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-  );
-  // Dựng chuỗi trong JS: node:sqlite bind số JS thành REAL → "4000.0" trong DB.
-  stmt.run(SETTING_KEYS.sellRate, String(next.sellRate));
-  stmt.run(SETTING_KEYS.defaultMarginVnd, String(next.defaultMarginVnd));
+export async function saveSettings(next: AppSettings): Promise<void> {
+  const Q = `INSERT INTO settings(key, value) VALUES(?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
+  // Vẫn dựng chuỗi trong JS để giá trị lưu đúng dạng "4000" chứ không "4000.0".
+  await raw.run(Q, [SETTING_KEYS.sellRate, String(next.sellRate)]);
+  await raw.run(Q, [
+    SETTING_KEYS.defaultMarginVnd,
+    String(next.defaultMarginVnd),
+  ]);
 }
 
 /**
@@ -80,20 +81,21 @@ export function saveSettings(next: AppSettings): void {
  * hoa thường). KHÔNG đoán theo tên gần giống — gợi ý sai âm thầm còn tệ hơn
  * không gợi ý.
  */
-export function suggestCnyFromHistory(productName: string): number | null {
+export async function suggestCnyFromHistory(
+  productName: string,
+): Promise<number | null> {
   const key = productName.trim().replace(/\s+/g, " ").toLowerCase();
   if (key === "") return null;
-  const row = sqlite
-    .prepare(
-      `SELECT unit_price_cny AS cny
-         FROM order_items
-        WHERE cost_confirmed = 1
-          AND unit_price_cny > 0
-          AND LOWER(TRIM(name)) = ?
-        ORDER BY id DESC
-        LIMIT 1`,
-    )
-    .get(key) as { cny: number } | undefined;
+  const row = await raw.get<{ cny: number }>(
+    `SELECT unit_price_cny AS cny
+       FROM order_items
+      WHERE cost_confirmed = true
+        AND unit_price_cny > 0
+        AND LOWER(TRIM(name)) = ?
+      ORDER BY id DESC
+      LIMIT 1`,
+    [key],
+  );
   return row ? row.cny : null;
 }
 
@@ -104,7 +106,12 @@ export async function listCustomers() {
 }
 
 export async function getCustomer(id: number) {
-  return db.select().from(customers).where(eq(customers.id, id)).get();
+  const rows = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.id, id))
+    .limit(1);
+  return rows[0];
 }
 
 // ---------- Tạo đơn (có transaction) ----------
@@ -254,15 +261,21 @@ export function createOrder(input: NewOrderInput): number {
 // ---------- Chi tiết đơn ----------
 
 export async function getOrderDetail(id: number) {
-  const order = await db.select().from(orders).where(eq(orders.id, id)).get();
+  const orderRows = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.id, id))
+    .limit(1);
+  const order = orderRows[0];
   if (!order) return null;
-  const customer = order.customerId
+  const customerRows = order.customerId
     ? await db
         .select()
         .from(customers)
         .where(eq(customers.id, order.customerId))
-        .get()
-    : null;
+        .limit(1)
+    : [];
+  const customer = customerRows[0] ?? null;
   const items = await db
     .select()
     .from(orderItems)
@@ -296,40 +309,43 @@ export type PhotoRow = {
   uploadedAt: Date;
 };
 
-export function addPhoto(input: {
+export async function addPhoto(input: {
   filePath: string;
   label: PhotoLabel;
   orderId?: number | null;
   inventoryId?: number | null;
-}): number {
-  const info = sqlite
-    .prepare(
-      "INSERT INTO photos(file_path, label, order_id, inventory_id) VALUES(?, ?, ?, ?)",
-    )
-    .run(
+}): Promise<number> {
+  const row = await raw.get<{ id: number }>(
+    `INSERT INTO photos(file_path, label, order_id, inventory_id)
+     VALUES(?, ?, ?, ?) RETURNING id`,
+    [
       input.filePath,
       input.label,
       input.orderId ?? null,
       input.inventoryId ?? null,
-    );
-  return Number(info.lastInsertRowid);
+    ],
+  );
+  return row!.id;
 }
 
 /** Gắn ảnh (đang chưa thuộc đơn nào) vào một đơn — dùng cho ảnh chốt đơn Zalo. */
-export function linkPhotoToOrder(photoId: number, orderId: number): void {
-  sqlite
-    .prepare(
-      "UPDATE photos SET order_id = ? WHERE id = ? AND order_id IS NULL",
-    )
-    .run(orderId, photoId);
+export async function linkPhotoToOrder(
+  photoId: number,
+  orderId: number,
+): Promise<void> {
+  await raw.run(
+    "UPDATE photos SET order_id = ? WHERE id = ? AND order_id IS NULL",
+    [orderId, photoId],
+  );
 }
 
-export function getPhoto(
+export async function getPhoto(
   id: number,
-): { id: number; file_path: string } | undefined {
-  return sqlite
-    .prepare("SELECT id, file_path FROM photos WHERE id = ?")
-    .get(id) as { id: number; file_path: string } | undefined;
+): Promise<{ id: number; file_path: string } | undefined> {
+  return raw.get<{ id: number; file_path: string }>(
+    "SELECT id, file_path FROM photos WHERE id = ?",
+    [id],
+  );
 }
 
 /**
@@ -340,12 +356,15 @@ export function getPhoto(
  * Chỉ xoá bản ghi DB, theo đúng khuôn của addPhoto (không đụng file vật lý)
  * — nơi gọi có quyền I/O (route/action) tự xoá file bằng filePath trả về.
  */
-export function deletePhoto(id: number): { filePath: string } | null {
-  const photo = sqlite
-    .prepare("SELECT file_path FROM photos WHERE id = ? AND order_id IS NULL")
-    .get(id) as { file_path: string } | undefined;
+export async function deletePhoto(
+  id: number,
+): Promise<{ filePath: string } | null> {
+  const photo = await raw.get<{ file_path: string }>(
+    "SELECT file_path FROM photos WHERE id = ? AND order_id IS NULL",
+    [id],
+  );
   if (!photo) return null;
-  sqlite.prepare("DELETE FROM photos WHERE id = ?").run(id);
+  await raw.run("DELETE FROM photos WHERE id = ?", [id]);
   return { filePath: photo.file_path };
 }
 
@@ -1038,10 +1057,11 @@ export function setShipFee(
 }
 
 /** Đổi nhãn ảnh (người dùng sửa lại khi AI phân loại sai). */
-export function updatePhotoLabel(photoId: number, label: PhotoLabel): void {
-  sqlite
-    .prepare("UPDATE photos SET label = ? WHERE id = ?")
-    .run(label, photoId);
+export async function updatePhotoLabel(
+  photoId: number,
+  label: PhotoLabel,
+): Promise<void> {
+  await raw.run("UPDATE photos SET label = ? WHERE id = ?", [label, photoId]);
 }
 
 // ---------- Sổ thu tiền (v3-B) ----------
