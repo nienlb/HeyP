@@ -826,12 +826,14 @@ type OrderMoneyRow = {
   deposit: number;
 };
 
-function readOrderMoneyRow(orderId: number): OrderMoneyRow {
-  const row = sqlite
-    .prepare(
-      "SELECT exchange_rate, shipping_fee, deposit FROM orders WHERE id = ?",
-    )
-    .get(orderId) as OrderMoneyRow | undefined;
+async function readOrderMoneyRow(
+  x: Exec,
+  orderId: number,
+): Promise<OrderMoneyRow> {
+  const row = await x.get<OrderMoneyRow>(
+    "SELECT exchange_rate, shipping_fee, deposit FROM orders WHERE id = ?",
+    [orderId],
+  );
   if (!row) throw new Error("Không tìm thấy đơn");
   return row;
 }
@@ -840,17 +842,17 @@ function readOrderMoneyRow(orderId: number): OrderMoneyRow {
  * Đồng bộ khối tiền cấp đơn từ các dòng. Gọi BÊN TRONG transaction đang mở.
  * goods_total_cny và margin_vnd ở cấp đơn là số DẪN XUẤT từ order_items.
  */
-export function recomputeOrderMoneyRow(
+export async function recomputeOrderMoneyRow(
+  x: Exec,
   orderId: number,
   order: OrderMoneyRow,
-): void {
-  const agg = sqlite
-    .prepare(
-      `SELECT COALESCE(SUM(quantity * unit_price_cny), 0) AS cny,
-              COALESCE(SUM(margin_vnd), 0) AS margin
-         FROM order_items WHERE order_id = ?`,
-    )
-    .get(orderId) as { cny: number; margin: number };
+): Promise<void> {
+  const agg = (await x.get<{ cny: number; margin: number }>(
+    `SELECT COALESCE(SUM(quantity * unit_price_cny), 0) AS cny,
+            COALESCE(SUM(margin_vnd), 0)::int AS margin
+       FROM order_items WHERE order_id = ?`,
+    [orderId],
+  ))!;
 
   const money = computeOrderMoney({
     goodsTotalCny: agg.cny,
@@ -860,175 +862,173 @@ export function recomputeOrderMoneyRow(
     deposit: order.deposit,
   });
 
-  sqlite
-    .prepare(
-      "UPDATE orders SET goods_total_cny = ?, margin_vnd = ?, amount_due = ? WHERE id = ?",
-    )
-    .run(agg.cny, agg.margin, money.amountDue, orderId);
+  await x.run(
+    "UPDATE orders SET goods_total_cny = ?, margin_vnd = ?, amount_due = ? WHERE id = ?",
+    [agg.cny, agg.margin, money.amountDue, orderId],
+  );
 }
 
 /**
  * Nhập hoặc sửa giá ¥ của một dòng. Total giữ nguyên (khách đã đồng ý), lời
  * được rải lại cho toàn bộ dòng. Chạm vào ô này = xác nhận giá vốn.
  */
-export function updateLineCost(
+export async function updateLineCost(
   orderId: number,
   itemId: number,
   unitPriceCny: number,
-): LineActionResult {
+): Promise<LineActionResult> {
   if (!(unitPriceCny >= 0))
     return { ok: false, reason: "Giá tệ không được âm" };
 
-  sqlite.exec("BEGIN");
+  const defaultMargin = (await getSettings()).defaultMarginVnd;
+  const ledger = await listLedger();
+
   try {
-    const order = readOrderMoneyRow(orderId);
-    const quoted = sqlite
-      .prepare("SELECT quoted_total_vnd AS total FROM orders WHERE id = ?")
-      .get(orderId) as { total: number };
+    return await withTx(async (x) => {
+      const order = await readOrderMoneyRow(x, orderId);
+      const quoted = (await x.get<{ total: number }>(
+        "SELECT quoted_total_vnd AS total FROM orders WHERE id = ?",
+        [orderId],
+      ))!;
 
-    sqlite
-      .prepare(
-        "UPDATE order_items SET unit_price_cny = ?, cost_confirmed = 1 WHERE id = ? AND order_id = ?",
-      )
-      .run(unitPriceCny, itemId, orderId);
+      await x.run(
+        "UPDATE order_items SET unit_price_cny = ?, cost_confirmed = true WHERE id = ? AND order_id = ?",
+        [unitPriceCny, itemId, orderId],
+      );
 
-    // Giá vốn đổi → lời phải rải lại để Σ giá bán vẫn đúng bằng Total.
-    const rows = sqlite
-      .prepare(
+      // Giá vốn đổi → lời phải rải lại để Σ giá bán vẫn đúng bằng Total.
+      const rows = await x.all<{
+        id: number;
+        quantity: number;
+        unit_price_cny: number;
+        margin_vnd: number;
+      }>(
         "SELECT id, quantity, unit_price_cny, margin_vnd FROM order_items WHERE order_id = ? ORDER BY id",
-      )
-      .all(orderId) as {
-      id: number;
-      quantity: number;
-      unit_price_cny: number;
-      margin_vnd: number;
-    }[];
-    const margins = allocateMargins(
-      quoted.total,
-      rows.map((r) => ({
-        quantity: r.quantity,
-        unitPriceCny: r.unit_price_cny,
-        marginVnd: r.margin_vnd,
-      })),
-      order.exchange_rate,
-      getSettings().defaultMarginVnd,
-    );
-    const stmt = sqlite.prepare(
-      "UPDATE order_items SET margin_vnd = ? WHERE id = ?",
-    );
-    rows.forEach((r, i) => stmt.run(margins[i], r.id));
+        [orderId],
+      );
+      const margins = allocateMargins(
+        quoted.total,
+        rows.map((r) => ({
+          quantity: r.quantity,
+          unitPriceCny: r.unit_price_cny,
+          marginVnd: r.margin_vnd,
+        })),
+        order.exchange_rate,
+        defaultMargin,
+      );
+      for (const [i, r] of rows.entries()) {
+        await x.run("UPDATE order_items SET margin_vnd = ? WHERE id = ?", [
+          margins[i],
+          r.id,
+        ]);
+      }
 
-    // Đơn đã mua hàng rồi mà giá ¥ mới sửa → ghi dòng điều chỉnh bằng phần
-    // chênh vào ví. Sổ ví là append-only: không bao giờ sửa quá khứ.
-    const spent = sqlite
-      .prepare(
+      // Đơn đã mua hàng rồi mà giá ¥ mới sửa → ghi dòng điều chỉnh bằng phần
+      // chênh vào ví. Sổ ví là append-only: không bao giờ sửa quá khứ.
+      const spent = (await x.get<{ cny: number }>(
         `SELECT COALESCE(SUM(-cny_delta), 0) AS cny
            FROM cny_ledger WHERE order_id = ? AND kind IN ('chi','dieu_chinh')`,
-      )
-      .get(orderId) as { cny: number };
+        [orderId],
+      ))!;
 
-    if (spent.cny > 0) {
-      const agg = sqlite
-        .prepare(
+      if (spent.cny > 0) {
+        const agg = (await x.get<{ cny: number }>(
           "SELECT COALESCE(SUM(quantity * unit_price_cny), 0) AS cny FROM order_items WHERE order_id = ?",
-        )
-        .get(orderId) as { cny: number };
-      const diff = agg.cny - spent.cny;
-      if (Math.abs(diff) > 0.0001) {
-        const rate = Math.round(currentRate(listLedger()));
-        sqlite
-          .prepare(
+          [orderId],
+        ))!;
+        const diff = agg.cny - spent.cny;
+        if (Math.abs(diff) > 0.0001) {
+          const rate = Math.round(currentRate(ledger));
+          await x.run(
             `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
              VALUES ('dieu_chinh', ?, ?, ?, ?)`,
-          )
-          .run(-diff, rate, orderId, `Sửa giá ¥ đơn #${orderId}`);
+            [-diff, rate, orderId, `Sửa giá ¥ đơn #${orderId}`],
+          );
+        }
       }
-    }
 
-    recomputeOrderMoneyRow(orderId, order);
-    sqlite.exec("COMMIT");
-    return { ok: true };
+      await recomputeOrderMoneyRow(x, orderId, order);
+      return { ok: true } as LineActionResult;
+    });
   } catch (err) {
-    sqlite.exec("ROLLBACK");
     return { ok: false, reason: (err as Error).message };
   }
 }
 
 /** Kéo lời của một dòng; các dòng khác bù lại để Total giữ nguyên. */
-export function updateLineMargin(
+export async function updateLineMargin(
   orderId: number,
   itemId: number,
   marginVnd: number,
-): LineActionResult {
-  sqlite.exec("BEGIN");
+): Promise<LineActionResult> {
   try {
-    const order = readOrderMoneyRow(orderId);
-    const quoted = sqlite
-      .prepare("SELECT quoted_total_vnd AS total FROM orders WHERE id = ?")
-      .get(orderId) as { total: number };
+    return await withTx(async (x) => {
+      const order = await readOrderMoneyRow(x, orderId);
+      const quoted = (await x.get<{ total: number }>(
+        "SELECT quoted_total_vnd AS total FROM orders WHERE id = ?",
+        [orderId],
+      ))!;
 
-    const rows = sqlite
-      .prepare(
+      const rows = await x.all<{
+        id: number;
+        quantity: number;
+        unit_price_cny: number;
+      }>(
         "SELECT id, quantity, unit_price_cny FROM order_items WHERE order_id = ? ORDER BY id",
-      )
-      .all(orderId) as {
-      id: number;
-      quantity: number;
-      unit_price_cny: number;
-    }[];
-    const idx = rows.findIndex((r) => r.id === itemId);
-    if (idx === -1) throw new Error("Không tìm thấy dòng sản phẩm");
+        [orderId],
+      );
+      const idx = rows.findIndex((r) => r.id === itemId);
+      if (idx === -1) throw new Error("Không tìm thấy dòng sản phẩm");
 
-    const margins = redistribute(
-      rows.map((r) => ({
-        quantity: r.quantity,
-        unitPriceCny: r.unit_price_cny,
-        marginVnd: 0,
-      })),
-      idx,
-      marginVnd,
-      quoted.total,
-      order.exchange_rate,
-    );
+      const margins = redistribute(
+        rows.map((r) => ({
+          quantity: r.quantity,
+          unitPriceCny: r.unit_price_cny,
+          marginVnd: 0,
+        })),
+        idx,
+        marginVnd,
+        quoted.total,
+        order.exchange_rate,
+      );
 
-    const stmt = sqlite.prepare(
-      "UPDATE order_items SET margin_vnd = ? WHERE id = ?",
-    );
-    rows.forEach((r, i) => stmt.run(margins[i], r.id));
+      for (const [i, r] of rows.entries()) {
+        await x.run("UPDATE order_items SET margin_vnd = ? WHERE id = ?", [
+          margins[i],
+          r.id,
+        ]);
+      }
 
-    recomputeOrderMoneyRow(orderId, order);
-    sqlite.exec("COMMIT");
-    return { ok: true };
+      await recomputeOrderMoneyRow(x, orderId, order);
+      return { ok: true } as LineActionResult;
+    });
   } catch (err) {
-    sqlite.exec("ROLLBACK");
     return { ok: false, reason: (err as Error).message };
   }
 }
 
 /** Nhập phí ship khi hàng về VN (hoặc đánh dấu freeship). */
-export function setShipFee(
+export async function setShipFee(
   orderId: number,
   shipStatus: ShipStatus,
   shippingFee: number,
-): LineActionResult {
+): Promise<LineActionResult> {
   if (!(shippingFee >= 0))
     return { ok: false, reason: "Phí ship không được âm" };
   const fee = shipStatus === "set" ? Math.round(shippingFee) : 0;
 
-  sqlite.exec("BEGIN");
   try {
-    const order = readOrderMoneyRow(orderId);
-    sqlite
-      .prepare(
+    return await withTx(async (x) => {
+      const order = await readOrderMoneyRow(x, orderId);
+      await x.run(
         "UPDATE orders SET ship_status = ?, shipping_fee = ? WHERE id = ?",
-      )
-      .run(shipStatus, fee, orderId);
+        [shipStatus, fee, orderId],
+      );
 
-    recomputeOrderMoneyRow(orderId, { ...order, shipping_fee: fee });
-    sqlite.exec("COMMIT");
-    return { ok: true };
+      await recomputeOrderMoneyRow(x, orderId, { ...order, shipping_fee: fee });
+      return { ok: true } as LineActionResult;
+    });
   } catch (err) {
-    sqlite.exec("ROLLBACK");
     return { ok: false, reason: (err as Error).message };
   }
 }
