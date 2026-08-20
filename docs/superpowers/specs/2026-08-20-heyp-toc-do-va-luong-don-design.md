@@ -20,7 +20,7 @@ không nằm ở framework.
 | TCP tới Singapore (`ap-southeast-1`) | **50 ms** (median, 4 lần) |
 | 5 câu `COUNT`/`GROUP BY` tuần tự lên DB thật | **1.388 ms** |
 | Kích thước DB thật | **11 MB** |
-| Dữ liệu thật | **6 đơn**, 6 dòng sản phẩm, 14 ảnh — *tất cả đều là `order_ho`* |
+| Dữ liệu lúc đo | 6 đơn, 6 dòng sản phẩm, 14 ảnh — *đã xoá sạch ngày 2026-08-20, xem mục 6* |
 
 1.388 ms cho năm câu đếm dòng trên bảng 6 dòng: gần như toàn bộ thời gian là
 **độ trễ mạng đi Sydney**, không phải xử lý dữ liệu và không phải Next.js.
@@ -146,10 +146,12 @@ Hiện tại: tạo ra ở `cho_bao_gia`, phải bấm **8 lần** mới tới `
 
 ### 4.1 Chuyển Supabase sang Singapore (`ap-southeast-1`)
 
-135 ms → 50 ms. Supabase **không cho đổi region tại chỗ** — phải tạo project mới
-rồi nạp dump vào. Đường đã có sẵn: `.github/workflows/db-backup.yml` đang
-`pg_dump` hằng ngày. Ảnh copy qua bucket mới bằng script kiểu
-`scripts/migrate-to-postgres.ts`.
+135 ms → 50 ms. Supabase **không cho đổi region tại chỗ** — phải tạo project mới.
+
+Vì DB đã trống (mục 6), việc này giờ chỉ còn: tạo project Singapore → chạy
+`npm run db:migrate` → tạo bucket `photos` (private) → đặt lại 2 dòng `settings`
+→ cập nhật biến môi trường trên Vercel và GitHub Actions secrets.
+**Không cần dump/restore, không cần copy ảnh.**
 
 ### 4.2 Ghim Vercel về `sin1`
 
@@ -240,24 +242,32 @@ chặn, và thà sớm còn hơn phát hiện lúc đã giao hàng.
 
 ---
 
-## 6. Di trú dữ liệu
+## 6. Dữ liệu: đã xoá sạch — không còn phải di trú
 
-Cả 6 đơn thật đều là `order_ho`. Chưa có đơn `nhap_kho` / `ban_tu_kho` nào.
+Ngày 2026-08-20, người dùng xác nhận toàn bộ dữ liệu trong Supabase chỉ là dữ
+liệu chạy thử và yêu cầu xoá. Bằng chứng khớp: `cny_ledger` và `expenses` đều
+rỗng dù có đơn đã đi qua `da_mua_tq`, số tiền toàn số tròn.
 
-| Đơn | Hiện tại | Thành | Lý do |
-|---|---|---|---|
-| #8 | `cho_bao_gia` | `khach_chot` | bỏ khâu báo giá |
-| #1 | `ve_kho_tq` | `da_mua_tq` | gộp 4 bước vận chuyển |
-| #4 | `ve_kho_vn` | `da_mua_tq` | về kho VN nhưng chưa giao khách |
-| #2, #3, #7 | `khach_bom`, `hoan_tat`, `khach_chot` | *giữ nguyên* | |
+**Đã thực hiện:**
 
-`order_status_history` **không sửa** — lịch sử là chuyện đã xảy ra. UI hành trình
-phải đọc được cả mã đã về hưu để không vỡ khi xem đơn cũ (`earliestOriginFor`
-trong `order-status.ts` đã có sẵn cơ chế neo dự phòng).
+1. Sao lưu toàn bộ 12 bảng ra `backups/pre-clear-2026-08-20T16-56-09/data.json`
+   (thư mục `backups/` nằm trong `.gitignore`).
+2. Xoá 14 file ảnh trên Supabase Storage.
+3. `TRUNCATE ... RESTART IDENTITY CASCADE` 11 bảng dữ liệu.
+4. **Giữ lại `settings`** — đó là tham số nghiệp vụ, không phải dữ liệu đơn:
+   `sell_rate = 4000`, `default_margin_vnd = 170000`.
 
-Báo cáo lãi vẫn đọc `to_status = 'hoan_tat'` như cũ — không ảnh hưởng.
+### Ảnh hưởng tới kế hoạch — nhẹ đi đáng kể
 
----
+| Trước | Giờ |
+|---|---|
+| Di trú 3 đơn sang mã trạng thái mới | **Không còn gì để di trú** |
+| Đổi region phải `pg_dump` + restore + copy 14 ảnh | **Chỉ cần chạy `npm run db:migrate` trên project mới** + đặt lại 2 dòng `settings` |
+| UI hành trình phải đọc được mã đã về hưu (đơn cũ) | Vẫn nên giữ cho bền, nhưng **không còn là đường chặn** |
+
+Bảng dữ liệu trống cũng có nghĩa: **mục 8.1 bớt căng.** Không cần giữ project
+Sydney làm đường lui nữa — không có dữ liệu nào để mất. Xoá Sydney rồi tạo
+Singapore là xong, khỏi lo trần 2 project.
 
 ## 7. Test
 
@@ -294,13 +304,15 @@ Kiểm tra thật: DB **11 MB** (free 500 MB), 14 ảnh, 7 lần chạy Actions/
 
 ### 8.1 Supabase free chỉ cho 2 project mỗi organization
 
-Kế hoạch giữ Sydney làm đường lui trong lúc chạy Singapore = **2 project cùng
-lúc, vừa khít mức free**. Nếu organization đã có project khác → vượt hạn mức,
-Supabase đòi nâng **Pro ~$25/tháng**.
+> **Đã hạ cấp rủi ro sau khi xoá dữ liệu (mục 6).** DB giờ trống, không có gì
+> để mất, nên không cần giữ Sydney làm đường lui.
 
-**Việc số 0, làm trước mọi thứ khác: mở dashboard đếm số project.**
-Nếu đã đủ 2: dump Sydney ra file `.sql` giữ ở máy → **xoá** project Sydney →
-mới tạo Singapore. Vẫn lui được, chỉ chậm hơn vài phút.
+Cách làm gọn nhất: **xoá project Sydney trước, rồi tạo Singapore** → lúc nào
+cũng chỉ có 1 project, không bao giờ chạm trần free 2 project/organization,
+không phát sinh Pro ~$25/tháng.
+
+Nếu vẫn muốn giữ Sydney vài ngày cho yên tâm thì được, miễn là organization
+chưa có project thứ ba — kiểm tra nhanh trên dashboard trước.
 
 ### 8.2 Gemini quota
 
@@ -339,7 +351,7 @@ free tier). Không mất dữ liệu, bấm restore là dậy.
 
 | # | Việc | Rủi ro |
 |---|---|---|
-| **0** | **Đếm số project Supabase trong org** (mục 8.1) | — chặn cửa |
+| **0** | Kiểm tra số project Supabase (mục 8.1) | Thấp — DB đã trống nên chỉ cần xoá Sydney trước khi tạo Singapore |
 | **1** | Singapore + ghim `sin1` + `Promise.all` + `--turbo` | Thấp — không đụng nghiệp vụ, thấy nhanh ngay |
 | **2** | Trục 4 bước + tự động hoàn tất + di trú + test | Trung bình — đụng luật trạng thái |
 | **3** | Optimistic UI nút trạng thái | Thấp |
@@ -350,9 +362,10 @@ nghiệp vụ, nên nếu bước 2 trục trặc thì người dùng vẫn đan
 
 ### Chặn rủi ro
 
-**Đổi region Supabase** — có downtime vài phút. Giữ nguyên project Sydney cho tới
-khi bản Singapore chạy ổn vài ngày; muốn quay lại chỉ cần đổi lại biến môi trường
-(`DATABASE_URL`, `DIRECT_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
+**Đổi region Supabase** — DB trống nên gần như không còn rủi ro: không có dữ liệu
+để mất, không có downtime đáng kể (chưa có ai đang dùng dữ liệu thật). Chỉ cần
+nhớ cập nhật đủ 4 biến: `DATABASE_URL`, `DIRECT_URL`, `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY` — ở cả Vercel lẫn GitHub Actions secrets.
 
 **Tự động hoàn tất** — đụng ngày dùng cho báo cáo lãi. Bắt buộc đi qua
 `changeOrderStatus` và ghi `order_status_history` như bấm tay (mục 3.4).
@@ -365,3 +378,6 @@ khi bản Singapore chạy ổn vài ngày; muốn quay lại chỉ cần đổi
 - Trục trạng thái: 9 bước → 4, kèm bảng mã về hưu và ý nghĩa mới của `da_mua_tq`.
 - Luật tự động hoàn tất và lý do bắt buộc đi qua `changeOrderStatus`.
 - Ghi chú giữ nguyên quyết định proxy ảnh (không dùng signed URL).
+- **Sửa câu đã lỗi thời:** CLAUDE.md đang ghi *"dữ liệu thật đã chuyển sang
+  Supabase 14/08"* và *"`data/app.sqlite` là bản lùi lịch sử"*. Từ 2026-08-20
+  Supabase đã trống (mục 6), nên câu này gây hiểu nhầm — phải sửa lại.
