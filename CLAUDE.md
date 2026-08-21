@@ -2,7 +2,7 @@
 
 Ứng dụng nội bộ (2 người dùng) quản lý dịch vụ **order hộ hàng Trung Quốc** cho shop HeyP (bán giày/dép/thời trang): báo giá → chốt đơn → mua hộ → gom kho → vận chuyển về VN → giao khách → thu tiền. Kèm bán hàng tồn kho và đọc ảnh chốt đơn Zalo bằng AI.
 
-**Trạng thái:** MVP xong (Phase 0–7). **v2 xong** — giao diện "Boutique atelier" (navy + giấy ấm + camel + serif), sidebar (desktop) / bottom tab+FAB+sheet (mobile), màn Tổng quan. Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`. **v3 xong** (A + B) — bóc lớp giá theo món (¥/giá vốn/lời tách riêng từng dòng sản phẩm), luồng nhập đơn 3 mảnh (ảnh chốt đơn + thông tin khách + ảnh sản phẩm), ví ¥, sổ chi phí, sổ thu tiền, 3 báo cáo tài chính. Spec: `docs/2026-08-11-heyp-v3a-gia-va-nhap-don-design.md`, `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`. **Đã chuyển hosting sang Vercel + Supabase** (14/08) — xem mục Hosting bên dưới. Logo: chưa có `public/logo.png` → đang dùng wordmark serif fallback (`src/lib/logo.ts` tự chuyển sang ảnh khi có file, không cần sửa code).
+**Trạng thái:** MVP xong (Phase 0–7). **v2 xong** — giao diện "Boutique atelier" (navy + giấy ấm + camel + serif), sidebar (desktop) / bottom tab+FAB+sheet (mobile), màn Tổng quan. Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`. **v3 xong** (A + B) — bóc lớp giá theo món (¥/giá vốn/lời tách riêng từng dòng sản phẩm), luồng nhập đơn 3 mảnh (ảnh chốt đơn + thông tin khách + ảnh sản phẩm), ví ¥, sổ chi phí, sổ thu tiền, 3 báo cáo tài chính. Spec: `docs/2026-08-11-heyp-v3a-gia-va-nhap-don-design.md`, `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`. **Đã chuyển hosting sang Vercel + Supabase** (14/08) — xem mục Hosting bên dưới. **v4 xong** — trục trạng thái rút còn 4 bước theo từng loại đơn, tự động hoàn tất khi đã giao và thu đủ tiền, form tạo đơn rút còn 3 ô bắt buộc, Vercel đã ghim region `sin1` (Singapore) đón trước việc DB dời sang Singapore (Task riêng, thủ công, **chưa làm** — DB vẫn ở Sydney). Spec: `docs/superpowers/specs/2026-08-20-heyp-toc-do-va-luong-don-design.md`. Logo: chưa có `public/logo.png` → đang dùng wordmark serif fallback (`src/lib/logo.ts` tự chuyển sang ảnh khi có file, không cần sửa code).
 
 ## Stack
 
@@ -13,6 +13,7 @@
 ## Hosting (Vercel + Supabase)
 
 - **DB:** Postgres trên Supabase, kết nối qua Supavisor. `DATABASE_URL` = **Transaction pooler** (port 6543, dùng cho runtime app). `DIRECT_URL` = **Session pooler** (port 5432, dùng cho migration/`pg_dump`). **KHÔNG** dùng "Direct connection" thật (host `db.xxx.supabase.co`) — free tier chỉ chạy IPv6, còn Vercel/GitHub Actions chỉ có IPv4.
+- **Region:** DB hiện vẫn ở Sydney (`ap-southeast-2`, xem `.env`). `vercel.json` đã ghim `regions: ["sin1"]` (Singapore) cho deployment Vercel — làm **trước**, đón đầu việc dời DB sang Singapore để function và DB cùng vùng AWS (độ trễ thấp hơn khi cùng region). Việc dời DB là một task thủ công riêng, thực hiện qua Supabase dashboard, **chưa làm** tại thời điểm commit này — đừng ghi hay giả định DB đã ở Singapore cho tới khi việc đó thật sự xong.
 - **Ảnh:** Supabase Storage, bucket `photos` (private). App luôn đi qua route đã xác thực (`/api/photo/[id]`, `src/lib/storage.ts`), không dùng signed URL public.
 - **Job nền:** không còn tiến trình `setInterval` trong app (Vercel serverless không giữ tiến trình sống). Thay bằng GitHub Actions (`.github/workflows/tracking-sweep.yml`, mỗi 4h) gọi `POST /api/cron/track` — route này vẫn nhận cả session đăng nhập lẫn `?secret=`/header `x-cron-secret` khớp `CRON_SECRET`. Cùng lịch này giữ cho Supabase free tier khỏi tự pause sau 7 ngày im lặng.
 - **Backup:** Supabase free không có backup tự động/PITR. `.github/workflows/db-backup.yml` chạy `pg_dump` hằng ngày, lưu 30 ngày trong GitHub Actions Artifacts. Khôi phục: `psql "$DIRECT_URL" -f file.sql`.
@@ -43,7 +44,19 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
 - **Test import module bằng đuôi `.ts` tường minh** (vd `../src/lib/money.ts`); `tsconfig` đã bật `allowImportingTsExtensions`. Module thuần dùng cho test không được import file khác có alias `@/`.
 - **Điều hướng (v2):** mọi trang có đăng nhập bọc bằng `<AppShell username={...}>` (`src/app/_components/app-shell.tsx`), KHÔNG dùng `AppHeader` nữa (đã xoá). Sidebar/bottom-tab đọc mục điều hướng từ `nav-config.ts` — thêm màn mới thì sửa 1 chỗ đó, không sửa từng component.
 - **`.env` gitignored** (chứa `GEMINI_API_KEY`, `SESSION_SECRET`, `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`...). Mọi cấu hình đọc từ env qua `src/lib/config.ts`. Mẫu ở `.env.example`.
-- **`data/app.sqlite` là bản lùi lịch sử** (KHÔNG còn là nguồn dữ liệu chính — dữ liệu thật đã chuyển sang Supabase 14/08) — vẫn giữ lại phòng khi cần đối chiếu, đừng xoá.
+- **`data/app.sqlite` là bản lùi lịch sử** (KHÔNG phải nguồn dữ liệu chính) —
+  giữ lại phòng khi cần đối chiếu, đừng xoá. Dữ liệu chạy thử trên Supabase đã
+  được xoá sạch ngày 20/08 (bản sao lưu ở `backups/pre-clear-2026-08-20T16-56-09/`),
+  chỉ giữ lại 2 dòng `settings`.
+- **Tái dùng mã trạng thái là có chủ đích** — `da_mua_tq` giờ mang nghĩa "Đã
+  mua, đang về" (gộp 4 khâu vận chuyển cũ) và `ve_kho_vn` là điểm kết của đơn
+  `nhap_kho`. Giữ đúng hai mã này vì ba side-effect tiền/kho neo vào chúng
+  (`queries.ts`: trừ ví ¥ ở `da_mua_tq`, cộng tồn ở `ve_kho_vn`, nhập hàng bom
+  ở `khach_bom`). Đổi tên mã = phải viết lại side-effect.
+- **Tự động hoàn tất PHẢI đi qua `changeOrderStatus`** (`autoCompleteIfPaid`
+  trong `src/db/queries.ts`), không `UPDATE orders SET status` thẳng — báo cáo
+  lãi đọc ngày hoàn tất từ `order_status_history`. Và phải gọi **ngoài**
+  `withTx` vì `changeOrderStatus` tự mở transaction riêng.
 - **Tiền v3-A:** `orders.service_fee` đã đổi tên thành `margin_vnd` và mang nghĩa **tổng lời** (= Σ `order_items.margin_vnd`). `quoted_total_vnd` là Total đã chốt với khách, **bất biến** và **không gồm ship**. Sửa ¥ thì lời được rải lại, Total giữ nguyên — luật này khoá bởi `tests/line-pricing.test.ts`.
 - **Tham số nghiệp vụ v3-A** (tỷ giá bán, lời mặc định) nằm ở bảng `settings`, không phải `.env` — đổi được lúc chạy, không cần khởi động lại app.
 - **Ví ¥ (v3-B):** số dư và giá vốn bq **không lưu trong DB** — chạy lại `cny_ledger` bằng `src/lib/cny-wallet.ts`. Đừng thêm cột `balance`. Dòng `chi` giữ `rate_snapshot` đã chốt cứng lúc mua; sửa giá ¥ sau khi mua thì **ghi dòng `dieu_chinh`**, không sửa dòng cũ.
@@ -53,7 +66,14 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
 ## Nghiệp vụ cốt lõi (đừng phá)
 
 - **Tiền** (`src/lib/money.ts`): `tiền hàng(tệ)×tỷ giá + phí dịch vụ + phí ship − cọc = còn phải thu`. Đơn `ban_tu_kho` lưu giá bán vào `goods_total_cny` với `exchange_rate=1` (VND thẳng) + cột `sale_cost` để tính lãi/lỗ. Đơn tạo từ ảnh Zalo cũng dùng `exchange_rate=1`.
-- **Trạng thái** (`src/lib/order-status.ts`): trục chính 9 bước tiến đúng 1 bước; nhánh `huy/su_co/khach_bom`. `changeOrderStatus` có side-effect tồn kho (nhập kho→cộng tồn, khách bom→nhập kho + gắn cờ khách).
+- **Trạng thái** (`src/lib/order-status.ts`): **mỗi loại đơn một trục riêng** (v4).
+  `order_ho`: Khách chốt → Đã mua, đang về → Đã giao khách → Hoàn tất.
+  `nhap_kho`: Đã mua, đang về → Về kho. `ban_tu_kho`: Đã giao khách → Hoàn tất.
+  Tiến đúng 1 bước trên trục; nhánh `huy` (chỉ từ Khách chốt) / `su_co` / `khach_bom`.
+  **Bốn mã đã về hưu** (`cho_bao_gia`, `da_bao_gia`, `ve_kho_tq`,
+  `dang_van_chuyen_vn`) vẫn nằm trong `ORDER_STATUSES` để đọc được
+  `order_status_history` cũ — đừng xoá, UI hành trình sẽ vỡ.
+  `changeOrderStatus` có side-effect tồn kho và ví ¥ (xem mục gotchas).
 - **Tồn kho** (`src/lib/inventory.ts`): giá vốn bình quân gia quyền; 3 luồng ngoại lệ (lỗi NCC, đổi/trả, khách bom).
 - **AI đọc ảnh Zalo** (Phase 5): **Google Gemini** (không phải Anthropic). REST `generativelanguage.googleapis.com`, model `gemini-flash-latest`, header `x-goog-api-key`, dùng `responseSchema` ép JSON. Prompt/schema ở `src/lib/zalo-extract.ts`, gọi ở `src/lib/gemini.ts`. Chuẩn đầu ra bám mẫu chốt đơn HeyP: `docs/reference-heyp-chot-don-template.md`.
 - **Tracking** (Phase 6): khung adapter ở `src/lib/tracking.ts` (`CARRIER_ADAPTERS` rỗng — chưa có đơn vị vận chuyển). Job nền 4h gắn cờ "tra tay" khi không có adapter.
@@ -78,3 +98,5 @@ Test bắt buộc phải xanh cho **công thức tiền** và **luật trạng t
 - Thiết kế v3-B (tài chính): `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`, kế hoạch: `docs/2026-08-11-heyp-v3b-implementation-plan.md`
 - Kế hoạch chuyển hosting Vercel + Supabase: `docs/superpowers/plans/2026-08-14-migrate-vercel-supabase.md`
 - Hướng dẫn vận hành Vercel + Supabase (backup, unpause, ngưỡng free tier): `docs/2026-08-14-huong-dan-van-hanh-vercel-supabase.md`
+- Thiết kế v4 (tốc độ & luồng đơn): `docs/superpowers/specs/2026-08-20-heyp-toc-do-va-luong-don-design.md`
+- Kế hoạch v4: `docs/superpowers/plans/2026-08-21-heyp-toc-do-va-luong-don.md`
