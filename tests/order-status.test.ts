@@ -99,6 +99,29 @@ test("Sự cố của nhap_kho chỉ quay lại được khâu có trên trục 
   assert.equal(next.includes("da_giao_khach"), false);
 });
 
+test("Sự cố của nhap_kho KHÔNG mở nhánh huỷ / khách bom", () => {
+  const next = allowedNextStatuses("nhap_kho", "su_co");
+  // Huỷ neo vào khach_chot, khách bom neo vào da_giao_khach — trục nhap_kho
+  // không đi qua khâu nào trong hai khâu đó: tiền NCC đã trả (không huỷ được)
+  // và không có khách để bom (nhánh này còn kéo theo side-effect nhập kho).
+  assert.equal(next.includes("huy"), false);
+  assert.equal(next.includes("khach_bom"), false);
+  assert.equal(canTransition("nhap_kho", "su_co", "huy"), false);
+  assert.equal(canTransition("nhap_kho", "su_co", "khach_bom"), false);
+
+  // order_ho giữ nguyên hành vi cũ: sự cố vẫn rẽ được cả hai nhánh.
+  const ho = allowedNextStatuses("order_ho", "su_co");
+  assert.ok(ho.includes("huy"));
+  assert.ok(ho.includes("khach_bom"));
+});
+
+test("Sự cố của ban_tu_kho: bom được (có khách), nhưng không huỷ được", () => {
+  const next = allowedNextStatuses("ban_tu_kho", "su_co");
+  assert.ok(next.includes("da_giao_khach"));
+  assert.ok(next.includes("khach_bom"));
+  assert.equal(next.includes("huy"), false);
+});
+
 test("Khách bom: chỉ từ khâu đã giao", () => {
   assert.ok(canTransition("order_ho", "da_giao_khach", "khach_bom"));
   assert.equal(canTransition("order_ho", "da_mua_tq", "khach_bom"), false);

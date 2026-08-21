@@ -95,11 +95,9 @@ export function OrderJourney({
   const primary: OrderStatus | null =
     effectiveStatus === "su_co"
       ? null
-      : orderType === "ban_tu_kho" && effectiveNext.includes("da_giao_khach")
-        ? "da_giao_khach"
-        : forwardTarget && effectiveNext.includes(forwardTarget)
-          ? forwardTarget
-          : null;
+      : forwardTarget && effectiveNext.includes(forwardTarget)
+        ? forwardTarget
+        : null;
   const secondary = effectiveNext.filter((s) => s !== primary);
 
   return (

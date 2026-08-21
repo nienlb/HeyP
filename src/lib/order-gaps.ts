@@ -9,7 +9,11 @@
 // Đuôi .ts tường minh: module này được test nạp thẳng bằng node, mà node cần
 // đường dẫn đầy đủ. tsconfig đã bật allowImportingTsExtensions nên Next/tsc
 // vẫn hiểu.
-import { MAIN_CHAIN, type OrderStatus, type OrderType } from "./order-status.ts";
+import {
+  journeyTrack,
+  type OrderStatus,
+  type OrderType,
+} from "./order-status.ts";
 import type { PhotoLabel } from "./photos.ts";
 
 export const GAP_CODES = [
@@ -79,9 +83,16 @@ export function orderGaps(
     gaps.push("thieu_anh_sp");
   }
 
-  // Chỉ nhắc ship khi đơn đã đi tới khâu về VN. Trạng thái nhánh
-  // (su_co / khach_bom) không nằm trên trục chính → indexOf = -1 → không nhắc.
-  const chain = MAIN_CHAIN as readonly string[];
+  // Nhắc ship dựa trên TRỤC CỦA CHÍNH LOẠI ĐƠN (v4 — mỗi loại đơn một trục),
+  // không phải một trục chung: đơn nhap_kho kết ở "ve_kho_vn" (mã không nằm
+  // trên trục order_ho), tra vào trục chung sẽ ra -1 và tắt mất lời nhắc đúng
+  // lúc phí ship vừa mới biết được.
+  //
+  // Trạng thái nhánh (su_co / khach_bom) không nằm trên trục → indexOf = -1.
+  // Với đơn order_ho / nhap_kho, mốc nhắc nằm trên trục nên -1 < mốc → không
+  // nhắc. Với ban_tu_kho, trục không có "da_mua_tq" nên mốc cũng là -1: đơn
+  // bán từ kho bắt đầu ngay ở khâu đã giao, ship phải biết ngay từ đầu.
+  const chain = journeyTrack(order.orderType) as readonly string[];
   const at = chain.indexOf(order.status);
   const remindFrom = chain.indexOf(SHIP_REMINDER_FROM);
   if (order.shipStatus === "unknown" && at >= remindFrom) {

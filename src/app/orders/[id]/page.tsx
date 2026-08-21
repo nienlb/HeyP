@@ -104,9 +104,9 @@ export default async function OrderDetailPage({
   const sellRate = order.exchangeRate || settings.sellRate;
   const saleProfit = money.goodsTotalVnd - (order.saleCost ?? 0);
   // Khi nào cho tách dòng: lỗi NCC ở khâu lưu thông, đổi/trả sau khi giao.
-  const canDefect = (
-    ["da_mua_tq", "ve_kho_tq", "dang_van_chuyen_vn", "ve_kho_vn"] as const
-  ).includes(order.status as never);
+  const canDefect = (["da_mua_tq", "ve_kho_vn"] as const).includes(
+    order.status as never,
+  );
   const canReturn = (["da_giao_khach", "hoan_tat"] as const).includes(
     order.status as never,
   );

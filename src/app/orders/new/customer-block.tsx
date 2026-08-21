@@ -1,6 +1,10 @@
 "use client";
 
-import { ORDER_TYPES, ORDER_TYPE_LABELS } from "@/lib/order-status";
+import {
+  ORDER_TYPES,
+  ORDER_TYPE_LABELS,
+  type OrderType,
+} from "@/lib/order-status";
 import type { CustomerOption } from "./types";
 
 /**
@@ -34,8 +38,8 @@ export function CustomerBlock({
   address: string;
   onAddressChange: (address: string) => void;
   customers: CustomerOption[];
-  orderType: string;
-  onOrderTypeChange: (type: string) => void;
+  orderType: OrderType;
+  onOrderTypeChange: (type: OrderType) => void;
 }) {
   const selectedCustomer = customers.find((c) => String(c.id) === customerId);
 
@@ -126,7 +130,7 @@ export function CustomerBlock({
           <select
             name="orderType"
             value={orderType}
-            onChange={(e) => onOrderTypeChange(e.target.value)}
+            onChange={(e) => onOrderTypeChange(e.target.value as OrderType)}
           >
             {ORDER_TYPES.map((t) => (
               <option key={t} value={t}>

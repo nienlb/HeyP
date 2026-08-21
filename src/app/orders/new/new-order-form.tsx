@@ -10,6 +10,7 @@ import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import { buildQuoteText } from "@/lib/format";
 import { suggestCnyFromTotal } from "@/lib/line-pricing";
 import type { ShipStatus } from "@/lib/order-gaps";
+import type { OrderType } from "@/lib/order-status";
 import { itemAttributes, type ZaloExtract } from "@/lib/zalo-extract";
 import { mergeItems, mergeMoneyFields } from "@/lib/zalo-merge";
 import { CopyButton } from "../../_components/copy-button";
@@ -36,7 +37,7 @@ export function NewOrderForm({
   const [customerMode, setCustomerMode] = useState<"existing" | "new">(
     customers.length > 0 ? "existing" : "new",
   );
-  const [orderType, setOrderType] = useState<string>("order_ho");
+  const [orderType, setOrderType] = useState<OrderType>("order_ho");
   const [exchangeRate, setExchangeRate] = useState(String(defaultExchangeRate));
   const [quotedTotal, setQuotedTotal] = useState("");
   const [shipStatus, setShipStatus] = useState<ShipStatus>("unknown");

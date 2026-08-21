@@ -57,6 +57,34 @@ import {
 import { config } from "@/lib/config";
 import { ageInDays } from "@/lib/format";
 
+// ---------- Mảnh SQL dùng chung ----------
+
+/**
+ * Điều kiện SQL "đơn còn treo" (chưa xong) — dùng chung để các chỗ tính công
+ * nợ / tài sản không lệch nhau.
+ *
+ * Ba mã cuối TOÀN CỤC (hoan_tat / huy / khach_bom) không đủ từ v4: đơn
+ * `nhap_kho` kết thúc ở `ve_kho_vn` — điểm cuối trục RIÊNG của nó, xem
+ * `isTerminalFor` trong `@/lib/order-status`. Nếu không loại ra, một đơn nhập
+ * kho đã xong vẫn cộng `amount_due` vào công nợ khách và vào khoản phải thu,
+ * treo vĩnh viễn.
+ *
+ * @param t     alias của bảng `orders` trong câu truy vấn
+ * @param extra mã coi như "đã xong" cho riêng câu đó (vd `da_giao_khach`)
+ */
+function openOrderSql(t: string, extra: readonly OrderStatus[] = []): string {
+  const done: readonly OrderStatus[] = [
+    ...extra,
+    "hoan_tat",
+    "huy",
+    "khach_bom",
+  ];
+  return (
+    `${t}.status NOT IN (${done.map((s) => `'${s}'`).join(",")})` +
+    ` AND NOT (${t}.order_type = 'nhap_kho' AND ${t}.status = 've_kho_vn')`
+  );
+}
+
 // ---------- Tham số nghiệp vụ (bảng settings) ----------
 
 export async function getSettings(): Promise<AppSettings> {
@@ -191,6 +219,9 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
 
     // Trạng thái khởi tạo là bước ĐẦU của trục theo loại đơn (v4), không
     // còn hardcode 'cho_bao_gia' — mã đó đã về hưu cùng khâu báo giá.
+    // Dùng chung một giá trị cho cả orders.status lẫn dòng lịch sử đầu tiên,
+    // để trang chi tiết không hiển thị một mốc khởi đầu sai.
+    const startStatus = initialStatus(input.orderType);
     const o = await x.get<{ id: number }>(
       `INSERT INTO orders
          (customer_id, order_type, status, exchange_rate, goods_total_cny,
@@ -201,7 +232,7 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
       [
         customerId,
         input.orderType,
-        initialStatus(input.orderType),
+        startStatus,
         input.exchangeRate,
         goodsTotalCny,
         marginTotal,
@@ -237,8 +268,8 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
     await x.run(
       `INSERT INTO order_status_history
          (order_id, from_status, to_status, changed_by, note)
-       VALUES (?, NULL, 'cho_bao_gia', ?, 'Tạo đơn')`,
-      [orderId, input.changedBy ?? null],
+       VALUES (?, NULL, ?, ?, 'Tạo đơn')`,
+      [orderId, startStatus, input.changedBy ?? null],
     );
 
     // Cọc đọc từ ảnh Zalo → một dòng thu tiền, không ghi thẳng vào
@@ -1351,7 +1382,7 @@ export async function listCustomersWithTotals(): Promise<CustomerListRow[]> {
     order_count: number;
   }>(
     `SELECT c.id, c.name, c.phone, c.warning_flag, c.warning_reason,
-            COALESCE(SUM(CASE WHEN o.status NOT IN ('hoan_tat','huy','khach_bom')
+            COALESCE(SUM(CASE WHEN ${openOrderSql("o")}
                               THEN o.amount_due ELSE 0 END), 0)::int AS outstanding,
             COUNT(o.id)::int AS order_count
        FROM customers c
@@ -1646,14 +1677,14 @@ export async function getAssetSnapshot() {
     "SELECT COALESCE(SUM(quantity * avg_cost), 0)::int AS total FROM inventory",
   ))!;
   const receivable = (await raw.get<{ total: number }>(
-    `SELECT COALESCE(SUM(amount_due), 0)::int AS total FROM orders
-      WHERE status NOT IN ('hoan_tat','huy','khach_bom')`,
+    `SELECT COALESCE(SUM(o.amount_due), 0)::int AS total FROM orders o
+      WHERE ${openOrderSql("o")}`,
   ))!;
   // Cọc của đơn CHƯA giao — tiền này nằm trong tài khoản nhưng chưa phải của mình.
   const heldDeposits = (await raw.get<{ total: number }>(
     `SELECT COALESCE(SUM(p.amount_vnd), 0)::int AS total FROM payments p
        JOIN orders o ON o.id = p.order_id
-      WHERE o.status NOT IN ('da_giao_khach','hoan_tat','huy','khach_bom')`,
+      WHERE ${openOrderSql("o", ["da_giao_khach"])}`,
   ))!;
 
   return {

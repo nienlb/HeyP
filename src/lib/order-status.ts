@@ -143,8 +143,14 @@ export function allowedNextStatuses(
 
   if (from === "su_co") {
     for (const s of incidentResumeFor(orderType)) result.add(s);
-    result.add("huy");
-    result.add("khach_bom");
+    // Huỷ / Khách bom chỉ mở khi trục của loại đơn này thật sự đi qua khâu mà
+    // hai nhánh đó neo vào. Đơn nhap_kho không có "khach_chot" (đã trả tiền
+    // NCC → không huỷ được) và không có "da_giao_khach" (không có khách để
+    // bom, mà nhánh khach_bom lại kéo theo side-effect nhập kho hàng bom).
+    if (CANCELLABLE_FROM.some((s) => TRACKS[orderType].includes(s)))
+      result.add("huy");
+    if (BOMB_FROM.some((s) => TRACKS[orderType].includes(s)))
+      result.add("khach_bom");
     return [...result];
   }
 

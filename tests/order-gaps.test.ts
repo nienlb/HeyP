@@ -132,6 +132,45 @@ test("nhiều thiếu cùng lúc → trả theo đúng thứ tự khai báo", ()
   ]);
 });
 
+test("đơn nhập kho: nhắc ship từ 'đã mua' và KHÔNG tắt khi đã về kho", () => {
+  const base: GapOrder = {
+    orderType: "nhap_kho",
+    status: "da_mua_tq",
+    customerId: 1,
+    customerPhone: "0900000000",
+    customerAddress: "Kho HN",
+    shipStatus: "unknown",
+  };
+
+  assert.deepEqual(
+    orderGaps(base, okItems, okPhotos),
+    ["thieu_ship"],
+    "hàng đang về thì phải nhắc",
+  );
+  // Trục của nhap_kho kết ở "ve_kho_vn" — mã này KHÔNG có trên trục order_ho.
+  // Bản cũ tra vào trục chung nên ra -1 và tắt mất lời nhắc đúng lúc phí ship
+  // vừa mới biết được.
+  assert.deepEqual(
+    orderGaps({ ...base, status: "ve_kho_vn" }, okItems, okPhotos),
+    ["thieu_ship"],
+    "về kho VN vẫn phải nhắc, đây mới là lúc biết phí ship",
+  );
+});
+
+test("đơn bán từ kho: nhắc ship ngay ở khâu đã giao", () => {
+  const gaps = orderGaps(
+    {
+      ...full,
+      orderType: "ban_tu_kho",
+      status: "da_giao_khach",
+      shipStatus: "unknown",
+    },
+    okItems,
+    okPhotos,
+  );
+  assert.deepEqual(gaps, ["thieu_ship"]);
+});
+
 test("đơn chưa có dòng nào → không bật cờ thiếu giá vốn", () => {
   const gaps = orderGaps(full, [], okPhotos);
   assert.deepEqual(gaps, []);
