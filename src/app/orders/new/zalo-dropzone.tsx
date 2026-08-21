@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { deletePhotoAction } from "../actions";
 import {
   IMAGE_KINDS,
@@ -39,6 +39,34 @@ export function ZaloDropzone({
   const [zaloError, setZaloError] = useState<string | null>(null);
   const [zaloInfo, setZaloInfo] = useState<string | null>(null);
   const [zaloDragOver, setZaloDragOver] = useState(false);
+
+  /** Nghe sự kiện dán ảnh (Ctrl+V) — chỉ xử lý khi focus không ở trong input/textarea/contenteditable. */
+  useEffect(() => {
+    function handlePaste(e: ClipboardEvent) {
+      // Bỏ qua nếu focus ở trong input/textarea hoặc element chỉnh sửa được
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        (activeElement instanceof HTMLElement && activeElement.isContentEditable)
+      ) {
+        return;
+      }
+
+      // Lấy ảnh từ clipboard
+      const files = e.clipboardData?.files;
+      if (!files || files.length === 0) return;
+
+      const imageFiles = [...files].filter((f) => f.type.startsWith("image/"));
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        addPending(imageFiles);
+      }
+    }
+
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, []);
 
   /** Thêm ảnh mới thả/chọn vào hàng chờ — CHƯA gửi đi đâu, chỉ xem trước. */
   function addPending(fileList: FileList | File[]) {
@@ -189,7 +217,7 @@ export function ZaloDropzone({
           role="button"
           tabIndex={0}
         >
-          Kéo-thả ảnh vào đây, hoặc bấm để chọn (chọn được nhiều ảnh)
+          Kéo-thả ảnh vào đây, dán bằng Ctrl+V, hoặc bấm để chọn (chọn được nhiều ảnh)
         </div>
         <input
           ref={zaloInputRef}
