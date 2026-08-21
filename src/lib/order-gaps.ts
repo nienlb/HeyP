@@ -40,8 +40,13 @@ export type GapOrder = {
 export type GapItem = { costConfirmed: boolean };
 export type GapPhoto = { label: PhotoLabel };
 
-/** Từ khâu này trở đi mới nhắc nhập phí ship (trước đó chưa biết là bình thường). */
-const SHIP_REMINDER_FROM: OrderStatus = "ve_kho_vn";
+/**
+ * Từ khâu này trở đi mới nhắc nhập phí ship. Ở v4, "da_mua_tq" mang nghĩa
+ * "đã mua, đang về" — bao trọn khoảng hàng trên đường, nên đây là mốc sớm
+ * nhất còn hợp lý. Gaps chỉ nhắc chứ không chặn, thà sớm còn hơn phát hiện
+ * lúc đã giao hàng.
+ */
+const SHIP_REMINDER_FROM: OrderStatus = "da_mua_tq";
 
 function blank(s: string | null): boolean {
   return s === null || s.trim() === "";
