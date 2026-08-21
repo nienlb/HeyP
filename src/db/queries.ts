@@ -40,7 +40,9 @@ import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import {
   BRANCH_STATUSES,
   MAIN_CHAIN,
+  initialStatus,
   isTerminal,
+  isTerminalFor,
   transition,
   type OrderStatus,
   type OrderType,
@@ -187,16 +189,19 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
     // Đơn ĐƯỢC PHÉP chưa có khách (tiền cọc đã về thật, thông tin tới sau).
     // Cờ `thieu_khach` của order-gaps lo phần nhắc bổ sung.
 
+    // Trạng thái khởi tạo là bước ĐẦU của trục theo loại đơn (v4), không
+    // còn hardcode 'cho_bao_gia' — mã đó đã về hưu cùng khâu báo giá.
     const o = await x.get<{ id: number }>(
       `INSERT INTO orders
          (customer_id, order_type, status, exchange_rate, goods_total_cny,
           margin_vnd, shipping_fee, deposit, amount_due, note,
           quoted_total_vnd, ship_status)
-       VALUES (?, ?, 'cho_bao_gia', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING id`,
       [
         customerId,
         input.orderType,
+        initialStatus(input.orderType),
         input.exchangeRate,
         goodsTotalCny,
         marginTotal,
@@ -1245,7 +1250,7 @@ export async function listOrders(query?: string): Promise<OrderListRow[]> {
     })
     .map((r) => {
       const ageDays = ageInDays(r.statusChangedAt);
-      const terminal = isTerminal(r.status);
+      const terminal = isTerminalFor(r.orderType, r.status);
       const isIncident = r.status === "su_co";
       const isStale = !terminal && !isIncident && ageDays >= threshold;
       return {
