@@ -8,8 +8,7 @@ import { CreatePackageForm } from "./create-package-form";
 import { runSweepAction, updatePackageStatusAction } from "./actions";
 
 export default async function TrackingPage() {
-  const session = await requireAuth();
-  const pkgs = await listPackages();
+  const [session, pkgs] = await Promise.all([requireAuth(), listPackages()]);
   const carriers = knownCarriers();
   const needAttention = pkgs.filter((p) => p.needsManualCheck);
 

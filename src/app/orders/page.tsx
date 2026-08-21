@@ -49,9 +49,11 @@ export default async function OrdersPage({
 }: {
   searchParams: Promise<{ q?: string; gap?: string }>;
 }) {
-  const session = await requireAuth();
-  const { q, gap } = await searchParams;
-  const all = await listOrdersWithGaps();
+  const [session, { q, gap }, all] = await Promise.all([
+    requireAuth(),
+    searchParams,
+    listOrdersWithGaps(),
+  ]);
 
   // Lọc tìm kiếm giữ nguyên hành vi cũ của listOrders(q).
   const needle = q?.trim().toLowerCase();

@@ -16,13 +16,17 @@ import { computePnl } from "@/lib/pnl";
 import { StatusIcon } from "./_components/status-icon";
 
 export default async function HomePage() {
-  const session = await requireAuth();
-
-  const [orders, statusCounts] = await Promise.all([
-    listOrdersWithGaps(),
-    countOrdersByStatus(),
-  ]);
-  const customers = await listCustomersWithTotals();
+  const now = new Date();
+  const [session, orders, statusCounts, customers, wallet, pnlData] =
+    await Promise.all([
+      requireAuth(),
+      listOrdersWithGaps(),
+      countOrdersByStatus(),
+      listCustomersWithTotals(),
+      getWallet(),
+      getPnlData(now.getFullYear(), now.getMonth() + 1),
+    ]);
+  const pnl = computePnl(pnlData);
 
   const attention = orders
     .filter((o) => o.needsAttention)
@@ -41,12 +45,6 @@ export default async function HomePage() {
     code,
     count: needInfo.filter((o) => o.gaps.includes(code)).length,
   })).filter((g) => g.count > 0);
-
-  const wallet = await getWallet();
-  const now = new Date();
-  const pnl = computePnl(
-    await getPnlData(now.getFullYear(), now.getMonth() + 1),
-  );
 
   return (
     <AppShell username={session.username}>

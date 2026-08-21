@@ -25,16 +25,18 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<{ y?: string; m?: string }>;
 }) {
-  const session = await requireAuth();
-  const { y, m } = await searchParams;
+  const [session, { y, m }] = await Promise.all([requireAuth(), searchParams]);
 
   const now = new Date();
   const year = Number(y) || now.getFullYear();
   const month = Number(m) || now.getMonth() + 1;
 
-  const cashFlow = await getCashFlow(year, month);
-  const pnl = computePnl(await getPnlData(year, month));
-  const assets = await getAssetSnapshot();
+  const [cashFlow, pnlData, assets] = await Promise.all([
+    getCashFlow(year, month),
+    getPnlData(year, month),
+    getAssetSnapshot(),
+  ]);
+  const pnl = computePnl(pnlData);
 
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;
