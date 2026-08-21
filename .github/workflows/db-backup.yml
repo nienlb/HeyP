@@ -9,10 +9,15 @@ jobs:
   dump:
     runs-on: ubuntu-latest
     steps:
-      - name: Cài postgresql-client
+      # Supabase chạy Postgres 17; postgresql-client mặc định của Ubuntu runner
+      # chỉ có bản 16 — pg_dump từ chối dump vì "server version mismatch".
+      # Thêm kho PGDG để cài đúng postgresql-client-17.
+      - name: Cài postgresql-client 17
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
 
       - name: pg_dump
         env:
