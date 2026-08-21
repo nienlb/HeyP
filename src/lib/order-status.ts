@@ -1,21 +1,22 @@
 /**
- * Luật vòng đời & chuyển trạng thái đơn hàng (spec mục 4).
+ * Luật vòng đời & chuyển trạng thái đơn hàng (v4 — mỗi loại đơn một trục).
  *
- * Trục xương sống (main chain):
- *   Chờ báo giá → Đã báo giá → Khách chốt → Đã mua hàng TQ → Về kho TQ
- *   → Đang vận chuyển VN → Về kho/điểm nhận VN → Đã giao khách → Hoàn tất
+ * order_ho:   khach_chot → da_mua_tq → da_giao_khach → hoan_tat
+ * nhap_kho:   da_mua_tq → ve_kho_vn
+ * ban_tu_kho: da_giao_khach → hoan_tat
  *
  * Nhánh: Hủy, Sự cố, Khách bom.
  *
  * Chính sách (khoá bởi unit test — tài liệu hoá rõ để không mơ hồ):
- *   - Trên trục chính chỉ được TIẾN đúng 1 bước (không nhảy cóc, không lùi).
- *   - Ngoại lệ: đơn `ban_tu_kho` được nhảy thẳng tới "Đã giao khách".
- *   - Hủy: chỉ khi chưa mua hàng (cho_bao_gia / da_bao_gia / khach_chot).
- *   - Sự cố: ở các khâu đang lưu thông (từ "Đã mua TQ" tới "Đã giao khách").
- *   - Khách bom: chỉ ở khâu giao (ve_kho_vn / da_giao_khach).
- *   - Sự cố CHƯA phải trạng thái cuối: giải quyết xong quay lại trục chính,
- *     hoặc chuyển sang Hủy / Khách bom.
- *   - Trạng thái cuối (không có bước ra): Hoàn tất, Hủy, Khách bom.
+ *   - Trên trục của một loại đơn chỉ được TIẾN đúng 1 bước (không nhảy cóc,
+ *     không lùi).
+ *   - Hủy: chỉ khi chưa mua hàng (khach_chot) — vì vậy chỉ đơn order_ho mới
+ *     huỷ được (nhap_kho/ban_tu_kho không đi qua khach_chot).
+ *   - Sự cố: ở các khâu đang lưu thông (da_mua_tq, da_giao_khach).
+ *   - Khách bom: chỉ ở khâu đã giao (da_giao_khach).
+ *   - Sự cố CHƯA phải trạng thái cuối: giải quyết xong quay lại khâu có trên
+ *     trục của loại đơn đó, hoặc chuyển sang Hủy / Khách bom.
+ *   - Trạng thái cuối toàn cục (không có bước ra): Hoàn tất, Hủy, Khách bom.
  *
  * Module thuần, không phụ thuộc DB.
  */
@@ -29,92 +30,132 @@ export const ORDER_TYPE_LABELS: Record<OrderType, string> = {
   ban_tu_kho: "Bán từ kho",
 };
 
+/**
+ * Trục chính của đơn order hộ (v4 — rút từ 9 bước xuống 4).
+ *
+ * Tái dùng đúng các mã cũ có side-effect tiền/kho neo vào, để không phải
+ * viết lại side-effect nào trong src/db/queries.ts:
+ *   - da_mua_tq  → trừ ví ¥ + chốt cứng tỷ giá
+ *   - ve_kho_vn  → cộng tồn kho (đơn nhap_kho)
+ *   - khach_bom  → nhập kho hàng bom + gắn cờ khách
+ */
 export const MAIN_CHAIN = [
-  "cho_bao_gia",
-  "da_bao_gia",
   "khach_chot",
   "da_mua_tq",
-  "ve_kho_tq",
-  "dang_van_chuyen_vn",
-  "ve_kho_vn",
   "da_giao_khach",
   "hoan_tat",
 ] as const;
 
 export const BRANCH_STATUSES = ["huy", "su_co", "khach_bom"] as const;
 
-export const ORDER_STATUSES = [...MAIN_CHAIN, ...BRANCH_STATUSES] as const;
+/**
+ * Mã đã về hưu ở v4. KHÔNG còn xuất hiện trong luồng chạy, nhưng vẫn phải là
+ * OrderStatus hợp lệ vì order_status_history cũ có thể còn giữ — UI hành
+ * trình đọc bảng đó, gặp mã lạ sẽ vỡ.
+ */
+export const RETIRED_STATUSES = [
+  "cho_bao_gia",
+  "da_bao_gia",
+  "ve_kho_tq",
+  "dang_van_chuyen_vn",
+] as const;
+
+export const ORDER_STATUSES = [
+  ...MAIN_CHAIN,
+  "ve_kho_vn",
+  ...BRANCH_STATUSES,
+  ...RETIRED_STATUSES,
+] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
-  cho_bao_gia: "Chờ báo giá",
-  da_bao_gia: "Đã báo giá",
   khach_chot: "Khách chốt",
-  da_mua_tq: "Đã mua hàng TQ",
-  ve_kho_tq: "Về kho TQ",
-  dang_van_chuyen_vn: "Đang vận chuyển VN",
-  ve_kho_vn: "Về kho/điểm nhận VN",
+  da_mua_tq: "Đã mua, đang về",
+  ve_kho_vn: "Về kho",
   da_giao_khach: "Đã giao khách",
   hoan_tat: "Hoàn tất",
   huy: "Hủy",
   su_co: "Sự cố",
   khach_bom: "Khách bom",
+  // Mã về hưu — nhãn giữ lại để hiển thị lịch sử cũ cho đúng.
+  cho_bao_gia: "Chờ báo giá",
+  da_bao_gia: "Đã báo giá",
+  ve_kho_tq: "Về kho TQ",
+  dang_van_chuyen_vn: "Đang vận chuyển VN",
 };
 
-const TERMINAL: readonly OrderStatus[] = ["hoan_tat", "huy", "khach_bom"];
-const CANCELLABLE_FROM: readonly OrderStatus[] = [
-  "cho_bao_gia",
-  "da_bao_gia",
-  "khach_chot",
-];
-const INCIDENT_FROM: readonly OrderStatus[] = [
-  "da_mua_tq",
-  "ve_kho_tq",
-  "dang_van_chuyen_vn",
-  "ve_kho_vn",
-  "da_giao_khach",
-];
-const BOMB_FROM: readonly OrderStatus[] = ["ve_kho_vn", "da_giao_khach"];
-/** Sau khi giải quyết sự cố, được quay lại các khâu đang lưu thông này. */
-const INCIDENT_RESUME: readonly OrderStatus[] = [
-  "da_mua_tq",
-  "ve_kho_tq",
-  "dang_van_chuyen_vn",
-  "ve_kho_vn",
-  "da_giao_khach",
-];
+/**
+ * Mỗi loại đơn đi một trục riêng, thay vì cả ba cùng bò qua một trục chung.
+ * Đơn nhập kho không có khách nên không có khâu giao; đơn bán từ kho là hàng
+ * có sẵn nên không có khâu mua/vận chuyển.
+ */
+const TRACKS: Record<OrderType, readonly OrderStatus[]> = {
+  order_ho: MAIN_CHAIN,
+  nhap_kho: ["da_mua_tq", "ve_kho_vn"],
+  ban_tu_kho: ["da_giao_khach", "hoan_tat"],
+};
 
+const GLOBAL_TERMINAL: readonly OrderStatus[] = ["hoan_tat", "huy", "khach_bom"];
+const CANCELLABLE_FROM: readonly OrderStatus[] = ["khach_chot"];
+const INCIDENT_FROM: readonly OrderStatus[] = ["da_mua_tq", "da_giao_khach"];
+const BOMB_FROM: readonly OrderStatus[] = ["da_giao_khach"];
+
+/** Ba mã kết thúc toàn cục, đúng với mọi loại đơn. */
 export function isTerminal(status: OrderStatus): boolean {
-  return TERMINAL.includes(status);
+  return GLOBAL_TERMINAL.includes(status);
 }
 
-/** Danh sách trạng thái được phép chuyển tới từ `from`, theo loại đơn. */
+/**
+ * Kết thúc theo loại đơn. Khác `isTerminal` ở chỗ: `ve_kho_vn` là điểm kết
+ * của đơn nhap_kho nhưng không phải mã kết thúc toàn cục.
+ */
+export function isTerminalFor(
+  orderType: OrderType,
+  status: OrderStatus,
+): boolean {
+  if (isTerminal(status)) return true;
+  const track = TRACKS[orderType];
+  return track[track.length - 1] === status;
+}
+
+/** Trạng thái một đơn mới được tạo ra — bước đầu của trục theo loại đơn. */
+export function initialStatus(orderType: OrderType): OrderStatus {
+  return TRACKS[orderType][0];
+}
+
+/** Các mốc hiển thị trên "hành trình đơn hàng" (UI). */
+export function journeyTrack(orderType: OrderType): readonly OrderStatus[] {
+  return TRACKS[orderType];
+}
+
+/** Sau khi giải quyết sự cố, quay lại được khâu nào — chỉ khâu có trên trục. */
+function incidentResumeFor(orderType: OrderType): OrderStatus[] {
+  return INCIDENT_FROM.filter((s) => TRACKS[orderType].includes(s));
+}
+
 export function allowedNextStatuses(
   orderType: OrderType,
   from: OrderStatus,
 ): OrderStatus[] {
-  if (isTerminal(from)) return [];
+  if (isTerminalFor(orderType, from)) return [];
 
   const result = new Set<OrderStatus>();
 
   if (from === "su_co") {
-    for (const s of INCIDENT_RESUME) result.add(s);
+    for (const s of incidentResumeFor(orderType)) result.add(s);
     result.add("huy");
     result.add("khach_bom");
     return [...result];
   }
 
-  // Từ đây `from` chắc chắn là một trạng thái trên trục chính.
-  const i = (MAIN_CHAIN as readonly string[]).indexOf(from);
+  const track = TRACKS[orderType];
+  const i = track.indexOf(from);
 
-  // Tiến đúng 1 bước.
-  if (i >= 0 && i < MAIN_CHAIN.length - 1) result.add(MAIN_CHAIN[i + 1]);
+  // Mã về hưu (hoặc mã không thuộc trục của loại đơn này) → indexOf = -1,
+  // không có bước tiếp nào. Đúng: đơn không bao giờ được tạo ở mã về hưu.
+  if (i < 0) return [];
 
-  // Ngoại lệ: đơn bán từ kho nhảy thẳng tới "Đã giao khách".
-  if (orderType === "ban_tu_kho") {
-    const deliveredIdx = (MAIN_CHAIN as readonly string[]).indexOf("da_giao_khach");
-    if (i >= 0 && i < deliveredIdx) result.add("da_giao_khach");
-  }
+  if (i < track.length - 1) result.add(track[i + 1]);
 
   if (CANCELLABLE_FROM.includes(from)) result.add("huy");
   if (INCIDENT_FROM.includes(from)) result.add("su_co");
@@ -124,26 +165,8 @@ export function allowedNextStatuses(
 }
 
 /**
- * Các mốc hiển thị trên "hành trình đơn hàng" (UI). Đơn bán từ kho không đi
- * qua khâu báo giá/mua hàng TQ/gom kho/vận chuyển — hiển thị đủ 9 bước sẽ
- * làm 4-5 mốc giữa mãi mãi treo "chưa tới" dù đơn đã xong. Nguồn chân lý
- * duy nhất cho việc này, để UI không tự suy luận lại luật nghiệp vụ.
- */
-export function journeyTrack(orderType: OrderType): readonly OrderStatus[] {
-  return orderType === "ban_tu_kho"
-    ? (["da_giao_khach", "hoan_tat"] as const)
-    : MAIN_CHAIN;
-}
-
-/**
- * Mốc SỚM NHẤT trên trục chính mà một trạng thái nhánh có thể xuất phát
- * (theo đúng luật ở trên — CANCELLABLE_FROM/INCIDENT_FROM/BOMB_FROM).
- *
- * Dùng làm điểm neo dự phòng cho UI khi lịch sử trạng thái không ghi đủ các
- * bước trung gian trên trục chính (dữ liệu demo/cũ) — "khách bom" luôn xuất
- * phát từ ve_kho_vn trở đi, nên nếu không tìm được mốc thật trong lịch sử,
- * neo về ve_kho_vn còn đúng luật hơn nhiều so với neo về cho_bao_gia (bước
- * đầu tiên) như thể đơn chưa làm gì.
+ * Mốc SỚM NHẤT trên trục mà một trạng thái nhánh có thể xuất phát. Dùng làm
+ * điểm neo dự phòng cho UI khi lịch sử không ghi đủ các bước trung gian.
  */
 export function earliestOriginFor(status: OrderStatus): OrderStatus {
   if (status === "huy") return CANCELLABLE_FROM[0];
