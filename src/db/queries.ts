@@ -748,10 +748,11 @@ export async function changeOrderStatus(
   );
   if (!order) return { ok: false, reason: "Không tìm thấy đơn" };
 
-  const result = transition(order.order_type, order.status, to);
-  if (!result.ok) return { ok: false, reason: result.reason };
+  const transitionResult = transition(order.order_type, order.status, to);
+  if (!transitionResult.ok)
+    return { ok: false, reason: transitionResult.reason };
 
-  return withTx(async (x) => {
+  const result = await withTx(async (x) => {
     await x.run(
       `UPDATE orders SET status = ?, status_changed_at = ${NOW_EPOCH_SQL}
         WHERE id = ?`,
@@ -814,6 +815,45 @@ export async function changeOrderStatus(
 
     return { ok: true } as ChangeStatusResult;
   });
+
+  // Đơn đã thu đủ từ trước (ví dụ cọc 100%) thì vừa bấm "đã giao" là xong
+  // luôn, không bắt thao tác thêm. Gọi ngoài withTx vì changeOrderStatus
+  // bên trong autoCompleteIfPaid tự mở transaction riêng.
+  if (result.ok && to === "da_giao_khach") {
+    await autoCompleteIfPaid(id, changedBy);
+  }
+
+  return result;
+}
+
+/**
+ * Đơn đã giao khách và không còn phải thu → tự chuyển "Hoàn tất".
+ *
+ * PHẢI đi qua changeOrderStatus (không UPDATE thẳng cột status) để
+ * order_status_history có dòng 'hoan_tat' — báo cáo lãi tính theo NGÀY HOÀN
+ * TẤT đọc từ bảng đó, không đọc orders.status_changed_at.
+ *
+ * Gọi hàm này SAU khi transaction gọi nó đã commit, không gọi bên trong
+ * withTx: changeOrderStatus tự mở transaction riêng.
+ */
+export async function autoCompleteIfPaid(
+  orderId: number,
+  changedBy?: string | null,
+): Promise<void> {
+  const row = await raw.get<{ status: OrderStatus; amount_due: number }>(
+    "SELECT status, amount_due FROM orders WHERE id = ?",
+    [orderId],
+  );
+  if (!row) return;
+  if (row.status !== "da_giao_khach") return;
+  if (row.amount_due > 0) return;
+
+  await changeOrderStatus(
+    orderId,
+    "hoan_tat",
+    changedBy ?? "tự động",
+    "Tự động hoàn tất: đã giao khách và thu đủ tiền",
+  );
 }
 
 // ---------- Bóc lớp giá theo dòng (v3-A) ----------
@@ -1081,8 +1121,9 @@ export async function addPayment(
       : Math.round(input.amountVnd);
   if (amount === 0) return { ok: false, reason: "Số tiền phải khác 0" };
 
+  let result: LineActionResult;
   try {
-    return await withTx(async (x) => {
+    result = await withTx(async (x) => {
       await x.run(
         `INSERT INTO payments (order_id, amount_vnd, paid_at, kind, method, note)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -1101,14 +1142,20 @@ export async function addPayment(
   } catch (err) {
     return { ok: false, reason: (err as Error).message };
   }
+
+  // Khách trả nốt tiền lúc đơn đã ở "đã giao khách" → hoàn tất luôn.
+  await autoCompleteIfPaid(input.orderId);
+
+  return result;
 }
 
 export async function deletePayment(
   id: number,
   orderId: number,
 ): Promise<LineActionResult> {
+  let result: LineActionResult;
   try {
-    return await withTx(async (x) => {
+    result = await withTx(async (x) => {
       await x.run("DELETE FROM payments WHERE id = ? AND order_id = ?", [
         id,
         orderId,
@@ -1119,6 +1166,12 @@ export async function deletePayment(
   } catch (err) {
     return { ok: false, reason: (err as Error).message };
   }
+
+  // Xoá nhầm rồi thêm lại là chuyện bình thường — gọi ở cả hai chiều thì
+  // trạng thái luôn khớp với số tiền thực thu.
+  await autoCompleteIfPaid(orderId);
+
+  return result;
 }
 
 /**
