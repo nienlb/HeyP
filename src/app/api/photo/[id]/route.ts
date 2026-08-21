@@ -23,7 +23,11 @@ export async function GET(
 
   const headers = new Headers({
     "Content-Type": contentTypeFromName(photo.file_path),
-    "Cache-Control": "private, max-age=3600",
+    // Nội dung của một photo.id là bất biến — file mới thì tạo bản ghi mới,
+    // không bao giờ ghi đè. Nên cache vĩnh viễn ở trình duyệt và không cần
+    // hỏi lại lần nào nữa. Vẫn `private`: ảnh không được cache ở CDN dùng
+    // chung, đúng với quyết định giữ proxy qua route đã xác thực.
+    "Cache-Control": "private, max-age=31536000, immutable",
   });
   if (new URL(req.url).searchParams.has("download")) {
     headers.set(
