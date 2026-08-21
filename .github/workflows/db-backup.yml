@@ -23,7 +23,9 @@ jobs:
         env:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
-          pg_dump --no-owner --no-privileges "$DIRECT_URL" \
+          # Gọi thẳng binary bản 17 — lệnh pg_dump trần trên PATH vẫn
+          # resolve về bản 16 mặc định của Ubuntu dù đã cài thêm bản 17.
+          /usr/lib/postgresql/17/bin/pg_dump --no-owner --no-privileges "$DIRECT_URL" \
             > "heyp-$(date -u +%Y%m%d-%H%M).sql"
           ls -lh heyp-*.sql
 
