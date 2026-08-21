@@ -53,17 +53,26 @@ export default async function OrderDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ err?: string }>;
 }) {
-  const session = await requireAuth();
-  const { id } = await params;
-  const { err } = await searchParams;
+  const [session, { id }, { err }] = await Promise.all([
+    requireAuth(),
+    params,
+    searchParams,
+  ]);
   const orderId = Number(id);
   if (!Number.isInteger(orderId)) notFound();
 
-  const detail = await getOrderDetail(orderId);
+  // Bốn truy vấn này độc lập nhau — chạy song song để chỉ tốn 1 vòng
+  // round-trip thay vì 4. suggestFinalPayment trước đây nằm trong JSX
+  // (await giữa lúc render) nên luôn chạy sau cùng; kéo lên đây.
+  const [detail, orderPackages, settings, suggestedFinal] = await Promise.all([
+    getOrderDetail(orderId),
+    getPackagesForOrder(orderId),
+    getSettings(),
+    suggestFinalPayment(orderId),
+  ]);
   if (!detail || !detail.order) notFound();
 
   const { order, customer, items, history, photos, payments } = detail;
-  const orderPackages = await getPackagesForOrder(orderId);
   const money = computeOrderMoney({
     goodsTotalCny: order.goodsTotalCny,
     exchangeRate: order.exchangeRate,
@@ -86,7 +95,7 @@ export default async function OrderDetailPage({
     items.map((it) => ({ costConfirmed: it.costConfirmed })),
     photos.map((p) => ({ label: p.label })),
   );
-  const sellRate = order.exchangeRate || (await getSettings()).sellRate;
+  const sellRate = order.exchangeRate || settings.sellRate;
   const saleProfit = money.goodsTotalVnd - (order.saleCost ?? 0);
   // Khi nào cho tách dòng: lỗi NCC ở khâu lưu thông, đổi/trả sau khi giao.
   const canDefect = (
@@ -298,7 +307,7 @@ export default async function OrderDetailPage({
           rows={payments}
           quotedTotalVnd={order.quotedTotalVnd}
           shippingFee={order.shippingFee}
-          suggestedFinal={await suggestFinalPayment(order.id)}
+          suggestedFinal={suggestedFinal}
         />
 
         {/* Sản phẩm */}
