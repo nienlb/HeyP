@@ -1584,6 +1584,12 @@ input.cny-suggested {
 .journey-final {
   margin: 10px 0 0;
 }
+/* Lỗi đổi trạng thái: server action trả lý do, không còn redirect kèm ?err */
+.journey-error {
+  margin-top: 0.5rem;
+  color: #b3261e;
+  font-size: 0.875rem;
+}
 
 @media (max-width: 640px) {
   .journey-track {
