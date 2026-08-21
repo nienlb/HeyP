@@ -38,29 +38,31 @@ export function MoneyBlock({
     <section className="card">
       <h2 className="card-title">Tính tiền</h2>
       <div className="field">
-        <label>Tỷ giá (VND / tệ) *</label>
+        <label>Total đã chốt (₫)</label>
         <input
-          name="exchangeRate"
           inputMode="numeric"
-          value={exchangeRate}
-          onChange={(e) => onExchangeRateChange(e.target.value)}
+          value={quotedTotal}
+          onChange={(e) => onQuotedTotalChange(e.target.value)}
+          placeholder={String(totalVnd)}
         />
+        <span className="muted small">
+          Lời:{" "}
+          <strong className={marginVnd < 0 ? "profit-negative" : ""}>
+            {formatVnd(marginVnd)}
+          </strong>
+        </span>
       </div>
-      <div className="grid-2">
+
+      <details className="more-fields">
+        <summary>Tỷ giá, phí ship, tiền cọc</summary>
         <div className="field">
-          <label>Total đã chốt (₫)</label>
+          <label>Tỷ giá (VND / tệ) *</label>
           <input
+            name="exchangeRate"
             inputMode="numeric"
-            value={quotedTotal}
-            onChange={(e) => onQuotedTotalChange(e.target.value)}
-            placeholder={String(totalVnd)}
+            value={exchangeRate}
+            onChange={(e) => onExchangeRateChange(e.target.value)}
           />
-          <span className="muted small">
-            Lời:{" "}
-            <strong className={marginVnd < 0 ? "profit-negative" : ""}>
-              {formatVnd(marginVnd)}
-            </strong>
-          </span>
         </div>
         <div className="field">
           <label>Phí ship (₫)</label>
@@ -79,16 +81,16 @@ export function MoneyBlock({
                 : "Đã nhập"}
           </span>
         </div>
-      </div>
-      <div className="field">
-        <label>Đã cọc (₫)</label>
-        <input
-          name="deposit"
-          inputMode="numeric"
-          value={deposit}
-          onChange={(e) => onDepositChange(e.target.value)}
-        />
-      </div>
+        <div className="field">
+          <label>Đã cọc (₫)</label>
+          <input
+            name="deposit"
+            inputMode="numeric"
+            value={deposit}
+            onChange={(e) => onDepositChange(e.target.value)}
+          />
+        </div>
+      </details>
 
       <div className="money-preview">
         <div className="kv">

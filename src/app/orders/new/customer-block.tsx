@@ -96,40 +96,46 @@ export function CustomerBlock({
               placeholder="VD: Chị Lan"
             />
           </div>
-          <div className="field">
-            <label>SĐT / Zalo</label>
-            <input
-              name="newCustomerPhone"
-              value={phone}
-              onChange={(e) => onPhoneChange(e.target.value)}
-              placeholder="09..."
-            />
-          </div>
-          <div className="field">
-            <label>Địa chỉ giao</label>
-            <input
-              name="newCustomerAddress"
-              value={address}
-              onChange={(e) => onAddressChange(e.target.value)}
-            />
-          </div>
+          <details className="more-fields">
+            <summary>Thêm chi tiết khách</summary>
+            <div className="field">
+              <label>SĐT / Zalo</label>
+              <input
+                name="newCustomerPhone"
+                value={phone}
+                onChange={(e) => onPhoneChange(e.target.value)}
+                placeholder="09..."
+              />
+            </div>
+            <div className="field">
+              <label>Địa chỉ giao</label>
+              <input
+                name="newCustomerAddress"
+                value={address}
+                onChange={(e) => onAddressChange(e.target.value)}
+              />
+            </div>
+          </details>
         </>
       )}
 
-      <div className="field">
-        <label>Loại đơn</label>
-        <select
-          name="orderType"
-          value={orderType}
-          onChange={(e) => onOrderTypeChange(e.target.value)}
-        >
-          {ORDER_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {ORDER_TYPE_LABELS[t]}
-            </option>
-          ))}
-        </select>
-      </div>
+      <details className="more-fields">
+        <summary>Loại đơn (mặc định: Order hộ)</summary>
+        <div className="field">
+          <label>Loại đơn</label>
+          <select
+            name="orderType"
+            value={orderType}
+            onChange={(e) => onOrderTypeChange(e.target.value)}
+          >
+            {ORDER_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {ORDER_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </details>
     </section>
   );
 }
