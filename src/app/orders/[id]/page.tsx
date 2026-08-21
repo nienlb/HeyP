@@ -18,19 +18,20 @@ import { buildQuoteText, formatCny, formatDateTime, formatVnd } from "@/lib/form
 import {
   allowedNextStatuses,
   earliestOriginFor,
-  MAIN_CHAIN,
+  journeyTrack,
   ORDER_TYPE_LABELS,
   STATUS_LABELS,
   type OrderStatus,
+  type OrderType,
 } from "@/lib/order-status";
 import { GAP_LABELS, orderGaps } from "@/lib/order-gaps";
 import { LinePricingTable } from "./line-pricing-table";
 import { OrderJourney } from "./order-journey";
 
 /**
- * Mốc trên trục chính để định vị bước hiện tại trên stepper. Đơn đang ở
- * chính trục chính thì dùng luôn; đang ở nhánh (sự cố/khách bom/huỷ) thì
- * tìm mốc main-chain gần nhất trước khi rẽ nhánh, từ lịch sử trạng thái.
+ * Mốc trên trục của LOẠI ĐƠN này để định vị bước hiện tại trên stepper. Đơn
+ * đang ở chính trục đó thì dùng luôn; đang ở nhánh (sự cố/khách bom/huỷ) thì
+ * tìm mốc gần nhất trên trục trước khi rẽ nhánh, từ lịch sử trạng thái.
  * Lịch sử không ghi đủ bước trung gian (dữ liệu demo/cũ) → neo về mốc SỚM
  * NHẤT hợp lệ theo luật (earliestOriginFor), không phải "cho_bao_gia" —
  * neo sai kiểu đó khiến một đơn "khách bom" (chỉ xảy ra từ về kho VN trở
@@ -39,8 +40,9 @@ import { OrderJourney } from "./order-journey";
 function journeyPosition(
   status: OrderStatus,
   history: { toStatus: OrderStatus }[],
+  orderType: OrderType,
 ): OrderStatus {
-  const chain = MAIN_CHAIN as readonly string[];
+  const chain = journeyTrack(orderType) as readonly string[];
   if (chain.includes(status)) return status;
   const lastMain = history.find((h) => chain.includes(h.toStatus));
   return lastMain ? lastMain.toStatus : earliestOriginFor(status);
@@ -81,7 +83,11 @@ export default async function OrderDetailPage({
     deposit: order.deposit,
   });
   const nextStatuses = allowedNextStatuses(order.orderType, order.status);
-  const positionStatus = journeyPosition(order.status, history);
+  const positionStatus = journeyPosition(
+    order.status,
+    history,
+    order.orderType,
+  );
   const isStockSale = order.orderType === "ban_tu_kho";
   const gaps = orderGaps(
     {

@@ -1,6 +1,5 @@
 import {
   journeyTrack,
-  MAIN_CHAIN,
   STATUS_LABELS,
   type OrderStatus,
   type OrderType,
@@ -46,10 +45,13 @@ export function OrderJourney({
 
   // Sự cố là lựa chọn "tiếp tục từ khâu nào" — không có một "bước kế tiếp"
   // duy nhất đúng, nên không gán primary; mọi lựa chọn nặng ngang nhau.
-  const mainIndex = (MAIN_CHAIN as readonly string[]).indexOf(positionStatus);
+  //
+  // Dùng trục của CHÍNH loại đơn này (trackIndex, đã tính ở trên), không
+  // phải MAIN_CHAIN chung — đơn nhap_kho và ban_tu_kho có trục riêng, tra
+  // vào MAIN_CHAIN sẽ ra -1.
   const forwardTarget =
-    mainIndex >= 0 && mainIndex < MAIN_CHAIN.length - 1
-      ? MAIN_CHAIN[mainIndex + 1]
+    trackIndex >= 0 && trackIndex < track.length - 1
+      ? track[trackIndex + 1]
       : null;
   const primary: OrderStatus | null =
     status === "su_co"

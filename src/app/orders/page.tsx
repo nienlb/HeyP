@@ -12,7 +12,13 @@ import {
   type OrderStatus,
 } from "@/lib/order-status";
 
-const DISPLAY_ORDER: OrderStatus[] = [...MAIN_CHAIN, ...BRANCH_STATUSES];
+// Chỉ liệt kê mã còn dùng. Mã về hưu (RETIRED_STATUSES) không xuất hiện ở
+// đây — đơn mới không bao giờ được tạo ở những mã đó nữa.
+const DISPLAY_ORDER: OrderStatus[] = [
+  ...MAIN_CHAIN,
+  "ve_kho_vn",
+  ...BRANCH_STATUSES,
+];
 
 type RowWithGaps = OrderListRow & { gaps: GapCode[] };
 
