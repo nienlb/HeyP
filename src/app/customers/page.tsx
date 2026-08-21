@@ -4,8 +4,10 @@ import { listCustomersWithTotals } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 
 export default async function CustomersPage() {
-  const session = await requireAuth();
-  const customers = await listCustomersWithTotals();
+  const [session, customers] = await Promise.all([
+    requireAuth(),
+    listCustomersWithTotals(),
+  ]);
 
   return (
     <AppShell username={session.username}>

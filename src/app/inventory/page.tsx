@@ -12,8 +12,7 @@ import { PhotoGallery } from "../_components/photo-gallery";
 import { SellForm } from "./sell-form";
 
 export default async function InventoryPage() {
-  const session = await requireAuth();
-  const rows = await listInventory();
+  const [session, rows] = await Promise.all([requireAuth(), listInventory()]);
   const inStock = rows.filter((r) => r.quantity > 0);
   const photosByItem = new Map(
     await Promise.all(

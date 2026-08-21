@@ -18,19 +18,20 @@ import { buildQuoteText, formatCny, formatDateTime, formatVnd } from "@/lib/form
 import {
   allowedNextStatuses,
   earliestOriginFor,
-  MAIN_CHAIN,
+  journeyTrack,
   ORDER_TYPE_LABELS,
   STATUS_LABELS,
   type OrderStatus,
+  type OrderType,
 } from "@/lib/order-status";
 import { GAP_LABELS, orderGaps } from "@/lib/order-gaps";
 import { LinePricingTable } from "./line-pricing-table";
 import { OrderJourney } from "./order-journey";
 
 /**
- * Mốc trên trục chính để định vị bước hiện tại trên stepper. Đơn đang ở
- * chính trục chính thì dùng luôn; đang ở nhánh (sự cố/khách bom/huỷ) thì
- * tìm mốc main-chain gần nhất trước khi rẽ nhánh, từ lịch sử trạng thái.
+ * Mốc trên trục của LOẠI ĐƠN này để định vị bước hiện tại trên stepper. Đơn
+ * đang ở chính trục đó thì dùng luôn; đang ở nhánh (sự cố/khách bom/huỷ) thì
+ * tìm mốc gần nhất trên trục trước khi rẽ nhánh, từ lịch sử trạng thái.
  * Lịch sử không ghi đủ bước trung gian (dữ liệu demo/cũ) → neo về mốc SỚM
  * NHẤT hợp lệ theo luật (earliestOriginFor), không phải "cho_bao_gia" —
  * neo sai kiểu đó khiến một đơn "khách bom" (chỉ xảy ra từ về kho VN trở
@@ -39,8 +40,9 @@ import { OrderJourney } from "./order-journey";
 function journeyPosition(
   status: OrderStatus,
   history: { toStatus: OrderStatus }[],
+  orderType: OrderType,
 ): OrderStatus {
-  const chain = MAIN_CHAIN as readonly string[];
+  const chain = journeyTrack(orderType) as readonly string[];
   if (chain.includes(status)) return status;
   const lastMain = history.find((h) => chain.includes(h.toStatus));
   return lastMain ? lastMain.toStatus : earliestOriginFor(status);
@@ -53,17 +55,26 @@ export default async function OrderDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ err?: string }>;
 }) {
-  const session = await requireAuth();
-  const { id } = await params;
-  const { err } = await searchParams;
+  const [session, { id }, { err }] = await Promise.all([
+    requireAuth(),
+    params,
+    searchParams,
+  ]);
   const orderId = Number(id);
   if (!Number.isInteger(orderId)) notFound();
 
-  const detail = await getOrderDetail(orderId);
+  // Bốn truy vấn này độc lập nhau — chạy song song để chỉ tốn 1 vòng
+  // round-trip thay vì 4. suggestFinalPayment trước đây nằm trong JSX
+  // (await giữa lúc render) nên luôn chạy sau cùng; kéo lên đây.
+  const [detail, orderPackages, settings, suggestedFinal] = await Promise.all([
+    getOrderDetail(orderId),
+    getPackagesForOrder(orderId),
+    getSettings(),
+    suggestFinalPayment(orderId),
+  ]);
   if (!detail || !detail.order) notFound();
 
   const { order, customer, items, history, photos, payments } = detail;
-  const orderPackages = await getPackagesForOrder(orderId);
   const money = computeOrderMoney({
     goodsTotalCny: order.goodsTotalCny,
     exchangeRate: order.exchangeRate,
@@ -72,7 +83,11 @@ export default async function OrderDetailPage({
     deposit: order.deposit,
   });
   const nextStatuses = allowedNextStatuses(order.orderType, order.status);
-  const positionStatus = journeyPosition(order.status, history);
+  const positionStatus = journeyPosition(
+    order.status,
+    history,
+    order.orderType,
+  );
   const isStockSale = order.orderType === "ban_tu_kho";
   const gaps = orderGaps(
     {
@@ -86,12 +101,12 @@ export default async function OrderDetailPage({
     items.map((it) => ({ costConfirmed: it.costConfirmed })),
     photos.map((p) => ({ label: p.label })),
   );
-  const sellRate = order.exchangeRate || (await getSettings()).sellRate;
+  const sellRate = order.exchangeRate || settings.sellRate;
   const saleProfit = money.goodsTotalVnd - (order.saleCost ?? 0);
   // Khi nào cho tách dòng: lỗi NCC ở khâu lưu thông, đổi/trả sau khi giao.
-  const canDefect = (
-    ["da_mua_tq", "ve_kho_tq", "dang_van_chuyen_vn", "ve_kho_vn"] as const
-  ).includes(order.status as never);
+  const canDefect = (["da_mua_tq", "ve_kho_vn"] as const).includes(
+    order.status as never,
+  );
   const canReturn = (["da_giao_khach", "hoan_tat"] as const).includes(
     order.status as never,
   );
@@ -298,7 +313,7 @@ export default async function OrderDetailPage({
           rows={payments}
           quotedTotalVnd={order.quotedTotalVnd}
           shippingFee={order.shippingFee}
-          suggestedFinal={await suggestFinalPayment(order.id)}
+          suggestedFinal={suggestedFinal}
         />
 
         {/* Sản phẩm */}

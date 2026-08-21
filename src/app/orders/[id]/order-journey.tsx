@@ -1,6 +1,9 @@
+"use client";
+
+import { useOptimistic, useState, useTransition } from "react";
 import {
+  allowedNextStatuses,
   journeyTrack,
-  MAIN_CHAIN,
   STATUS_LABELS,
   type OrderStatus,
   type OrderType,
@@ -21,6 +24,10 @@ const ALERT_COPY: Partial<Record<OrderStatus, string>> = {
  * Hành trình đơn hàng: thay cho hàng nút phẳng cũ bằng một stepper thấy được
  * đơn đang ở đâu trong quy trình, cộng một hành động "tiến tiếp" nổi bật hơn
  * hẳn các lựa chọn phụ (huỷ / sự cố / khách bom).
+ *
+ * Client component: bấm đổi trạng thái là UI nhảy bước NGAY (useOptimistic),
+ * server action chạy ngầm. Trước đây mỗi lần bấm là submit <form> rồi
+ * redirect — tải lại cả trang chi tiết, mất vài giây.
  */
 export function OrderJourney({
   orderId,
@@ -40,37 +47,69 @@ export function OrderJourney({
   positionStatus: OrderStatus;
   nextStatuses: OrderStatus[];
 }) {
+  const [optimisticStatus, applyOptimistic] = useOptimistic(status);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function go(to: OrderStatus) {
+    setError(null);
+    // applyOptimistic PHẢI nằm trong callback của startTransition (luật React
+    // 19), nếu không sẽ ném "can only update optimistic state within a
+    // transition".
+    startTransition(async () => {
+      applyOptimistic(to);
+      const res = await changeStatusAction(orderId, to);
+      // Thất bại: React tự bỏ giá trị optimistic khi transition kết thúc,
+      // nên chỉ cần hiện lý do.
+      if (!res.ok) setError(res.reason);
+    });
+  }
+
+  const effectiveStatus = optimisticStatus;
+  // Cùng một hàm thuần server đã dùng để tính prop, nên khi chưa có thay đổi
+  // optimistic thì hai đường cho kết quả giống hệt — dùng thẳng prop cho rẻ.
+  const effectiveNext =
+    effectiveStatus === status
+      ? nextStatuses
+      : allowedNextStatuses(orderType, effectiveStatus);
+  const isBranch = DANGER_STATUSES.has(effectiveStatus);
+
   const track = journeyTrack(orderType);
-  const trackIndex = track.indexOf(positionStatus);
-  const isBranch = DANGER_STATUSES.has(status);
+  // positionStatus do server tính từ lịch sử; nhưng nếu trạng thái (optimistic)
+  // đang nằm ngay trên trục thì chính nó là mốc đúng.
+  const effectivePosition = track.includes(effectiveStatus)
+    ? effectiveStatus
+    : positionStatus;
+  const trackIndex = track.indexOf(effectivePosition);
 
   // Sự cố là lựa chọn "tiếp tục từ khâu nào" — không có một "bước kế tiếp"
   // duy nhất đúng, nên không gán primary; mọi lựa chọn nặng ngang nhau.
-  const mainIndex = (MAIN_CHAIN as readonly string[]).indexOf(positionStatus);
+  //
+  // Dùng trục của CHÍNH loại đơn này (trackIndex, đã tính ở trên), không
+  // phải MAIN_CHAIN chung — đơn nhap_kho và ban_tu_kho có trục riêng, tra
+  // vào MAIN_CHAIN sẽ ra -1.
   const forwardTarget =
-    mainIndex >= 0 && mainIndex < MAIN_CHAIN.length - 1
-      ? MAIN_CHAIN[mainIndex + 1]
+    trackIndex >= 0 && trackIndex < track.length - 1
+      ? track[trackIndex + 1]
       : null;
   const primary: OrderStatus | null =
-    status === "su_co"
+    effectiveStatus === "su_co"
       ? null
-      : orderType === "ban_tu_kho" && nextStatuses.includes("da_giao_khach")
-        ? "da_giao_khach"
-        : forwardTarget && nextStatuses.includes(forwardTarget)
-          ? forwardTarget
-          : null;
-  const secondary = nextStatuses.filter((s) => s !== primary);
+      : forwardTarget && effectiveNext.includes(forwardTarget)
+        ? forwardTarget
+        : null;
+  const secondary = effectiveNext.filter((s) => s !== primary);
 
   return (
     <section className="card journey-card">
       <h2 className="card-title">Hành trình đơn hàng</h2>
 
       {isBranch && (
-        <div className={`journey-alert journey-alert--${status}`}>
-          <StatusIcon status={status} size={20} />
+        <div className={`journey-alert journey-alert--${effectiveStatus}`}>
+          <StatusIcon status={effectiveStatus} size={20} />
           <div>
-            <strong>{STATUS_LABELS[status]}</strong>
-            {ALERT_COPY[status] && <p>{ALERT_COPY[status]}</p>}
+            <strong>{STATUS_LABELS[effectiveStatus]}</strong>
+            {ALERT_COPY[effectiveStatus] && <p>{ALERT_COPY[effectiveStatus]}</p>}
           </div>
         </div>
       )}
@@ -96,48 +135,54 @@ export function OrderJourney({
         })}
       </ol>
 
-      {nextStatuses.length === 0 ? (
+      {effectiveNext.length === 0 ? (
         <p className="muted journey-final">
-          {status === "huy"
+          {effectiveStatus === "huy"
             ? "Đơn đã huỷ — không còn thao tác nào tiếp theo."
             : "Đơn đã ở trạng thái cuối, không thể chuyển tiếp."}
         </p>
       ) : (
         <div className="journey-actions">
           {primary && (
-            <form action={changeStatusAction}>
-              <input type="hidden" name="orderId" value={orderId} />
-              <input type="hidden" name="to" value={primary} />
-              <button type="submit" className="btn journey-primary">
-                Xác nhận: {STATUS_LABELS[primary]}
-                <span aria-hidden="true"> →</span>
-              </button>
-            </form>
+            <button
+              type="button"
+              className="btn journey-primary"
+              disabled={isPending}
+              onClick={() => go(primary)}
+            >
+              Xác nhận: {STATUS_LABELS[primary]}
+              <span aria-hidden="true"> →</span>
+            </button>
           )}
           {secondary.length > 0 && (
             <div className="journey-secondary">
-              {status === "su_co" && (
+              {effectiveStatus === "su_co" && (
                 <span className="journey-secondary-label">
                   Tiếp tục từ khâu:
                 </span>
               )}
               {secondary.map((to) => (
-                <form key={to} action={changeStatusAction}>
-                  <input type="hidden" name="orderId" value={orderId} />
-                  <input type="hidden" name="to" value={to} />
-                  <button
-                    type="submit"
-                    className={`btn btn-sm ${
-                      DANGER_STATUSES.has(to) ? "btn-warn" : "btn-outline"
-                    }`}
-                  >
-                    {STATUS_LABELS[to]}
-                  </button>
-                </form>
+                <button
+                  key={to}
+                  type="button"
+                  className={`btn btn-sm ${
+                    DANGER_STATUSES.has(to) ? "btn-warn" : "btn-outline"
+                  }`}
+                  disabled={isPending}
+                  onClick={() => go(to)}
+                >
+                  {STATUS_LABELS[to]}
+                </button>
               ))}
             </div>
           )}
         </div>
+      )}
+
+      {error && (
+        <p className="journey-error" role="alert">
+          {error}
+        </p>
       )}
     </section>
   );

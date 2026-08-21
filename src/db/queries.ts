@@ -40,7 +40,9 @@ import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import {
   BRANCH_STATUSES,
   MAIN_CHAIN,
+  initialStatus,
   isTerminal,
+  isTerminalFor,
   transition,
   type OrderStatus,
   type OrderType,
@@ -54,6 +56,34 @@ import {
 } from "@/lib/inventory";
 import { config } from "@/lib/config";
 import { ageInDays } from "@/lib/format";
+
+// ---------- Mảnh SQL dùng chung ----------
+
+/**
+ * Điều kiện SQL "đơn còn treo" (chưa xong) — dùng chung để các chỗ tính công
+ * nợ / tài sản không lệch nhau.
+ *
+ * Ba mã cuối TOÀN CỤC (hoan_tat / huy / khach_bom) không đủ từ v4: đơn
+ * `nhap_kho` kết thúc ở `ve_kho_vn` — điểm cuối trục RIÊNG của nó, xem
+ * `isTerminalFor` trong `@/lib/order-status`. Nếu không loại ra, một đơn nhập
+ * kho đã xong vẫn cộng `amount_due` vào công nợ khách và vào khoản phải thu,
+ * treo vĩnh viễn.
+ *
+ * @param t     alias của bảng `orders` trong câu truy vấn
+ * @param extra mã coi như "đã xong" cho riêng câu đó (vd `da_giao_khach`)
+ */
+function openOrderSql(t: string, extra: readonly OrderStatus[] = []): string {
+  const done: readonly OrderStatus[] = [
+    ...extra,
+    "hoan_tat",
+    "huy",
+    "khach_bom",
+  ];
+  return (
+    `${t}.status NOT IN (${done.map((s) => `'${s}'`).join(",")})` +
+    ` AND NOT (${t}.order_type = 'nhap_kho' AND ${t}.status = 've_kho_vn')`
+  );
+}
 
 // ---------- Tham số nghiệp vụ (bảng settings) ----------
 
@@ -187,16 +217,22 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
     // Đơn ĐƯỢC PHÉP chưa có khách (tiền cọc đã về thật, thông tin tới sau).
     // Cờ `thieu_khach` của order-gaps lo phần nhắc bổ sung.
 
+    // Trạng thái khởi tạo là bước ĐẦU của trục theo loại đơn (v4), không
+    // còn hardcode 'cho_bao_gia' — mã đó đã về hưu cùng khâu báo giá.
+    // Dùng chung một giá trị cho cả orders.status lẫn dòng lịch sử đầu tiên,
+    // để trang chi tiết không hiển thị một mốc khởi đầu sai.
+    const startStatus = initialStatus(input.orderType);
     const o = await x.get<{ id: number }>(
       `INSERT INTO orders
          (customer_id, order_type, status, exchange_rate, goods_total_cny,
           margin_vnd, shipping_fee, deposit, amount_due, note,
           quoted_total_vnd, ship_status)
-       VALUES (?, ?, 'cho_bao_gia', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING id`,
       [
         customerId,
         input.orderType,
+        startStatus,
         input.exchangeRate,
         goodsTotalCny,
         marginTotal,
@@ -232,8 +268,8 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
     await x.run(
       `INSERT INTO order_status_history
          (order_id, from_status, to_status, changed_by, note)
-       VALUES (?, NULL, 'cho_bao_gia', ?, 'Tạo đơn')`,
-      [orderId, input.changedBy ?? null],
+       VALUES (?, NULL, ?, ?, 'Tạo đơn')`,
+      [orderId, startStatus, input.changedBy ?? null],
     );
 
     // Cọc đọc từ ảnh Zalo → một dòng thu tiền, không ghi thẳng vào
@@ -743,10 +779,11 @@ export async function changeOrderStatus(
   );
   if (!order) return { ok: false, reason: "Không tìm thấy đơn" };
 
-  const result = transition(order.order_type, order.status, to);
-  if (!result.ok) return { ok: false, reason: result.reason };
+  const transitionResult = transition(order.order_type, order.status, to);
+  if (!transitionResult.ok)
+    return { ok: false, reason: transitionResult.reason };
 
-  return withTx(async (x) => {
+  const result = await withTx(async (x) => {
     await x.run(
       `UPDATE orders SET status = ?, status_changed_at = ${NOW_EPOCH_SQL}
         WHERE id = ?`,
@@ -809,6 +846,45 @@ export async function changeOrderStatus(
 
     return { ok: true } as ChangeStatusResult;
   });
+
+  // Đơn đã thu đủ từ trước (ví dụ cọc 100%) thì vừa bấm "đã giao" là xong
+  // luôn, không bắt thao tác thêm. Gọi ngoài withTx vì changeOrderStatus
+  // bên trong autoCompleteIfPaid tự mở transaction riêng.
+  if (result.ok && to === "da_giao_khach") {
+    await autoCompleteIfPaid(id, changedBy);
+  }
+
+  return result;
+}
+
+/**
+ * Đơn đã giao khách và không còn phải thu → tự chuyển "Hoàn tất".
+ *
+ * PHẢI đi qua changeOrderStatus (không UPDATE thẳng cột status) để
+ * order_status_history có dòng 'hoan_tat' — báo cáo lãi tính theo NGÀY HOÀN
+ * TẤT đọc từ bảng đó, không đọc orders.status_changed_at.
+ *
+ * Gọi hàm này SAU khi transaction gọi nó đã commit, không gọi bên trong
+ * withTx: changeOrderStatus tự mở transaction riêng.
+ */
+export async function autoCompleteIfPaid(
+  orderId: number,
+  changedBy?: string | null,
+): Promise<void> {
+  const row = await raw.get<{ status: OrderStatus; amount_due: number }>(
+    "SELECT status, amount_due FROM orders WHERE id = ?",
+    [orderId],
+  );
+  if (!row) return;
+  if (row.status !== "da_giao_khach") return;
+  if (row.amount_due > 0) return;
+
+  await changeOrderStatus(
+    orderId,
+    "hoan_tat",
+    changedBy ?? "tự động",
+    "Tự động hoàn tất: đã giao khách và thu đủ tiền",
+  );
 }
 
 // ---------- Bóc lớp giá theo dòng (v3-A) ----------
@@ -1076,8 +1152,9 @@ export async function addPayment(
       : Math.round(input.amountVnd);
   if (amount === 0) return { ok: false, reason: "Số tiền phải khác 0" };
 
+  let result: LineActionResult;
   try {
-    return await withTx(async (x) => {
+    result = await withTx(async (x) => {
       await x.run(
         `INSERT INTO payments (order_id, amount_vnd, paid_at, kind, method, note)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -1096,14 +1173,20 @@ export async function addPayment(
   } catch (err) {
     return { ok: false, reason: (err as Error).message };
   }
+
+  // Khách trả nốt tiền lúc đơn đã ở "đã giao khách" → hoàn tất luôn.
+  await autoCompleteIfPaid(input.orderId);
+
+  return result;
 }
 
 export async function deletePayment(
   id: number,
   orderId: number,
 ): Promise<LineActionResult> {
+  let result: LineActionResult;
   try {
-    return await withTx(async (x) => {
+    result = await withTx(async (x) => {
       await x.run("DELETE FROM payments WHERE id = ? AND order_id = ?", [
         id,
         orderId,
@@ -1114,6 +1197,12 @@ export async function deletePayment(
   } catch (err) {
     return { ok: false, reason: (err as Error).message };
   }
+
+  // Xoá nhầm rồi thêm lại là chuyện bình thường — gọi ở cả hai chiều thì
+  // trạng thái luôn khớp với số tiền thực thu.
+  await autoCompleteIfPaid(orderId);
+
+  return result;
 }
 
 /**
@@ -1245,7 +1334,7 @@ export async function listOrders(query?: string): Promise<OrderListRow[]> {
     })
     .map((r) => {
       const ageDays = ageInDays(r.statusChangedAt);
-      const terminal = isTerminal(r.status);
+      const terminal = isTerminalFor(r.orderType, r.status);
       const isIncident = r.status === "su_co";
       const isStale = !terminal && !isIncident && ageDays >= threshold;
       return {
@@ -1293,7 +1382,7 @@ export async function listCustomersWithTotals(): Promise<CustomerListRow[]> {
     order_count: number;
   }>(
     `SELECT c.id, c.name, c.phone, c.warning_flag, c.warning_reason,
-            COALESCE(SUM(CASE WHEN o.status NOT IN ('hoan_tat','huy','khach_bom')
+            COALESCE(SUM(CASE WHEN ${openOrderSql("o")}
                               THEN o.amount_due ELSE 0 END), 0)::int AS outstanding,
             COUNT(o.id)::int AS order_count
        FROM customers c
@@ -1588,14 +1677,14 @@ export async function getAssetSnapshot() {
     "SELECT COALESCE(SUM(quantity * avg_cost), 0)::int AS total FROM inventory",
   ))!;
   const receivable = (await raw.get<{ total: number }>(
-    `SELECT COALESCE(SUM(amount_due), 0)::int AS total FROM orders
-      WHERE status NOT IN ('hoan_tat','huy','khach_bom')`,
+    `SELECT COALESCE(SUM(o.amount_due), 0)::int AS total FROM orders o
+      WHERE ${openOrderSql("o")}`,
   ))!;
   // Cọc của đơn CHƯA giao — tiền này nằm trong tài khoản nhưng chưa phải của mình.
   const heldDeposits = (await raw.get<{ total: number }>(
     `SELECT COALESCE(SUM(p.amount_vnd), 0)::int AS total FROM payments p
        JOIN orders o ON o.id = p.order_id
-      WHERE o.status NOT IN ('da_giao_khach','hoan_tat','huy','khach_bom')`,
+      WHERE ${openOrderSql("o", ["da_giao_khach"])}`,
   ))!;
 
   return {

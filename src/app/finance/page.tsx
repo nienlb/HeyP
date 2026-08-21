@@ -25,12 +25,13 @@ export default async function FinancePage({
 }: {
   searchParams: Promise<{ err?: string }>;
 }) {
-  const session = await requireAuth();
-  const { err } = await searchParams;
-
-  const wallet = await getWallet();
-  const ledger = await listLedger();
-  const expenseRows = await listExpenses();
+  const [session, { err }, wallet, ledger, expenseRows] = await Promise.all([
+    requireAuth(),
+    searchParams,
+    getWallet(),
+    listLedger(),
+    listExpenses(),
+  ]);
 
   return (
     <AppShell username={session.username}>

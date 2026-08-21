@@ -159,6 +159,27 @@ a {
   border-color: var(--brand);
 }
 
+.more-fields {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.more-fields > summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  opacity: 0.75;
+  list-style: none;
+}
+
+.more-fields > summary::before {
+  content: "＋ ";
+}
+
+.more-fields[open] > summary::before {
+  content: "－ ";
+}
+
 .error {
   background: var(--danger-tint);
   border: 1px solid var(--danger-border);
@@ -1583,6 +1604,12 @@ input.cny-suggested {
 }
 .journey-final {
   margin: 10px 0 0;
+}
+/* Lỗi đổi trạng thái: server action trả lý do, không còn redirect kèm ?err */
+.journey-error {
+  margin-top: 0.5rem;
+  color: #b3261e;
+  font-size: 0.875rem;
 }
 
 @media (max-width: 640px) {

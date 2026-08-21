@@ -8,9 +8,11 @@ export default async function SettingsPage({
 }: {
   searchParams: Promise<{ ok?: string }>;
 }) {
-  const session = await requireAuth();
-  const { ok } = await searchParams;
-  const s = await getSettings();
+  const [session, { ok }, s] = await Promise.all([
+    requireAuth(),
+    searchParams,
+    getSettings(),
+  ]);
 
   return (
     <AppShell username={session.username}>

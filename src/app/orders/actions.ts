@@ -168,29 +168,30 @@ export async function createOrderAction(
   redirect(`/orders/${orderId}`);
 }
 
-export async function changeStatusAction(formData: FormData): Promise<void> {
+export type ChangeStatusResultUi = { ok: true } | { ok: false; reason: string };
+
+/**
+ * Không redirect nữa: trả kết quả về client để OrderJourney dùng
+ * useOptimistic — bấm là UI đổi ngay, lỗi thì tự bật lại và báo.
+ * revalidatePath vẫn gọi để dữ liệu server đồng bộ ở lần render sau.
+ */
+export async function changeStatusAction(
+  orderId: number,
+  to: OrderStatus,
+): Promise<ChangeStatusResultUi> {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) return { ok: false, reason: "Phiên đăng nhập đã hết hạn." };
 
-  const orderId = Number(formData.get("orderId"));
-  const toRaw = String(formData.get("to") ?? "");
-  if (!orderId || !(ORDER_STATUSES as readonly string[]).includes(toRaw)) {
-    redirect(`/orders/${orderId}?err=${encodeURIComponent("Yêu cầu không hợp lệ")}`);
+  if (!orderId || !(ORDER_STATUSES as readonly string[]).includes(to)) {
+    return { ok: false, reason: "Yêu cầu không hợp lệ" };
   }
 
-  const result = await changeOrderStatus(
-    orderId,
-    toRaw as OrderStatus,
-    session.username,
-  );
-
-  if (!result.ok) {
-    redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
-  }
+  const result = await changeOrderStatus(orderId, to, session.username);
+  if (!result.ok) return { ok: false, reason: result.reason };
 
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
-  redirect(`/orders/${orderId}`);
+  return { ok: true };
 }
 
 /** Ngoại lệ theo dòng: đánh lỗi NCC / đổi trả → tách khỏi đơn + nhập kho. */

@@ -5,9 +5,11 @@ import { getSettings, listCustomers } from "@/db/queries";
 import { NewOrderForm } from "./new-order-form";
 
 export default async function NewOrderPage() {
-  const session = await requireAuth();
-  const customers = await listCustomers();
-  const settings = await getSettings();
+  const [session, customers, settings] = await Promise.all([
+    requireAuth(),
+    listCustomers(),
+    getSettings(),
+  ]);
 
   return (
     <AppShell username={session.username}>

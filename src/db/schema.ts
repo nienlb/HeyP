@@ -73,9 +73,13 @@ export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id").references(() => customers.id),
   orderType: text("order_type", { enum: ORDER_TYPES }).notNull(),
+  // Default ở tầng DB chỉ là lưới an toàn: mọi đường insert đều tự truyền
+  // status theo `initialStatus(orderType)`. Để "khach_chot" (bước đầu của
+  // order_ho — loại đơn phổ biến nhất) thay vì mã đã về hưu "cho_bao_gia",
+  // để đường insert mới nào quên truyền cũng không sinh ra đơn ở mã chết.
   status: text("status", { enum: ORDER_STATUSES })
     .notNull()
-    .default("cho_bao_gia"),
+    .default("khach_chot"),
   // Khối tiền — CNY & tỷ giá là số thực; các khoản VND là số nguyên đồng.
   exchangeRate: doublePrecision("exchange_rate").notNull().default(0),
   goodsTotalCny: doublePrecision("goods_total_cny").notNull().default(0),
