@@ -33,7 +33,12 @@ import type {
   PaymentKind,
   PaymentMethod,
 } from "@/lib/expenses";
-import { currentRate, replayLedger, walletValueVnd } from "@/lib/cny-wallet";
+import {
+  currentRate,
+  replayLedger,
+  shouldDeductCny,
+  walletValueVnd,
+} from "@/lib/cny-wallet";
 import type { PnlExpense, PnlOrder } from "@/lib/pnl";
 import { getAdapter } from "@/lib/tracking";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
@@ -201,6 +206,19 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
     deposit: input.deposit,
   });
 
+  // Tính TRƯỚC khi mở transaction: listLedger() dùng `raw` toàn cục, gọi bên
+  // trong withTx thì câu đó chạy ngoài transaction, không rollback theo.
+  const willDeductCny = shouldDeductCny({
+    orderType: input.orderType,
+    toStatus: initialStatus(input.orderType),
+    goodsTotalCny,
+    // Đơn mới tinh, chưa thể có dòng sổ nào.
+    alreadyDeducted: false,
+  });
+  const cnyRateSnapshot = willDeductCny
+    ? Math.round(currentRate(await listLedger()))
+    : 0;
+
   return withTx(async (x) => {
     let customerId = input.customerId ?? null;
     if (!customerId && input.newCustomer) {
@@ -271,6 +289,16 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
        VALUES (?, NULL, ?, ?, 'Tạo đơn')`,
       [orderId, startStatus, input.changedBy ?? null],
     );
+
+    // Đơn nhap_kho sinh ra thẳng ở 'da_mua_tq' nên không bao giờ đi qua
+    // changeOrderStatus — không ghi ở đây thì ví ¥ không bao giờ bị trừ.
+    if (willDeductCny) {
+      await x.run(
+        `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
+         VALUES ('chi', ?, ?, ?, ?)`,
+        [-goodsTotalCny, cnyRateSnapshot, orderId, `Mua hàng đơn #${orderId}`],
+      );
+    }
 
     // Cọc đọc từ ảnh Zalo → một dòng thu tiền, không ghi thẳng vào
     // orders.deposit nữa (deposit là số dẫn xuất — spec v3-B mục 3).
@@ -834,8 +862,20 @@ export async function changeOrderStatus(
 
     // Đã mua hàng TQ → trừ ví ¥ và CHỐT CỨNG giá vốn tại thời điểm này.
     // Nạp ¥ đợt sau rẻ hơn không được làm đổi lãi/lỗ của đơn đã mua rồi.
-    // goods_total_cny = 0 (chưa nhập giá ¥) → không ghi dòng chi vô nghĩa.
-    if (to === "da_mua_tq" && order.goods_total_cny > 0) {
+    // Luật (kể cả chống trừ hai lần) nằm ở shouldDeductCny — đừng viết lại
+    // điều kiện ở đây, createOrder cũng gọi đúng hàm đó.
+    const deducted = await x.get<{ one: number }>(
+      "SELECT 1 AS one FROM cny_ledger WHERE order_id = ? AND kind = 'chi' LIMIT 1",
+      [id],
+    );
+    if (
+      shouldDeductCny({
+        orderType: order.order_type,
+        toStatus: to,
+        goodsTotalCny: order.goods_total_cny,
+        alreadyDeducted: Boolean(deducted),
+      })
+    ) {
       const rate = Math.round(currentRate(await listLedger()));
       await x.run(
         `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
