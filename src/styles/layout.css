@@ -196,3 +196,131 @@
   text-decoration: none;
   cursor: pointer;
 }
+
+/* ---------- Desktop: từ 900px trở lên ----------
+   Cùng component, chỉ đổi vị trí. Sidebar quay lại, tabbar ẩn, sheet
+   thành modal giữa màn hình. */
+@media (min-width: 900px) {
+  .sidebar {
+    display: flex;
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 240px;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding: var(--sp-4) var(--sp-3);
+    background: var(--brand-deep);
+    color: #fff;
+    z-index: 20;
+  }
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    font-size: var(--fs-5);
+    font-weight: 700;
+    color: #fff;
+    text-decoration: none;
+    padding: var(--sp-1) var(--sp-2);
+  }
+  .sidebar-logo-img {
+    height: 36px;
+    width: auto;
+    border-radius: 50%;
+  }
+  .sidebar-cta {
+    justify-content: flex-start;
+    background: #fff;
+    color: var(--brand);
+  }
+  .sidebar-cta:hover {
+    background: var(--brand-tint);
+  }
+  .sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+  }
+  .sidebar-sep {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    margin: var(--sp-2) var(--sp-1);
+  }
+  .sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    min-height: var(--tap);
+    padding: 0 var(--sp-3);
+    border: none;
+    border-left: 3px solid transparent;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: var(--fs-2);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+  }
+  .sidebar-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+  .sidebar-link.active {
+    background: rgba(255, 255, 255, 0.14);
+    border-left-color: #fff;
+    color: #fff;
+  }
+  .sidebar-foot {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+  .sidebar-user {
+    font-size: var(--fs-2);
+    color: rgba(255, 255, 255, 0.7);
+    padding: 0 var(--sp-3);
+  }
+
+  .tabbar {
+    display: none;
+  }
+  /* Nút "Nhập nhanh từ ảnh" / "Nhập kho" thôi neo vào header, trôi theo
+     dòng nội dung — desktop không có ô hành động cố định để neo vào. */
+  .header-action-float {
+    position: static;
+    height: var(--tap);
+    margin-bottom: var(--sp-3);
+  }
+
+  .screen-header,
+  .app-main,
+  .sticky-bar {
+    margin-left: 240px;
+  }
+  .app-main {
+    max-width: 960px;
+    padding: var(--sp-5);
+    padding-bottom: var(--sp-7);
+  }
+  .app-shell.has-bottom-bar .app-main {
+    padding-bottom: 96px;
+  }
+
+  /* Sheet thành modal giữa màn hình — cùng component, khác chỗ đứng. */
+  .sheet-overlay {
+    align-items: center;
+    justify-content: center;
+  }
+  .sheet {
+    width: min(560px, 92vw);
+    max-height: 80dvh;
+    border-radius: var(--radius);
+    padding-bottom: 0;
+  }
+  .sheet-grab {
+    display: none;
+  }
+}
