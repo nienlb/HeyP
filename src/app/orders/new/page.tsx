@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { AppShell } from "../../_components/app-shell";
 import { getSettings, listCustomers } from "@/db/queries";
@@ -12,11 +11,12 @@ export default async function NewOrderPage() {
   ]);
 
   return (
-    <AppShell username={session.username}>
-        <div className="crumbs">
-          <Link href="/orders">← Danh sách đơn</Link>
-        </div>
-        <h1>Tạo đơn nhanh</h1>
+    <AppShell
+      username={session.username}
+      title="Đơn mới"
+      backHref="/orders"
+      bottomBar={<></>}
+    >
         <NewOrderForm
           customers={customers.map((c) => ({
             id: c.id,

@@ -1,0 +1,55 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--fs-3);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* Chặn kéo ngang cả trang; nội dung rộng tự cuộn trong khung của nó. */
+  overflow-x: hidden;
+}
+
+a {
+  color: var(--brand);
+}
+
+/* Mọi ô nhập PHẢI ≥16px — dưới ngưỡng này Safari iOS tự phóng to trang
+   mỗi lần chạm vào ô. Đây là luật gốc, đừng ghi đè ở bất cứ đâu. */
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  font-size: var(--fs-3);
+}
+
+/* Số tiền: luôn tabular để cột số thẳng hàng khi đọc lướt. */
+.num,
+.money {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Ký hiệu tiền mờ hơn chữ số một bậc. */
+.cur {
+  color: var(--text-subtle);
+  font-size: 0.85em;
+  margin-left: 0.15em;
+}
+
+h1 {
+  font-size: var(--fs-5);
+  margin: 0 0 var(--sp-4);
+}
+h2 {
+  font-size: var(--fs-4);
+  margin: 0 0 var(--sp-3);
+}

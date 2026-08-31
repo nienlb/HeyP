@@ -1,7 +1,12 @@
+"use client";
+
+import { useState } from "react";
 import { formatVnd } from "@/lib/format";
 import { amountDue } from "@/lib/payments";
 import { PAYMENT_KIND_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/expenses";
 import { addPaymentAction, deletePaymentAction } from "../actions";
+import { ListRow } from "../../_components/list-row";
+import { Sheet } from "../../_components/sheet";
 
 export type PaymentRow = {
   id: number;
@@ -30,97 +35,88 @@ export function PaymentsBlock({
   shippingFee: number;
   suggestedFinal: number;
 }) {
+  const [addOpen, setAddOpen] = useState(false);
   const due = amountDue(
     quotedTotalVnd,
     shippingFee,
     rows.map((r) => ({ amountVnd: r.amountVnd })),
   );
+  const totalPaid = rows.reduce((s, r) => s + r.amountVnd, 0);
 
   return (
     <section className="card">
       <h2 className="card-title">Thu tiền</h2>
 
-      <div className="table-scroll">
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Ngày</th>
-              <th>Loại</th>
-              <th className="num">Số tiền</th>
-              <th>Hình thức</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="muted">
-                  Chưa có lần trả nào.
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id}>
-                  <td>{formatDate(r.paidAt)}</td>
-                  <td>{PAYMENT_KIND_LABELS[r.kind]}</td>
-                  <td className="num">{formatVnd(r.amountVnd)}</td>
-                  <td>{PAYMENT_METHOD_LABELS[r.method]}</td>
-                  <td>
-                    <form action={deletePaymentAction}>
-                      <input type="hidden" name="orderId" value={orderId} />
-                      <input type="hidden" name="paymentId" value={r.id} />
-                      <button type="submit" className="btn btn-sm btn-outline">
-                        Xoá
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th colSpan={2}>Đã thu</th>
-              <th className="num" colSpan={3}>
-                {formatVnd(rows.reduce((s, r) => s + r.amountVnd, 0))}
-              </th>
-            </tr>
-            <tr>
-              <th colSpan={2}>Còn phải thu</th>
-              <th
-                className={`num ${due < 0 ? "profit-negative" : ""}`}
-                colSpan={3}
-              >
-                {formatVnd(due)}
-              </th>
-            </tr>
-          </tfoot>
-        </table>
+      <div className="kv">
+        <span>Đã thu</span>
+        <span>{formatVnd(totalPaid)}</span>
       </div>
-
+      <div className="kv kv-total">
+        <span>Còn phải thu</span>
+        <strong className={due < 0 ? "profit-negative" : ""}>
+          {formatVnd(due)}
+        </strong>
+      </div>
       {due < 0 && (
         <p className="profit-negative">
           ⚠️ Đã thu vượt {formatVnd(-due)} — cần hoàn lại khách.
         </p>
       )}
 
-      <details style={{ marginTop: 12 }}>
-        <summary className="btn btn-outline btn-sm" style={{ display: "inline-block" }}>
-          + Ghi khoản thu
-        </summary>
-        <form action={addPaymentAction} className="stack-form" style={{ marginTop: 12 }}>
+      {rows.length === 0 ? (
+        <p className="muted">Chưa có lần trả nào.</p>
+      ) : (
+        rows.map((r) => (
+          <ListRow
+            key={r.id}
+            title={PAYMENT_KIND_LABELS[r.kind]}
+            meta={`${formatDate(r.paidAt)} · ${PAYMENT_METHOD_LABELS[r.method]}`}
+            amount={formatVnd(r.amountVnd)}
+            trailing={
+              <form action={deletePaymentAction}>
+                <input type="hidden" name="orderId" value={orderId} />
+                <input type="hidden" name="paymentId" value={r.id} />
+                <button type="submit" className="btn btn-sm btn-outline">
+                  Xoá
+                </button>
+              </form>
+            }
+          />
+        ))
+      )}
+
+      <button
+        type="button"
+        className="picker"
+        onClick={() => setAddOpen(true)}
+      >
+        + Ghi khoản thu
+      </button>
+
+      <Sheet
+        open={addOpen}
+        title="Ghi khoản thu"
+        onClose={() => setAddOpen(false)}
+        footer={
+          <button type="submit" form="add-payment-form" className="btn">
+            Lưu
+          </button>
+        }
+      >
+        <form action={addPaymentAction} id="add-payment-form">
           <input type="hidden" name="orderId" value={orderId} />
-          <label>
+          <label className="field">
             <span>Số tiền (₫)</span>
             <input
               type="number"
               name="amountVnd"
+              inputMode="numeric"
               step="1000"
               defaultValue={suggestedFinal > 0 ? suggestedFinal : undefined}
               required
             />
           </label>
-          <label>
+          <label className="field">
             <span>Ngày</span>
             <input
               type="date"
@@ -128,7 +124,7 @@ export function PaymentsBlock({
               defaultValue={new Date().toISOString().slice(0, 10)}
             />
           </label>
-          <label>
+          <label className="field">
             <span>Loại</span>
             <select name="kind" defaultValue="thu_not">
               <option value="coc">Cọc</option>
@@ -136,18 +132,15 @@ export function PaymentsBlock({
               <option value="hoan_tra">Hoàn trả khách</option>
             </select>
           </label>
-          <label>
+          <label className="field">
             <span>Hình thức</span>
             <select name="method" defaultValue="chuyen_khoan">
               <option value="chuyen_khoan">Chuyển khoản</option>
               <option value="tien_mat">Tiền mặt</option>
             </select>
           </label>
-          <button type="submit" className="btn">
-            Lưu
-          </button>
         </form>
-      </details>
+      </Sheet>
     </section>
   );
 }

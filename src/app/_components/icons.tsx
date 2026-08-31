@@ -16,7 +16,9 @@ export type IconName =
   | "reports"
   | "plus"
   | "menu"
-  | "logout";
+  | "logout"
+  | "chevron-left"
+  | "image";
 
 const PATHS: Record<IconName, ReactNode> = {
   dashboard: (
@@ -91,6 +93,14 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <path d="m16 17 5-5-5-5" />
       <path d="M21 12H9" />
+    </>
+  ),
+  "chevron-left": <path d="M15 18l-6-6 6-6" />,
+  image: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
     </>
   ),
 };

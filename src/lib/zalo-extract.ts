@@ -24,7 +24,9 @@ export type ZaloExtract = {
   notes: string | null;
 };
 
-export const ZALO_EXTRACT_PROMPT = `Bạn đọc ảnh chụp màn hình tin nhắn "chốt đơn" của shop HeyP (order giày/dép/sandal). Trích xuất dữ liệu đơn hàng ra JSON theo schema. CHỈ trả JSON, không giải thích.
+export const ZALO_EXTRACT_PROMPT = `Bạn đọc một ảnh liên quan tới việc chốt đơn hàng của shop HeyP (order giày/dép/sandal). Ảnh có thể là ảnh chụp màn hình tin nhắn chốt đơn (Zalo, Messenger, SMS, hoặc ứng dụng nhắn tin khác), hoặc ảnh chụp tay một tờ ghi chép/hoá đơn giấy. Trích xuất dữ liệu đơn hàng ra JSON theo schema. CHỈ trả JSON, không giải thích.
+
+Mẫu chốt đơn phổ biến nhất của shop có dạng như các quy tắc dưới đây mô tả — ảnh khớp mẫu này thì áp dụng đúng quy tắc. Ảnh không khớp mẫu (ghi chép tay, định dạng khác, ứng dụng nhắn tin khác) thì đọc đúng những gì nhìn thấy được theo ý nghĩa tương ứng của từng trường, đừng cố ép vào đúng khuôn cú pháp bên dưới.
 
 Quy tắc:
 - Dòng sau "Tên sp:" có dạng: "<tên> (như hình) - màu <màu> - size <số>". Với mỗi sản phẩm: name = tên (BỎ chữ "(như hình)"), color = màu, size = size. Có thể có nhiều sản phẩm.
@@ -99,8 +101,8 @@ export type ZaloBatchExtract = {
 export const ZALO_BATCH_PROMPT = `${ZALO_EXTRACT_PROMPT}
 
 Lần này bạn nhận NHIỀU ảnh cùng lúc, đánh số từ 0 theo thứ tự gửi. Với MỖI ảnh, xác định loại:
-- "chot_don": ảnh chụp tin nhắn chốt đơn (có "Tên sp:", "Total", "Đã cọc"). Áp dụng mọi quy tắc ở trên để trích dữ liệu đơn.
-- "thong_tin_khach": ảnh chứa tên / số điện thoại / địa chỉ giao hàng của khách. Có thể là ảnh chụp màn hình Zalo HOẶC ảnh chụp giấy/sổ bằng điện thoại (chữ viết tay cũng tính). Lấy customerName, customerPhone, customerAddress từ đây.
+- "chot_don": ảnh chứa thông tin chốt đơn — tin nhắn (Zalo/Messenger/SMS/ứng dụng khác) hoặc ghi chép/hoá đơn giấy có tên sản phẩm, tổng tiền, hoặc tiền cọc. Áp dụng các quy tắc ở trên để trích dữ liệu đơn; ảnh không khớp đúng mẫu HeyP thì đọc đúng những gì thấy được.
+- "thong_tin_khach": ảnh chứa tên / số điện thoại / địa chỉ giao hàng của khách. Có thể là ảnh chụp màn hình tin nhắn HOẶC ảnh chụp giấy/sổ bằng điện thoại (chữ viết tay cũng tính). Lấy customerName, customerPhone, customerAddress từ đây.
 - "san_pham": ảnh chụp sản phẩm (giày, dép, túi...). KHÔNG trích gì từ ảnh loại này.
 
 Trả về mảng "images" có ĐÚNG một phần tử cho mỗi ảnh nhận được, kèm index. Gộp toàn bộ dữ liệu đơn đọc được từ mọi ảnh vào một đối tượng "order" duy nhất.

@@ -11,7 +11,9 @@ export type PhotoLabel = (typeof PHOTO_LABELS)[number];
 
 export const PHOTO_LABEL_LABELS: Record<PhotoLabel, string> = {
   product: "Ảnh sản phẩm",
-  zalo_confirm: "Ảnh chốt đơn Zalo",
+  // Nguồn ảnh không nhất thiết là Zalo. Giá trị enum trong DB vẫn là
+  // 'zalo_confirm' — đổi nó cần migration và làm hỏng các dòng ảnh cũ.
+  zalo_confirm: "Ảnh chốt đơn",
   actual: "Ảnh thực tế",
   listing: "Ảnh đăng bán",
 };

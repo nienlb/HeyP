@@ -33,7 +33,12 @@ import type {
   PaymentKind,
   PaymentMethod,
 } from "@/lib/expenses";
-import { currentRate, replayLedger, walletValueVnd } from "@/lib/cny-wallet";
+import {
+  currentRate,
+  replayLedger,
+  shouldDeductCny,
+  walletValueVnd,
+} from "@/lib/cny-wallet";
 import type { PnlExpense, PnlOrder } from "@/lib/pnl";
 import { getAdapter } from "@/lib/tracking";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
@@ -94,7 +99,11 @@ export async function getSettings(): Promise<AppSettings> {
   return parseSettings(rows);
 }
 
-export async function saveSettings(next: AppSettings): Promise<void> {
+// Chỉ ghi hai tham số nghiệp vụ — KHÔNG nhận lastBackupAt, để màn Cài đặt
+// không thể vô tình xoá mốc sao lưu (xem touchBackupAt bên dưới).
+export async function saveSettings(
+  next: Omit<AppSettings, "lastBackupAt">,
+): Promise<void> {
   const Q = `INSERT INTO settings(key, value) VALUES(?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
   // Vẫn dựng chuỗi trong JS để giá trị lưu đúng dạng "4000" chứ không "4000.0".
@@ -103,6 +112,18 @@ export async function saveSettings(next: AppSettings): Promise<void> {
     SETTING_KEYS.defaultMarginVnd,
     String(next.defaultMarginVnd),
   ]);
+}
+
+/**
+ * Đánh dấu vừa tải một bản sao lưu. Tách khỏi saveSettings có chủ đích: màn
+ * Cài đặt gọi saveSettings và không được phép đụng vào mốc này.
+ */
+export async function touchBackupAt(): Promise<void> {
+  await raw.run(
+    `INSERT INTO settings(key, value) VALUES(?, ${NOW_EPOCH_SQL}::text)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [SETTING_KEYS.lastBackupAt],
+  );
 }
 
 /**
@@ -201,6 +222,19 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
     deposit: input.deposit,
   });
 
+  // Tính TRƯỚC khi mở transaction: listLedger() dùng `raw` toàn cục, gọi bên
+  // trong withTx thì câu đó chạy ngoài transaction, không rollback theo.
+  const willDeductCny = shouldDeductCny({
+    orderType: input.orderType,
+    toStatus: initialStatus(input.orderType),
+    goodsTotalCny,
+    // Đơn mới tinh, chưa thể có dòng sổ nào.
+    alreadyDeducted: false,
+  });
+  const cnyRateSnapshot = willDeductCny
+    ? Math.round(currentRate(await listLedger()))
+    : 0;
+
   return withTx(async (x) => {
     let customerId = input.customerId ?? null;
     if (!customerId && input.newCustomer) {
@@ -271,6 +305,16 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
        VALUES (?, NULL, ?, ?, 'Tạo đơn')`,
       [orderId, startStatus, input.changedBy ?? null],
     );
+
+    // Đơn nhap_kho sinh ra thẳng ở 'da_mua_tq' nên không bao giờ đi qua
+    // changeOrderStatus — không ghi ở đây thì ví ¥ không bao giờ bị trừ.
+    if (willDeductCny) {
+      await x.run(
+        `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
+         VALUES ('chi', ?, ?, ?, ?)`,
+        [-goodsTotalCny, cnyRateSnapshot, orderId, `Mua hàng đơn #${orderId}`],
+      );
+    }
 
     // Cọc đọc từ ảnh Zalo → một dòng thu tiền, không ghi thẳng vào
     // orders.deposit nữa (deposit là số dẫn xuất — spec v3-B mục 3).
@@ -834,8 +878,20 @@ export async function changeOrderStatus(
 
     // Đã mua hàng TQ → trừ ví ¥ và CHỐT CỨNG giá vốn tại thời điểm này.
     // Nạp ¥ đợt sau rẻ hơn không được làm đổi lãi/lỗ của đơn đã mua rồi.
-    // goods_total_cny = 0 (chưa nhập giá ¥) → không ghi dòng chi vô nghĩa.
-    if (to === "da_mua_tq" && order.goods_total_cny > 0) {
+    // Luật (kể cả chống trừ hai lần) nằm ở shouldDeductCny — đừng viết lại
+    // điều kiện ở đây, createOrder cũng gọi đúng hàm đó.
+    const deducted = await x.get<{ one: number }>(
+      "SELECT 1 AS one FROM cny_ledger WHERE order_id = ? AND kind = 'chi' LIMIT 1",
+      [id],
+    );
+    if (
+      shouldDeductCny({
+        orderType: order.order_type,
+        toStatus: to,
+        goodsTotalCny: order.goods_total_cny,
+        alreadyDeducted: Boolean(deducted),
+      })
+    ) {
       const rate = Math.round(currentRate(await listLedger()));
       await x.run(
         `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)

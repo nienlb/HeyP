@@ -1,0 +1,229 @@
+/* Luật riêng của từng màn. */
+
+/* ---------- Sheet chọn khách ---------- */
+.sheet-search {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  margin-bottom: var(--sp-3);
+}
+.sheet-list {
+  display: flex;
+  flex-direction: column;
+}
+.sheet-item-create {
+  color: var(--brand);
+  font-weight: 600;
+}
+.warn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning);
+  margin-right: var(--sp-2);
+  flex: none;
+}
+
+/* ---------- Màn tạo đơn kiểu POS ---------- */
+.sec-label {
+  font-size: var(--fs-2);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: var(--sp-5) 0 var(--sp-2);
+}
+.picker {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--sp-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--brand);
+  font-weight: 600;
+  cursor: pointer;
+}
+.item-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.item-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--sp-1) var(--sp-3);
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+.ic-name {
+  font-weight: 600;
+}
+.ic-meta {
+  grid-column: 1;
+  font-size: var(--fs-2);
+  color: var(--muted);
+}
+.ic-price {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  font-size: var(--fs-4);
+  font-weight: 600;
+}
+.more-fields > summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  color: var(--brand);
+  font-size: var(--fs-2);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.sb-money {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sb-money strong {
+  font-size: var(--fs-6);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.sb-label {
+  font-size: var(--fs-2);
+  color: var(--muted);
+}
+.neg {
+  color: var(--danger);
+}
+.sticky-bar .btn {
+  min-height: var(--tap);
+  padding: 0 var(--sp-5);
+}
+
+/* ---------- Nút "Nhập nhanh từ ảnh" neo vào ô hành động của header ---------- */
+.header-action-float {
+  position: fixed;
+  top: var(--sat);
+  right: var(--sp-2);
+  z-index: 26;
+  width: var(--tap);
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--brand);
+  cursor: pointer;
+}
+
+/* ---------- Danh sách đơn ---------- */
+.search input {
+  width: 100%;
+}
+.chip-bar {
+  position: sticky;
+  top: calc(var(--header-h) + var(--sat));
+  z-index: 20;
+  background: var(--bg);
+  margin: 0 calc(-1 * var(--sp-4));
+}
+.lr-id {
+  font-size: var(--fs-2);
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.gap-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning);
+  margin-left: var(--sp-2);
+}
+
+/* ---------- Chi tiết đơn: đầu màn cố định + tab ---------- */
+.order-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2) 0 var(--sp-3);
+}
+.oh-label {
+  font-size: var(--fs-2);
+  color: var(--muted);
+}
+.oh-amount {
+  font-size: var(--fs-6);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: left;
+}
+.oh-meta {
+  font-size: var(--fs-2);
+  color: var(--muted);
+}
+.tabs {
+  display: flex;
+  position: sticky;
+  top: calc(var(--header-h) + var(--sat));
+  z-index: 20;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  margin: var(--sp-3) calc(-1 * var(--sp-4)) var(--sp-4);
+  padding: 0 var(--sp-4);
+}
+.tab {
+  flex: 1;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.tab-on {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+.kv-copy {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  text-align: right;
+}
+
+/* ---------- Tổng quan: nhắc sao lưu + số lớn ---------- */
+.warn-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  background: var(--warning-tint);
+  border-color: var(--warning-border);
+  color: var(--text);
+  text-decoration: none;
+}
+.dash-big {
+  font-size: var(--fs-6);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand);
+}

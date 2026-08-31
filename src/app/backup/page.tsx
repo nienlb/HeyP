@@ -1,39 +1,48 @@
 import { requireAuth } from "@/lib/auth";
 import { AppShell } from "../_components/app-shell";
+import { getSettings } from "@/db/queries";
+import { formatDateTime } from "@/lib/format";
 
 export default async function BackupPage() {
-  const session = await requireAuth();
+  const [session, settings] = await Promise.all([requireAuth(), getSettings()]);
 
   return (
-    <AppShell username={session.username}>
-        <div className="page-head">
-          <h1>Sao lưu</h1>
-        </div>
+    <AppShell username={session.username} title="Sao lưu">
+      <div className="card">
+        <p>
+          Supabase gói miễn phí <strong>không có sao lưu tự động</strong> và
+          không có PITR. Bản sao duy nhất là bản gần nhất bạn tự tải.
+        </p>
+        <p className="muted">
+          Lần sao lưu gần nhất:{" "}
+          {settings.lastBackupAt
+            ? formatDateTime(settings.lastBackupAt)
+            : "chưa bao giờ"}
+        </p>
+        <a href="/api/backup" className="btn" download>
+          Tải bản sao lưu
+        </a>
+      </div>
 
-        <div className="card" style={{ marginBottom: 16 }}>
-          <p style={{ margin: 0, lineHeight: 1.7 }}>
-            Dữ liệu nằm trên <strong>Supabase</strong>. Gói miễn phí{" "}
-            <strong>không có sao lưu tự động</strong>, nên hệ thống tự chạy{" "}
-            <code>pg_dump</code> mỗi ngày bằng GitHub Actions và giữ bản dump
-            trong phần Artifacts của lần chạy đó.
-          </p>
-          <p className="muted" style={{ marginBottom: 0 }}>
-            Xem và tải bản sao lưu: mở repo trên GitHub → tab{" "}
-            <strong>Actions</strong> → workflow <strong>db-backup</strong> → chọn
-            lần chạy → tải Artifact. Ảnh nằm ở Supabase Storage (bucket{" "}
-            <code>photos</code>), tải xuống từ dashboard Supabase khi cần.
-          </p>
-        </div>
+      <div className="card">
+        <p>
+          <strong>Ảnh không nằm trong file này.</strong> Ảnh ở Supabase Storage
+          (bucket <code>photos</code>) — tải từ dashboard Supabase khi cần.
+        </p>
+      </div>
 
-        <div className="card">
-          <p style={{ margin: 0, lineHeight: 1.7 }}>
-            <strong>Khôi phục</strong> (ghi đè dữ liệu hiện tại) chạy trong
-            terminal, sau khi đã tải file dump về:
-          </p>
-          <p className="muted" style={{ marginBottom: 0 }}>
-            <code>psql &quot;$DIRECT_URL&quot; -f duong-dan-file.sql</code>
-          </p>
-        </div>
+      <div className="card">
+        <p>
+          <strong>Khôi phục</strong> chạy trên máy tính, sau khi đã tải file về.
+          Lệnh này <strong>ghi đè toàn bộ dữ liệu hiện tại</strong>:
+        </p>
+        <p className="muted">
+          <code>
+            node --experimental-strip-types scripts/restore-from-json.ts
+            duong-dan-file.json --toi-chac-chan
+          </code>
+        </p>
+      </div>
     </AppShell>
   );
 }

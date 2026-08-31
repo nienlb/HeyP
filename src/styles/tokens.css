@@ -1,0 +1,66 @@
+/* Thang tỷ lệ và bảng màu HeyP v5 — mobile-first.
+   Thang chữ: cơ số 16px, tỷ lệ 1.2. Thang khoảng cách: lưới 4pt. */
+:root {
+  /* Thương hiệu — navy từ logo HeyP, màu nhận diện DUY NHẤT */
+  --brand: #0e5a87;
+  --brand-strong: #0a4468;
+  --brand-deep: #0a3d5c;
+  --brand-tint: #e8f1f7;
+  --brand-tint-2: #d3e5f1;
+  --on-brand: #ffffff;
+
+  /* Trung tính lạnh — thay nền giấy ấm của v2 */
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
+  --border: #e3e8ee;
+  --border-strong: #cfd7e0;
+  --text: #10161f;
+  --muted: #5b6673;
+  --text-subtle: #8b949f;
+
+  /* Ngữ nghĩa — giữ nguyên giá trị v2, trạng thái đơn đã neo vào */
+  --danger: #dc2a25;
+  --danger-tint: #fef2f2;
+  --danger-border: #fecdca;
+  --warning: #b7791f;
+  --warning-tint: #fff7e6;
+  --warning-border: #fedf89;
+  --success: #1f9d57;
+  --success-tint: #eaf7ef;
+  --success-border: #a6f4c5;
+
+  /* Thang chữ — sáu bậc, KHÔNG thêm bậc thứ bảy */
+  --fs-1: 11px; /* nhãn tab, badge */
+  --fs-2: 13px; /* chú thích, nhãn phụ */
+  --fs-3: 16px; /* thân chữ VÀ mọi ô nhập — dưới 16px là iOS tự zoom */
+  --fs-4: 19px; /* tiêu đề thẻ, số tiền trong dòng */
+  --fs-5: 23px; /* tiêu đề màn */
+  --fs-6: 28px; /* tổng tiền thanh đáy, số lớn Tổng quan */
+
+  /* Thang khoảng cách — lưới 4pt */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(16, 32, 43, 0.06);
+  --shadow-md: 0 6px 20px rgba(16, 32, 43, 0.1);
+  --shadow-lg: 0 -8px 32px rgba(16, 32, 43, 0.12);
+
+  /* Khung màn hình */
+  --header-h: 52px;
+  --tabbar-h: 56px;
+  --tap: 44px; /* vùng chạm tối thiểu theo Apple HIG */
+
+  /* Safe area — giá trị dự phòng 0px cho trình duyệt không hỗ trợ */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}

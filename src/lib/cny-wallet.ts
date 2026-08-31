@@ -10,6 +10,7 @@
  * Module thuần, không phụ thuộc DB.
  */
 import type { LedgerKind } from "./expenses";
+import type { OrderStatus, OrderType } from "./order-status";
 
 export type LedgerEntry = {
   kind: LedgerKind;
@@ -68,4 +69,31 @@ export function currentRate(entries: LedgerEntry[]): number {
 /** Giá trị ví quy ra VND (làm tròn về đồng). */
 export function walletValueVnd(state: WalletState): number {
   return Math.round(state.balance * state.avgCost);
+}
+
+export type CnyDeductInput = {
+  orderType: OrderType;
+  /** Trạng thái đơn VỪA đạt tới — dù do tạo mới hay do chuyển bước. */
+  toStatus: OrderStatus;
+  goodsTotalCny: number;
+  /** Đơn này đã có dòng 'chi' trong sổ ¥ chưa. */
+  alreadyDeducted: boolean;
+};
+
+/**
+ * Có ghi dòng 'chi' vào sổ ¥ cho đơn này không.
+ *
+ * Một nguồn chân lý duy nhất cho CẢ hai đường: đơn tạo thẳng ở 'da_mua_tq'
+ * (nhap_kho) và đơn chuyển bước tới 'da_mua_tq' (order_ho). Trước đây chỉ
+ * đường thứ hai trừ ví, nên nhập kho không bao giờ bị trừ; và đường thứ hai
+ * không kiểm trùng, nên 'sự cố rồi quay lại' trừ hai lần.
+ *
+ * `ban_tu_kho` bị chặn cứng: cột goods_total_cny của nó chứa VND
+ * (exchange_rate = 1), trừ ví theo số đó sẽ sai một trời một vực.
+ */
+export function shouldDeductCny(input: CnyDeductInput): boolean {
+  if (input.orderType === "ban_tu_kho") return false;
+  if (input.toStatus !== "da_mua_tq") return false;
+  if (!(input.goodsTotalCny > 0)) return false;
+  return !input.alreadyDeducted;
 }
