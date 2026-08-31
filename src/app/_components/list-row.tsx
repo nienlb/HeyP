@@ -37,9 +37,16 @@ export function ListRow({
       </Link>
     );
   }
-  return (
-    <button type="button" className="list-row" onClick={onClick}>
-      {inner}
-    </button>
-  );
+  if (onClick) {
+    return (
+      <button type="button" className="list-row" onClick={onClick}>
+        {inner}
+      </button>
+    );
+  }
+  // Không href, không onClick: dòng tĩnh, chỉ đọc. PHẢI là <div>, không
+  // <button> — `trailing` thường chứa một <form>/<button> riêng (vd nút
+  // Xoá), và HTML không cho phép <button> lồng <button>. Dùng <button> ở
+  // đây từng gây lỗi hydration thật khi PaymentsBlock lồng nút Xoá vào.
+  return <div className="list-row list-row-static">{inner}</div>;
 }

@@ -156,3 +156,57 @@
   background: var(--warning);
   margin-left: var(--sp-2);
 }
+
+/* ---------- Chi tiết đơn: đầu màn cố định + tab ---------- */
+.order-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2) 0 var(--sp-3);
+}
+.oh-label {
+  font-size: var(--fs-2);
+  color: var(--muted);
+}
+.oh-amount {
+  font-size: var(--fs-6);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: left;
+}
+.oh-meta {
+  font-size: var(--fs-2);
+  color: var(--muted);
+}
+.tabs {
+  display: flex;
+  position: sticky;
+  top: calc(var(--header-h) + var(--sat));
+  z-index: 20;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  margin: var(--sp-3) calc(-1 * var(--sp-4)) var(--sp-4);
+  padding: 0 var(--sp-4);
+}
+.tab {
+  flex: 1;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.tab-on {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+.kv-copy {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  text-align: right;
+}

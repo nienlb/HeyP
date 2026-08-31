@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
 import { AppShell } from "../../_components/app-shell";
 import { CopyButton } from "../../_components/copy-button";
+import { ListRow } from "../../_components/list-row";
 import { PhotoUpload } from "../../_components/photo-upload";
 import { PhotoGallery } from "../../_components/photo-gallery";
 import { lineExceptionAction } from "../actions";
@@ -14,7 +15,13 @@ import {
 } from "@/db/queries";
 import { PaymentsBlock } from "./payments-block";
 import { computeOrderMoney } from "@/lib/money";
-import { buildQuoteText, formatCny, formatDateTime, formatVnd } from "@/lib/format";
+import {
+  ageInDays,
+  buildQuoteText,
+  formatCny,
+  formatDateTime,
+  formatVnd,
+} from "@/lib/format";
 import {
   allowedNextStatuses,
   earliestOriginFor,
@@ -27,6 +34,9 @@ import {
 import { GAP_LABELS, orderGaps } from "@/lib/order-gaps";
 import { LinePricingTable } from "./line-pricing-table";
 import { OrderJourney } from "./order-journey";
+import { OrderTabs, type TabCode } from "./order-tabs";
+
+const TAB_CODES = ["tom_tat", "mon", "tien", "anh"] as const;
 
 /**
  * Mốc trên trục của LOẠI ĐƠN này để định vị bước hiện tại trên stepper. Đơn
@@ -53,9 +63,9 @@ export default async function OrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ err?: string }>;
+  searchParams: Promise<{ err?: string; tab?: string }>;
 }) {
-  const [session, { id }, { err }] = await Promise.all([
+  const [session, { id }, { err, tab: rawTab }] = await Promise.all([
     requireAuth(),
     params,
     searchParams,
@@ -125,56 +135,63 @@ export default async function OrderDetailPage({
     deposit: order.deposit,
   });
 
+  const tab: TabCode = (TAB_CODES as readonly string[]).includes(rawTab ?? "")
+    ? (rawTab as TabCode)
+    : "tom_tat";
+
   return (
     <AppShell
       username={session.username}
       title={`#${order.id}`}
       backHref="/orders"
     >
-        <div className="page-head">
-          <span className={`badge badge-type type-${order.orderType}`}>
-            {ORDER_TYPE_LABELS[order.orderType]}
-          </span>
-          <span className={`badge badge-status status-${order.status}`}>
-            {STATUS_LABELS[order.status]}
-          </span>
-        </div>
+      <section className="order-head">
+        <span className="oh-label">Còn phải thu</span>
+        <strong className="oh-amount num">{formatVnd(money.amountDue)}</strong>
+        <span className="oh-meta">
+          {ORDER_TYPE_LABELS[order.orderType]} ·{" "}
+          {ageInDays(order.statusChangedAt)} ngày
+        </span>
+      </section>
 
-        {err && <div className="error">{err}</div>}
+      {err && <div className="error">{err}</div>}
 
-        {gaps.length > 0 && (
-          <div className="gap-banner">
-            <div className="gap-chips">
-              {gaps.map((g) => (
-                <span key={g} className="gap-chip">
-                  {GAP_LABELS[g]}
-                </span>
-              ))}
+      {/* Hành trình đơn hàng: stepper + hành động chuyển trạng thái — hiện
+          ở mọi tab, luôn thấy được, không phải cuộn tới mới tìm ra. */}
+      <OrderJourney
+        orderId={order.id}
+        orderType={order.orderType}
+        status={order.status}
+        positionStatus={positionStatus}
+        nextStatuses={nextStatuses}
+      />
+
+      <OrderTabs orderId={order.id} active={tab} />
+
+      {tab === "tom_tat" && (
+        <>
+          {gaps.length > 0 && (
+            <div className="gap-banner">
+              <div className="gap-chips">
+                {gaps.map((g) => (
+                  <span key={g} className="gap-chip">
+                    {GAP_LABELS[g]}
+                  </span>
+                ))}
+              </div>
+              <p className="muted small" style={{ margin: "6px 0 0" }}>
+                Đơn vẫn chạy bình thường — các mục này chỉ để nhắc bổ sung.
+              </p>
             </div>
-            <p className="muted small" style={{ margin: "6px 0 0" }}>
-              Đơn vẫn chạy bình thường — các mục này chỉ để nhắc bổ sung.
-            </p>
-          </div>
-        )}
+          )}
 
-        {customer?.warningFlag && (
-          <div className="warn-flag">
-            ⚠️ Khách có cờ cảnh báo
-            {customer.warningReason ? `: ${customer.warningReason}` : ""}.
-          </div>
-        )}
+          {customer?.warningFlag && (
+            <div className="warn-flag">
+              ⚠️ Khách có cờ cảnh báo
+              {customer.warningReason ? `: ${customer.warningReason}` : ""}.
+            </div>
+          )}
 
-        {/* Hành trình đơn hàng: stepper + hành động chuyển trạng thái */}
-        <OrderJourney
-          orderId={order.id}
-          orderType={order.orderType}
-          status={order.status}
-          positionStatus={positionStatus}
-          nextStatuses={nextStatuses}
-        />
-
-        <div className="two-col">
-          {/* Khách + tiền */}
           <section className="card">
             <h2 className="card-title">Khách hàng</h2>
             <div className="kv">
@@ -188,19 +205,163 @@ export default async function OrderDetailPage({
             {customer?.phone && (
               <div className="kv">
                 <span>SĐT/Zalo</span>
-                <span>{customer.phone}</span>
+                <a href={`tel:${customer.phone.replace(/\s/g, "")}`}>
+                  {customer.phone}
+                </a>
               </div>
             )}
             {customer?.address && (
               <div className="kv">
                 <span>Địa chỉ</span>
-                <span>{customer.address}</span>
+                <span className="kv-copy">
+                  {customer.address}
+                  <CopyButton
+                    text={customer.address}
+                    label="Copy"
+                    className="btn btn-ghost btn-sm"
+                  />
+                </span>
               </div>
             )}
+          </section>
 
-            <h2 className="card-title" style={{ marginTop: 20 }}>
-              Khối tiền
+          {order.note && (
+            <section className="card">
+              <h2 className="card-title">Ghi chú</h2>
+              <p style={{ margin: 0 }}>{order.note}</p>
+            </section>
+          )}
+
+          <section className="card">
+            <h2 className="card-title">
+              Kiện vận chuyển ({orderPackages.length})
             </h2>
+            {orderPackages.length === 0 ? (
+              <p className="muted">
+                Chưa gắn kiện nào.{" "}
+                <Link href="/tracking">Thêm ở màn Tracking →</Link>
+              </p>
+            ) : (
+              <ul className="pkg-list-mini">
+                {orderPackages.map((p) => (
+                  <li key={p.id}>
+                    <strong>{p.trackingCode}</strong>
+                    {p.carrier ? ` · ${p.carrier}` : ""} —{" "}
+                    {p.trackingStatus ?? "chưa có trạng thái"}
+                    {p.needsManualCheck && " ⚠️"}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="card">
+            <h2 className="card-title">Lịch sử trạng thái</h2>
+            <ol className="timeline">
+              {history.map((h) => (
+                <li key={h.id}>
+                  <div className="tl-main">
+                    {h.fromStatus
+                      ? `${STATUS_LABELS[h.fromStatus]} → ${STATUS_LABELS[h.toStatus]}`
+                      : STATUS_LABELS[h.toStatus]}
+                  </div>
+                  <div className="tl-meta">
+                    {formatDateTime(h.changedAt)}
+                    {h.changedBy ? ` · ${h.changedBy}` : ""}
+                    {h.note ? ` · ${h.note}` : ""}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </>
+      )}
+
+      {tab === "mon" && (
+        <>
+          <section className="card">
+            <h2 className="card-title">Sản phẩm ({items.length})</h2>
+            {items.map((it) => {
+              const money2 = (n: number) =>
+                isStockSale ? formatVnd(n) : formatCny(n);
+              return (
+                <ListRow
+                  key={it.id}
+                  title={
+                    it.productUrl ? (
+                      <a href={it.productUrl} target="_blank" rel="noreferrer">
+                        {it.name}
+                      </a>
+                    ) : (
+                      it.name
+                    )
+                  }
+                  meta={`${it.attributes ?? "—"} · ×${it.quantity}`}
+                  amount={money2(it.quantity * it.unitPriceCny)}
+                  trailing={
+                    showLineActions ? (
+                      it.lineStatus === "supplier_defect" ? (
+                        <span className="badge status-su_co">Lỗi NCC</span>
+                      ) : it.lineStatus === "returned" ? (
+                        <span className="badge status-huy">Đã trả</span>
+                      ) : canDefect ? (
+                        <form action={lineExceptionAction}>
+                          <input type="hidden" name="orderId" value={order.id} />
+                          <input type="hidden" name="itemId" value={it.id} />
+                          <input type="hidden" name="kind" value="defect" />
+                          <button className="btn btn-warn btn-sm" type="submit">
+                            Lỗi NCC
+                          </button>
+                        </form>
+                      ) : canReturn ? (
+                        <form action={lineExceptionAction}>
+                          <input type="hidden" name="orderId" value={order.id} />
+                          <input type="hidden" name="itemId" value={it.id} />
+                          <input type="hidden" name="kind" value="return" />
+                          <button className="btn btn-warn btn-sm" type="submit">
+                            Đổi/trả
+                          </button>
+                        </form>
+                      ) : null
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+            {order.note && (
+              <p className="order-note">Ghi chú: {order.note}</p>
+            )}
+          </section>
+
+          {/* Bóc lớp giá theo món — chỉ đơn tính giá vốn bằng ¥. Giữ nguyên
+              dạng bảng (không rebuild thành sheet): các form sửa giá/lời
+              theo dòng ở đây đụng trực tiếp luật đã test trong
+              line-pricing.test.ts, rủi ro rebuild không đáng. */}
+          {!isStockSale && items.length > 0 && (
+            <LinePricingTable
+              orderId={order.id}
+              rows={items.map((it) => ({
+                id: it.id,
+                name: it.name,
+                attributes: it.attributes,
+                quantity: it.quantity,
+                unitPriceCny: it.unitPriceCny,
+                marginVnd: it.marginVnd,
+                costConfirmed: it.costConfirmed,
+              }))}
+              sellRate={sellRate}
+              quotedTotalVnd={order.quotedTotalVnd}
+              shippingFee={order.shippingFee}
+              shipStatus={order.shipStatus}
+            />
+          )}
+        </>
+      )}
+
+      {tab === "tien" && (
+        <>
+          <section className="card">
+            <h2 className="card-title">Khối tiền</h2>
             {isStockSale ? (
               <>
                 <div className="kv">
@@ -263,164 +424,17 @@ export default async function OrderDetailPage({
             )}
           </section>
 
-          {/* Timeline */}
-          <section className="card">
-            <h2 className="card-title">Lịch sử trạng thái</h2>
-            <ol className="timeline">
-              {history.map((h) => (
-                <li key={h.id}>
-                  <div className="tl-main">
-                    {h.fromStatus
-                      ? `${STATUS_LABELS[h.fromStatus]} → ${STATUS_LABELS[h.toStatus]}`
-                      : STATUS_LABELS[h.toStatus]}
-                  </div>
-                  <div className="tl-meta">
-                    {formatDateTime(h.changedAt)}
-                    {h.changedBy ? ` · ${h.changedBy}` : ""}
-                    {h.note ? ` · ${h.note}` : ""}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </section>
-        </div>
-
-        {/* Bóc lớp giá theo món — chỉ đơn tính giá vốn bằng ¥ */}
-        {!isStockSale && items.length > 0 && (
-          <LinePricingTable
+          <PaymentsBlock
             orderId={order.id}
-            rows={items.map((it) => ({
-              id: it.id,
-              name: it.name,
-              attributes: it.attributes,
-              quantity: it.quantity,
-              unitPriceCny: it.unitPriceCny,
-              marginVnd: it.marginVnd,
-              costConfirmed: it.costConfirmed,
-            }))}
-            sellRate={sellRate}
+            rows={payments}
             quotedTotalVnd={order.quotedTotalVnd}
             shippingFee={order.shippingFee}
-            shipStatus={order.shipStatus}
+            suggestedFinal={suggestedFinal}
           />
-        )}
+        </>
+      )}
 
-        <PaymentsBlock
-          orderId={order.id}
-          rows={payments}
-          quotedTotalVnd={order.quotedTotalVnd}
-          shippingFee={order.shippingFee}
-          suggestedFinal={suggestedFinal}
-        />
-
-        {/* Sản phẩm */}
-        <section className="card">
-          <h2 className="card-title">Sản phẩm ({items.length})</h2>
-          <div className="table-scroll">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Tên hàng</th>
-                  <th>Thuộc tính</th>
-                  <th className="num">SL</th>
-                  <th className="num">Đơn giá</th>
-                  <th className="num">Thành tiền</th>
-                  {showLineActions && <th></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it) => {
-                  const money2 = (n: number) =>
-                    isStockSale ? formatVnd(n) : formatCny(n);
-                  return (
-                    <tr
-                      key={it.id}
-                      className={
-                        it.lineStatus !== "normal" ? "line-removed" : undefined
-                      }
-                    >
-                      <td data-label="Tên hàng">
-                        {it.productUrl ? (
-                          <a
-                            href={it.productUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {it.name}
-                          </a>
-                        ) : (
-                          it.name
-                        )}
-                      </td>
-                      <td data-label="Thuộc tính">{it.attributes ?? "—"}</td>
-                      <td className="num" data-label="SL">
-                        {it.quantity}
-                      </td>
-                      <td className="num" data-label="Đơn giá">
-                        {money2(it.unitPriceCny)}
-                      </td>
-                      <td className="num" data-label="Thành tiền">
-                        {money2(it.quantity * it.unitPriceCny)}
-                      </td>
-                      {showLineActions && (
-                        <td data-label="">
-                          {it.lineStatus === "supplier_defect" ? (
-                            <span className="badge status-su_co">Lỗi NCC</span>
-                          ) : it.lineStatus === "returned" ? (
-                            <span className="badge status-huy">Đã trả</span>
-                          ) : canDefect ? (
-                            <form action={lineExceptionAction}>
-                              <input type="hidden" name="orderId" value={order.id} />
-                              <input type="hidden" name="itemId" value={it.id} />
-                              <input type="hidden" name="kind" value="defect" />
-                              <button className="btn btn-warn btn-sm" type="submit">
-                                Lỗi NCC
-                              </button>
-                            </form>
-                          ) : canReturn ? (
-                            <form action={lineExceptionAction}>
-                              <input type="hidden" name="orderId" value={order.id} />
-                              <input type="hidden" name="itemId" value={it.id} />
-                              <input type="hidden" name="kind" value="return" />
-                              <button className="btn btn-warn btn-sm" type="submit">
-                                Đổi/trả
-                              </button>
-                            </form>
-                          ) : null}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {order.note && <p className="order-note">Ghi chú: {order.note}</p>}
-        </section>
-
-        {/* Kiện vận chuyển */}
-        <section className="card">
-          <h2 className="card-title">Kiện vận chuyển ({orderPackages.length})</h2>
-          {orderPackages.length === 0 ? (
-            <p className="muted">
-              Chưa gắn kiện nào.{" "}
-              <Link href="/tracking">Thêm ở màn Tracking →</Link>
-            </p>
-          ) : (
-            <ul className="pkg-list-mini">
-              {orderPackages.map((p) => (
-                <li key={p.id}>
-                  <strong>{p.trackingCode}</strong>
-                  {p.carrier ? ` · ${p.carrier}` : ""} —{" "}
-                  {p.trackingStatus ?? "chưa có trạng thái"}
-                  {p.needsManualCheck && " ⚠️"}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* Ảnh đính kèm */}
+      {tab === "anh" && (
         <section className="card">
           <h2 className="card-title">Ảnh ({photos.length})</h2>
           <PhotoUpload orderId={order.id} defaultLabel="zalo_confirm" />
@@ -430,6 +444,7 @@ export default async function OrderDetailPage({
             />
           </div>
         </section>
+      )}
     </AppShell>
   );
 }

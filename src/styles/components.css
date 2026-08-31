@@ -55,6 +55,9 @@
   cursor: pointer;
   font-size: var(--fs-3);
 }
+.list-row-static {
+  cursor: default;
+}
 .lr-main {
   flex: 1;
   min-width: 0;
