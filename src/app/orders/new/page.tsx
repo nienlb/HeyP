@@ -11,7 +11,12 @@ export default async function NewOrderPage() {
   ]);
 
   return (
-    <AppShell username={session.username} title="Đơn mới" backHref="/orders">
+    <AppShell
+      username={session.username}
+      title="Đơn mới"
+      backHref="/orders"
+      bottomBar={<></>}
+    >
         <NewOrderForm
           customers={customers.map((c) => ({
             id: c.id,

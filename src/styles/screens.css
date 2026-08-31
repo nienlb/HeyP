@@ -26,3 +26,91 @@
   margin-right: var(--sp-2);
   flex: none;
 }
+
+/* ---------- Màn tạo đơn kiểu POS ---------- */
+.sec-label {
+  font-size: var(--fs-2);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: var(--sp-5) 0 var(--sp-2);
+}
+.picker {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--sp-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--brand);
+  font-weight: 600;
+  cursor: pointer;
+}
+.item-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.item-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--sp-1) var(--sp-3);
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+.ic-name {
+  font-weight: 600;
+}
+.ic-meta {
+  grid-column: 1;
+  font-size: var(--fs-2);
+  color: var(--muted);
+}
+.ic-price {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  font-size: var(--fs-4);
+  font-weight: 600;
+}
+.more-fields > summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  color: var(--brand);
+  font-size: var(--fs-2);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.sb-money {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sb-money strong {
+  font-size: var(--fs-6);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.sb-label {
+  font-size: var(--fs-2);
+  color: var(--muted);
+}
+.neg {
+  color: var(--danger);
+}
+.sticky-bar .btn {
+  min-height: var(--tap);
+  padding: 0 var(--sp-5);
+}

@@ -98,7 +98,9 @@ a {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
-  font-size: 15px;
+  /* PHẢI ≥16px — dưới ngưỡng này Safari iOS tự phóng to trang khi chạm vào
+     ô. Luật cứng áp cho MỌI ô nhập, kể cả màn chưa di trú sang hệ mới. */
+  font-size: var(--fs-3);
   background: var(--surface);
   color: var(--text);
 }
@@ -229,7 +231,7 @@ a {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 9px 12px;
-  font-size: 14px;
+  font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
   min-width: 240px;
   background: #fff;
 }
@@ -475,7 +477,7 @@ a {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
-  font-size: 15px;
+  font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
   background: #fff;
   color: var(--text);
   width: 100%;
@@ -486,66 +488,11 @@ a {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-.seg {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 14px;
-}
-.seg button {
-  border: none;
-  background: #fff;
-  padding: 8px 14px;
-  font-size: 14px;
-  cursor: pointer;
-  color: var(--muted);
-}
-.seg button.seg-on {
-  background: var(--brand);
-  color: #fff;
-}
-.seg button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 .money-preview {
   background: #f9fafb;
   border-radius: 8px;
   padding: 10px 12px;
   margin-top: 8px;
-}
-.items {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.item-row {
-  display: grid;
-  grid-template-columns: 1.4fr 1.4fr 1fr 60px 90px 34px;
-  gap: 8px;
-}
-.item-row input {
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 8px 10px;
-  font-size: 14px;
-  background: #fff;
-  color: var(--text);
-  min-width: 0;
-}
-.item-row .it-del {
-  border: 1px solid var(--border);
-  background: #fff;
-  border-radius: 7px;
-  cursor: pointer;
-  color: var(--muted);
-}
-.item-row .it-del:hover {
-  background: var(--danger-tint);
-  color: var(--danger);
-  border-color: var(--danger-border);
 }
 .form-actions {
   display: flex;
@@ -639,7 +586,7 @@ a {
   border: 1px solid var(--border);
   border-radius: 7px;
   padding: 8px 10px;
-  font-size: 14px;
+  font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
   background: #fff;
   color: var(--text);
   min-width: 0;
@@ -662,7 +609,7 @@ a {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
-  font-size: 14px;
+  font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
   background: #fff;
   color: var(--text);
 }
@@ -740,7 +687,7 @@ a {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 9px 11px;
-  font-size: 14px;
+  font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
   background: #fff;
   color: var(--text);
   width: 100%;
@@ -785,7 +732,7 @@ a {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 11px;
-  font-size: 14px;
+  font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
   background: #fff;
   color: var(--text);
 }
@@ -960,9 +907,6 @@ a {
   .two-col {
     grid-template-columns: 1fr;
   }
-  .item-row {
-    grid-template-columns: 1fr 1fr;
-  }
   .sell-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -1131,7 +1075,7 @@ input.cny-suggested {
   padding: 5px 6px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
-  font-size: 0.82rem;
+  font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
   font-family: inherit;
 }
 .photo-kind .btn {
