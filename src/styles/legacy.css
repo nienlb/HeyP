@@ -1087,31 +1087,6 @@ input.cny-suggested {
   padding-right: 34px;
 }
 
-/* Ví ¥ — gọn, số liệu sát lề phải trên cùng một dòng với tiêu đề. */
-.wallet-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.wallet-figures {
-  text-align: right;
-}
-.wallet-balance {
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--brand);
-  font-variant-numeric: tabular-nums;
-  line-height: 1.2;
-}
-.wallet-sub {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
 /* ===== Hành trình đơn hàng (order detail) ===== */
 .journey-alert {
   display: flex;
