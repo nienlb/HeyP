@@ -131,3 +131,28 @@
   color: var(--brand);
   cursor: pointer;
 }
+
+/* ---------- Danh sách đơn ---------- */
+.search input {
+  width: 100%;
+}
+.chip-bar {
+  position: sticky;
+  top: calc(var(--header-h) + var(--sat));
+  z-index: 20;
+  background: var(--bg);
+  margin: 0 calc(-1 * var(--sp-4));
+}
+.lr-id {
+  font-size: var(--fs-2);
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.gap-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning);
+  margin-left: var(--sp-2);
+}

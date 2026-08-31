@@ -350,22 +350,6 @@ a {
   min-width: 70px;
   text-align: right;
 }
-.attention-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.attention-item .order-row {
-  flex: 1;
-  border-color: var(--danger-border);
-  background: var(--danger-tint);
-}
-.attention-status {
-  font-size: 12px;
-  color: var(--muted);
-  min-width: 120px;
-}
-
 /* ---------- Cards & detail ---------- */
 .card-title {
   font-family: var(--font-display);

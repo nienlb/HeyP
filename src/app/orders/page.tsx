@@ -1,61 +1,45 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { AppShell } from "../_components/app-shell";
+import { ChipBar, Chip } from "../_components/chip";
+import { ListRow } from "../_components/list-row";
 import { listOrdersWithGaps, type OrderListRow } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import { GAP_CODES, GAP_LABELS, type GapCode } from "@/lib/order-gaps";
-import {
-  BRANCH_STATUSES,
-  MAIN_CHAIN,
-  ORDER_TYPE_LABELS,
-  STATUS_LABELS,
-  type OrderStatus,
-} from "@/lib/order-status";
-
-// Chỉ liệt kê mã còn dùng. Mã về hưu (RETIRED_STATUSES) không xuất hiện ở
-// đây — đơn mới không bao giờ được tạo ở những mã đó nữa.
-const DISPLAY_ORDER: OrderStatus[] = [
-  ...MAIN_CHAIN,
-  "ve_kho_vn",
-  ...BRANCH_STATUSES,
-];
+import { STATUS_LABELS } from "@/lib/order-status";
 
 type RowWithGaps = OrderListRow & { gaps: GapCode[] };
 
-function OrderRow({ o }: { o: RowWithGaps }) {
-  return (
-    <Link href={`/orders/${o.id}`} className="order-row">
-      <span className="order-id">#{o.id}</span>
-      <span className="order-customer">
-        {o.customerName}
-        {o.gaps.length > 0 && (
-          <span
-            className="gap-dot"
-            title={o.gaps.map((g) => GAP_LABELS[g]).join(" · ")}
-          />
-        )}
-      </span>
-      <span className={`badge badge-type type-${o.orderType}`}>
-        {ORDER_TYPE_LABELS[o.orderType]}
-      </span>
-      <span className="order-due">{formatVnd(o.amountDue)}</span>
-      <span className="order-age">
-        {o.status === "su_co"
-          ? "⚠️ Sự cố"
-          : o.isStale
-            ? `⏳ ${o.ageDays} ngày`
-            : `${o.ageDays}n`}
-      </span>
-    </Link>
-  );
+const FILTERS = [
+  { code: "chu_y", label: "Cần chú ý" },
+  { code: "", label: "Tất cả" },
+  { code: "dang_ve", label: "Đang về" },
+  { code: "da_giao", label: "Đã giao" },
+  { code: "chua_thu", label: "Chưa thu đủ" },
+] as const;
+
+function matchesFilter(r: RowWithGaps, code: string): boolean {
+  switch (code) {
+    case "chu_y":
+      return r.needsAttention;
+    case "dang_ve":
+      return r.status === "da_mua_tq";
+    case "da_giao":
+      return r.status === "da_giao_khach";
+    case "chua_thu":
+      // Đơn nhập kho không có khách — amountDue của nó không phải nợ của ai.
+      return r.amountDue > 0 && r.status !== "huy" && r.orderType !== "nhap_kho";
+    default:
+      return true;
+  }
 }
 
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; gap?: string }>;
+  searchParams: Promise<{ q?: string; gap?: string; f?: string }>;
 }) {
-  const [session, { q, gap }, all] = await Promise.all([
+  const [session, { q, gap, f: rawF }, all] = await Promise.all([
     requireAuth(),
     searchParams,
     listOrdersWithGaps(),
@@ -75,90 +59,103 @@ export default async function OrdersPage({
   const activeGap = (GAP_CODES as readonly string[]).includes(gap ?? "")
     ? (gap as GapCode)
     : null;
-  const rows = activeGap
+  const gapFiltered = activeGap
     ? searched.filter((r) => r.gaps.includes(activeGap))
     : searched;
 
-  const attention = rows
-    .filter((r) => r.needsAttention)
-    .sort((a, b) => {
-      // Sự cố lên trước, rồi tới đơn đứng lâu nhất.
-      if (a.status === "su_co" && b.status !== "su_co") return -1;
-      if (b.status === "su_co" && a.status !== "su_co") return 1;
-      return b.ageDays - a.ageDays;
-    });
-  const attentionIds = new Set(attention.map((r) => r.id));
-  const rest = rows.filter((r) => !attentionIds.has(r.id));
+  const attentionCount = gapFiltered.filter((r) => r.needsAttention).length;
+  // Mặc định mở ở "Cần chú ý" khi có đơn cần chú ý; không thì "Tất cả".
+  const f =
+    typeof rawF === "string" ? rawF : attentionCount > 0 ? "chu_y" : "";
 
-  const groups = DISPLAY_ORDER.map((status) => ({
-    status,
-    items: rest.filter((r) => r.status === status),
-  })).filter((g) => g.items.length > 0);
+  const rows = gapFiltered.filter((r) => matchesFilter(r, f)).sort((a, b) => {
+    // Sự cố lên trước, rồi tới đơn đứng lâu nhất.
+    if (a.status === "su_co" && b.status !== "su_co") return -1;
+    if (b.status === "su_co" && a.status !== "su_co") return 1;
+    return b.ageDays - a.ageDays;
+  });
+
+  const qs = (code: string) => {
+    const p = new URLSearchParams();
+    if (q) p.set("q", q);
+    if (activeGap) p.set("gap", activeGap);
+    // Chuỗi rỗng cũng phải ghi để phân biệt "chọn Tất cả" với "chưa chọn gì".
+    p.set("f", code);
+    return `/orders?${p.toString()}`;
+  };
 
   return (
     <AppShell username={session.username} title="Đơn hàng">
-        <form className="search" action="/orders" method="get">
-          <input
-            type="search"
-            name="q"
-            placeholder="Tìm tên khách / mã đơn…"
-            defaultValue={q ?? ""}
+      <form className="search" action="/orders" method="get">
+        <input
+          type="search"
+          name="q"
+          placeholder="Tìm tên khách / mã đơn…"
+          defaultValue={q ?? ""}
+          enterKeyHint="search"
+        />
+      </form>
+
+      <ChipBar>
+        {FILTERS.map((it) => (
+          <Chip
+            key={it.code}
+            href={qs(it.code)}
+            label={it.label}
+            active={f === it.code}
+            count={it.code === "chu_y" ? attentionCount : undefined}
           />
-        </form>
+        ))}
+      </ChipBar>
 
-        {activeGap && (
-          <div className="filter-bar">
-            <span className="gap-chip">Đang lọc: {GAP_LABELS[activeGap]}</span>
-            <Link href="/orders" className="btn btn-sm btn-outline">
-              Bỏ lọc
-            </Link>
-          </div>
-        )}
+      {activeGap && (
+        <div className="filter-bar">
+          <span className="gap-chip">Đang lọc: {GAP_LABELS[activeGap]}</span>
+          <Link href="/orders" className="btn btn-sm btn-outline">
+            Bỏ lọc
+          </Link>
+        </div>
+      )}
 
-        {rows.length === 0 ? (
-          <div className="card empty">
-            {q ? (
-              <p>Không tìm thấy đơn khớp «{q}».</p>
-            ) : (
-              <p>
-                Chưa có đơn nào.{" "}
-                <Link href="/orders/new">Tạo đơn đầu tiên →</Link>
-              </p>
-            )}
-          </div>
-        ) : (
-          <>
-            {attention.length > 0 && (
-              <section className="attention">
-                <h2>⚠️ Cần chú ý ({attention.length})</h2>
-                <div className="order-list">
-                  {attention.map((o) => (
-                    <div key={o.id} className="attention-item">
-                      <OrderRow o={o} />
-                      <span className="attention-status">
-                        {STATUS_LABELS[o.status]}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {groups.map((g) => (
-              <section key={g.status} className="status-group">
-                <h2>
-                  {STATUS_LABELS[g.status]}{" "}
-                  <span className="count">{g.items.length}</span>
-                </h2>
-                <div className="order-list">
-                  {g.items.map((o) => (
-                    <OrderRow key={o.id} o={o} />
-                  ))}
-                </div>
-              </section>
-            ))}
-          </>
-        )}
+      {rows.length === 0 ? (
+        <div className="card empty">
+          {q ? (
+            <p>Không tìm thấy đơn khớp «{q}».</p>
+          ) : (
+            <p>Không có đơn nào ở mục này.</p>
+          )}
+        </div>
+      ) : (
+        rows.map((o) => (
+          <ListRow
+            key={o.id}
+            href={`/orders/${o.id}`}
+            title={
+              <>
+                {o.customerName}
+                {o.gaps.length > 0 && (
+                  <span
+                    className="gap-dot"
+                    title={o.gaps.map((g) => GAP_LABELS[g]).join(" · ")}
+                  />
+                )}
+              </>
+            }
+            meta={
+              <>
+                {STATUS_LABELS[o.status]} ·{" "}
+                {o.status === "su_co"
+                  ? "⚠️ Sự cố"
+                  : o.isStale
+                    ? `⏳ ${o.ageDays} ngày`
+                    : `${o.ageDays}n`}
+              </>
+            }
+            amount={formatVnd(o.amountDue)}
+            trailing={<span className="lr-id">#{o.id}</span>}
+          />
+        ))
+      )}
     </AppShell>
   );
 }
