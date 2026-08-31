@@ -10,11 +10,7 @@ export default async function CustomersPage() {
   ]);
 
   return (
-    <AppShell username={session.username}>
-      <div className="page-head">
-        <h1>Khách hàng</h1>
-      </div>
-
+    <AppShell username={session.username} title="Khách hàng">
       {customers.length === 0 ? (
         <div className="card empty">
           <p>Chưa có khách nào. Khách sẽ được tạo khi lên đơn.</p>

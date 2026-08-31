@@ -13,16 +13,17 @@ export default async function TrackingPage() {
   const needAttention = pkgs.filter((p) => p.needsManualCheck);
 
   return (
-    <AppShell username={session.username}>
-        <div className="page-head">
-          <h1>Tracking</h1>
-          <form action={runSweepAction}>
-            <button className="btn btn-ghost btn-sm" type="submit">
-              Chạy tra tự động ngay
-            </button>
-          </form>
-        </div>
-
+    <AppShell
+      username={session.username}
+      title="Tracking"
+      action={
+        <form action={runSweepAction}>
+          <button className="btn btn-ghost btn-sm" type="submit">
+            Chạy tra tự động ngay
+          </button>
+        </form>
+      }
+    >
         {carriers.length === 0 && (
           <div className="warn-flag">
             Chưa cấu hình đơn vị vận chuyển nào để tra tự động — kiện chế độ “Tự

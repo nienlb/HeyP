@@ -29,11 +29,7 @@ export default async function InventoryPage() {
   })).filter((g) => g.items.length > 0);
 
   return (
-    <AppShell username={session.username}>
-        <div className="page-head">
-          <h1>Tồn kho</h1>
-        </div>
-
+    <AppShell username={session.username} title="Tồn kho">
         {inStock.length === 0 ? (
           <div className="card empty">
             <p>

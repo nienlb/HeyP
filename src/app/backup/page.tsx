@@ -5,11 +5,7 @@ export default async function BackupPage() {
   const session = await requireAuth();
 
   return (
-    <AppShell username={session.username}>
-        <div className="page-head">
-          <h1>Sao lưu</h1>
-        </div>
-
+    <AppShell username={session.username} title="Sao lưu">
         <div className="card" style={{ marginBottom: 16 }}>
           <p style={{ margin: 0, lineHeight: 1.7 }}>
             Dữ liệu nằm trên <strong>Supabase</strong>. Gói miễn phí{" "}

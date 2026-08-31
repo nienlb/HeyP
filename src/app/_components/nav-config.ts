@@ -2,16 +2,16 @@ import type { IconName } from "./icons";
 
 export type NavItem = { href: string; label: string; icon: IconName };
 
-/** Mục chính — hiện ở sidebar (desktop) và bottom tab (mobile). */
+/** Mục chính — sidebar (desktop) và ba ô đầu của tabbar (mobile). */
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Tổng quan", icon: "dashboard" },
-  { href: "/orders", label: "Đơn hàng", icon: "orders" },
-  { href: "/customers", label: "Khách hàng", icon: "customers" },
-  { href: "/inventory", label: "Tồn kho", icon: "inventory" },
+  { href: "/orders", label: "Đơn", icon: "orders" },
+  { href: "/inventory", label: "Kho", icon: "inventory" },
 ];
 
 /** Mục phụ — sidebar hiện thêm; mobile gom vào sheet "Thêm". */
 export const MORE_ITEMS: NavItem[] = [
+  { href: "/customers", label: "Khách hàng", icon: "customers" },
   { href: "/tracking", label: "Tracking", icon: "tracking" },
   { href: "/finance", label: "Tài chính", icon: "finance" },
   { href: "/reports", label: "Báo cáo", icon: "reports" },

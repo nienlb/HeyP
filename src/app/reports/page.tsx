@@ -44,11 +44,7 @@ export default async function ReportsPage({
   const nextYear = month === 12 ? year + 1 : year;
 
   return (
-    <AppShell username={session.username}>
-      <div className="page-head">
-        <h1>Báo cáo</h1>
-      </div>
-
+    <AppShell username={session.username} title="Báo cáo">
       <div className="filter-bar">
         <a
           className="btn btn-outline btn-sm"

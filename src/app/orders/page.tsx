@@ -96,18 +96,15 @@ export default async function OrdersPage({
   })).filter((g) => g.items.length > 0);
 
   return (
-    <AppShell username={session.username}>
-        <div className="page-head">
-          <h1>Đơn hàng</h1>
-          <form className="search" action="/orders" method="get">
-            <input
-              type="search"
-              name="q"
-              placeholder="Tìm tên khách / mã đơn…"
-              defaultValue={q ?? ""}
-            />
-          </form>
-        </div>
+    <AppShell username={session.username} title="Đơn hàng">
+        <form className="search" action="/orders" method="get">
+          <input
+            type="search"
+            name="q"
+            placeholder="Tìm tên khách / mã đơn…"
+            defaultValue={q ?? ""}
+          />
+        </form>
 
         {activeGap && (
           <div className="filter-bar">

@@ -15,11 +15,7 @@ export default async function SettingsPage({
   ]);
 
   return (
-    <AppShell username={session.username}>
-      <div className="page-head">
-        <h1>Cài đặt</h1>
-      </div>
-
+    <AppShell username={session.username} title="Cài đặt">
       {ok && <div className="ok-banner">✓ Đã lưu.</div>}
 
       <section className="card" style={{ maxWidth: 520 }}>

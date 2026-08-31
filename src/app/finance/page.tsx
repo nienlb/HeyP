@@ -34,11 +34,7 @@ export default async function FinancePage({
   ]);
 
   return (
-    <AppShell username={session.username}>
-      <div className="page-head">
-        <h1>Tài chính</h1>
-      </div>
-
+    <AppShell username={session.username} title="Tài chính">
       {err && <div className="error">{err}</div>}
 
       {/* Chi phí — dùng hàng ngày, ưu tiên lên trước */}

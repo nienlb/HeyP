@@ -126,18 +126,15 @@ export default async function OrderDetailPage({
   });
 
   return (
-    <AppShell username={session.username}>
-        <div className="crumbs">
-          <Link href="/orders">← Danh sách đơn</Link>
-        </div>
-
+    <AppShell
+      username={session.username}
+      title={`#${order.id}`}
+      backHref="/orders"
+    >
         <div className="page-head">
-          <h1>
-            Đơn #{order.id}{" "}
-            <span className={`badge badge-type type-${order.orderType}`}>
-              {ORDER_TYPE_LABELS[order.orderType]}
-            </span>
-          </h1>
+          <span className={`badge badge-type type-${order.orderType}`}>
+            {ORDER_TYPE_LABELS[order.orderType]}
+          </span>
           <span className={`badge badge-status status-${order.status}`}>
             {STATUS_LABELS[order.status]}
           </span>

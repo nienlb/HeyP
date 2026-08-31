@@ -47,11 +47,7 @@ export default async function HomePage() {
   })).filter((g) => g.count > 0);
 
   return (
-    <AppShell username={session.username}>
-      <div className="page-head">
-        <h1>Tổng quan</h1>
-      </div>
-
+    <AppShell username={session.username} title="Tổng quan">
       <div className="dash-grid">
         {/* Cần chú ý — chiếm cả hàng */}
         <section className="card dash-attention">

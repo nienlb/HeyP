@@ -6,65 +6,47 @@ import { logoutAction } from "../actions";
 import { NavLinks } from "./nav-links";
 import { NAV_ITEMS, MORE_ITEMS } from "./nav-config";
 import { Icon } from "./icons";
+import { Sheet } from "./sheet";
 
-export function MobileNav({
-  username,
-  logoUrl,
-}: {
-  username: string;
-  logoUrl: string | null;
-}) {
+export function MobileNav({ username }: { username: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <header className="mobile-top">
-        <Link href="/" className="mobile-brand">
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="HeyP" className="mobile-logo-img" />
-          ) : (
-            "HeyP"
-          )}
-        </Link>
-      </header>
-
       <nav className="tabbar">
-        <NavLinks items={NAV_ITEMS} variant="tab" />
-        <button
-          className="tab-link"
-          type="button"
-          onClick={() => setOpen(true)}
-        >
-          <Icon name="menu" size={22} /> <span>Thêm</span>
+        <NavLinks items={NAV_ITEMS.slice(0, 2)} variant="tab" />
+
+        {/* Ô giữa LUÔN là tạo đơn — không đổi nghĩa theo màn đang mở.
+            Nút nhập kho là nút riêng ở header màn Kho. */}
+        <Link href="/orders/new" className="tab-new" aria-label="Tạo đơn">
+          <Icon name="plus" size={26} />
+        </Link>
+
+        <NavLinks items={NAV_ITEMS.slice(2)} variant="tab" />
+        <button className="tab-link" type="button" onClick={() => setOpen(true)}>
+          <Icon name="menu" size={22} />
+          <span>Thêm</span>
         </button>
       </nav>
 
-      <Link href="/orders/new" className="fab" aria-label="Tạo đơn">
-        <Icon name="plus" size={26} />
-      </Link>
-
-      {open && (
-        <div className="sheet-overlay" onClick={() => setOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-user">{username}</div>
-            {MORE_ITEMS.map((it) => (
-              <Link
-                key={it.href}
-                href={it.href}
-                className="sheet-item"
-                onClick={() => setOpen(false)}
-              >
-                <Icon name={it.icon} size={20} /> {it.label}
-              </Link>
-            ))}
-            <form action={logoutAction}>
-              <button className="sheet-item" type="submit">
-                <Icon name="logout" size={20} /> Đăng xuất
-              </button>
-            </form>
-          </div>
+      <Sheet open={open} title={username} onClose={() => setOpen(false)}>
+        <div className="sheet-menu">
+          {MORE_ITEMS.map((it) => (
+            <Link
+              key={it.href}
+              href={it.href}
+              className="sheet-item"
+              onClick={() => setOpen(false)}
+            >
+              <Icon name={it.icon} size={20} /> {it.label}
+            </Link>
+          ))}
+          <form action={logoutAction}>
+            <button className="sheet-item" type="submit">
+              <Icon name="logout" size={20} /> Đăng xuất
+            </button>
+          </form>
         </div>
-      )}
+      </Sheet>
     </>
   );
 }
