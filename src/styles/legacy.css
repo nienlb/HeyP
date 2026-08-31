@@ -429,9 +429,11 @@ a {
 /* ---------- Table ---------- */
 .table-scroll {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .tbl {
   width: 100%;
+  min-width: max-content; /* chữ không bị co ép vỡ dòng — cuộn ngang thay vào đó */
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -815,61 +817,6 @@ a {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-/* ---------- Bảng → thẻ xếp dọc trên mobile ---------- */
-@media (max-width: 767px) {
-  .tbl thead {
-    display: none;
-  }
-  .tbl,
-  .tbl tbody,
-  .tbl tr,
-  .tbl td {
-    display: block;
-    width: 100%;
-  }
-  .tbl tr {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    margin-bottom: 10px;
-    padding: 4px 12px;
-    background: var(--surface);
-  }
-  .tbl tr:last-child {
-    margin-bottom: 0;
-  }
-  .tbl td {
-    border: none;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 8px 0;
-    text-align: right;
-    border-bottom: 1px dashed var(--border);
-  }
-  .tbl td:last-child {
-    border-bottom: none;
-  }
-  .tbl td::before {
-    content: attr(data-label);
-    color: var(--muted);
-    font-weight: 600;
-    text-align: left;
-    flex-shrink: 0;
-  }
-  .tbl td:not([data-label]),
-  .tbl td[data-label=""] {
-    justify-content: flex-end;
-  }
-  .tbl td:not([data-label])::before,
-  .tbl td[data-label=""]::before {
-    content: none;
-  }
-  .tbl .num {
-    text-align: right;
-  }
 }
 
 /* ---------- Responsive ---------- */
