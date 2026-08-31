@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getSession, requireAuth } from "@/lib/auth";
 import { saveSettings } from "@/db/queries";
+import { changeOwnPassword } from "@/db/users";
 import { SETTING_DEFAULTS } from "@/lib/settings";
 
 /** Bỏ dấu ngăn nghìn kiểu Việt ("170.000" → 170000). */
@@ -29,4 +30,25 @@ export async function saveSettingsAction(formData: FormData): Promise<void> {
 
   revalidatePath("/settings");
   redirect("/settings?ok=1");
+}
+
+// ---------- Đổi mật khẩu cá nhân (v6) ----------
+
+export type PasswordState = { error?: string; ok?: boolean };
+
+export async function changePasswordAction(
+  _prev: PasswordState,
+  formData: FormData,
+): Promise<PasswordState> {
+  const session = await requireAuth();
+
+  const current = String(formData.get("current") ?? "");
+  const next = String(formData.get("next") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+
+  if (next !== confirm) return { error: "Hai ô mật khẩu mới không khớp nhau." };
+
+  const result = await changeOwnPassword(session.id, current, next);
+  if (!result.ok) return { error: result.reason };
+  return { ok: true };
 }

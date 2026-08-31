@@ -4,16 +4,22 @@ import { useState } from "react";
 import Link from "next/link";
 import { logoutAction } from "../actions";
 import { NavLinks } from "./nav-links";
-import { NAV_ITEMS, MORE_ITEMS } from "./nav-config";
+import type { NavItem } from "./nav-config";
 import { Icon } from "./icons";
 import { Sheet } from "./sheet";
 
-export function MobileNav({ username }: { username: string }) {
+export function MobileNav({
+  username,
+  nav,
+}: {
+  username: string;
+  nav: { main: NavItem[]; more: NavItem[] };
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <nav className="tabbar">
-        <NavLinks items={NAV_ITEMS.slice(0, 2)} variant="tab" />
+        <NavLinks items={nav.main.slice(0, 2)} variant="tab" />
 
         {/* Ô giữa LUÔN là tạo đơn — không đổi nghĩa theo màn đang mở.
             Nút nhập kho là nút riêng ở header màn Kho. */}
@@ -21,7 +27,7 @@ export function MobileNav({ username }: { username: string }) {
           <Icon name="plus" size={26} />
         </Link>
 
-        <NavLinks items={NAV_ITEMS.slice(2)} variant="tab" />
+        <NavLinks items={nav.main.slice(2)} variant="tab" />
         <button className="tab-link" type="button" onClick={() => setOpen(true)}>
           <Icon name="menu" size={22} />
           <span>Thêm</span>
@@ -30,7 +36,7 @@ export function MobileNav({ username }: { username: string }) {
 
       <Sheet open={open} title={username} onClose={() => setOpen(false)}>
         <div className="sheet-menu">
-          {MORE_ITEMS.map((it) => (
+          {nav.more.map((it) => (
             <Link
               key={it.href}
               href={it.href}

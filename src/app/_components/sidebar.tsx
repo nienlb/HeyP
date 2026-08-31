@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { logoutAction } from "../actions";
 import { NavLinks } from "./nav-links";
-import { NAV_ITEMS, MORE_ITEMS } from "./nav-config";
+import type { NavItem } from "./nav-config";
 import { Icon } from "./icons";
 
 export function Sidebar({
   username,
   logoUrl,
+  nav,
 }: {
   username: string;
   logoUrl: string | null;
+  nav: { main: NavItem[]; more: NavItem[] };
 }) {
   return (
     <aside className="sidebar">
@@ -25,9 +27,9 @@ export function Sidebar({
         <Icon name="plus" size={18} /> Tạo đơn
       </Link>
       <nav className="sidebar-nav">
-        <NavLinks items={NAV_ITEMS} variant="sidebar" />
+        <NavLinks items={nav.main} variant="sidebar" />
         <div className="sidebar-sep" />
-        <NavLinks items={MORE_ITEMS} variant="sidebar" />
+        <NavLinks items={nav.more} variant="sidebar" />
       </nav>
       <div className="sidebar-foot">
         <span className="sidebar-user">{username}</span>

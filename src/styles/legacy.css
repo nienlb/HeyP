@@ -159,6 +159,17 @@ a {
 .btn-warn:hover {
   background: var(--danger-tint);
 }
+/* Nút phá huỷ (xoá đơn/khách/tài khoản) — đặc màu, khác .btn-warn viền nhạt.
+   Phải nằm ở legacy.css cùng chỗ với .btn: file này import CUỐI nên luật
+   .btn ở đây thắng mọi luật cùng độ đặc hiệu đặt ở components.css. */
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+  border-color: transparent;
+}
+.btn-danger:hover {
+  background: #b3211d;
+}
 
 .search input {
   border: 1px solid var(--border);

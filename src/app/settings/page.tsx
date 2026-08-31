@@ -2,6 +2,7 @@ import { requireAuth } from "@/lib/auth";
 import { AppShell } from "../_components/app-shell";
 import { getSettings } from "@/db/queries";
 import { saveSettingsAction } from "./actions";
+import { PasswordForm } from "./password-form";
 
 export default async function SettingsPage({
   searchParams,
@@ -53,6 +54,8 @@ export default async function SettingsPage({
           đơn cũ.
         </p>
       </section>
+
+      <PasswordForm />
     </AppShell>
   );
 }
