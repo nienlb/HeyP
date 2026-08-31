@@ -99,7 +99,11 @@ export async function getSettings(): Promise<AppSettings> {
   return parseSettings(rows);
 }
 
-export async function saveSettings(next: AppSettings): Promise<void> {
+// Chỉ ghi hai tham số nghiệp vụ — KHÔNG nhận lastBackupAt, để màn Cài đặt
+// không thể vô tình xoá mốc sao lưu (xem touchBackupAt bên dưới).
+export async function saveSettings(
+  next: Omit<AppSettings, "lastBackupAt">,
+): Promise<void> {
   const Q = `INSERT INTO settings(key, value) VALUES(?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
   // Vẫn dựng chuỗi trong JS để giá trị lưu đúng dạng "4000" chứ không "4000.0".
@@ -108,6 +112,18 @@ export async function saveSettings(next: AppSettings): Promise<void> {
     SETTING_KEYS.defaultMarginVnd,
     String(next.defaultMarginVnd),
   ]);
+}
+
+/**
+ * Đánh dấu vừa tải một bản sao lưu. Tách khỏi saveSettings có chủ đích: màn
+ * Cài đặt gọi saveSettings và không được phép đụng vào mốc này.
+ */
+export async function touchBackupAt(): Promise<void> {
+  await raw.run(
+    `INSERT INTO settings(key, value) VALUES(?, ${NOW_EPOCH_SQL}::text)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [SETTING_KEYS.lastBackupAt],
+  );
 }
 
 /**

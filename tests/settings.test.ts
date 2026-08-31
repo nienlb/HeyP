@@ -30,3 +30,23 @@ test("tỷ giá bán 0 hoặc âm là vô nghĩa → mặc định", () => {
   assert.equal(parseSettings([{ key: "sell_rate", value: "0" }]).sellRate, 4000);
   assert.equal(parseSettings([{ key: "sell_rate", value: "-5" }]).sellRate, 4000);
 });
+
+test("chưa từng sao lưu → lastBackupAt là null, KHÔNG phải 0", () => {
+  assert.equal(parseSettings([]).lastBackupAt, null);
+});
+
+test("đọc được mốc sao lưu gần nhất", () => {
+  const s = parseSettings([{ key: "last_backup_at", value: "1756600000" }]);
+  assert.equal(s.lastBackupAt, 1756600000);
+});
+
+test("giá trị rác ở mốc sao lưu → null, coi như chưa từng sao lưu", () => {
+  assert.equal(
+    parseSettings([{ key: "last_backup_at", value: "abc" }]).lastBackupAt,
+    null,
+  );
+  assert.equal(
+    parseSettings([{ key: "last_backup_at", value: "" }]).lastBackupAt,
+    null,
+  );
+});
