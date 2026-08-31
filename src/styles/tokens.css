@@ -63,12 +63,4 @@
   /* Safe area — giá trị dự phòng 0px cho trình duyệt không hỗ trợ */
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
-
-  /* ---- Alias TẠM cho CSS cũ. Task 18 xoá cả khối này. ---- */
-  --card: var(--surface);
-  --brand-hover: var(--brand-strong);
-  --accent: var(--brand);
-  --accent-strong: var(--brand-strong);
-  --accent-tint: var(--brand-tint);
-  --font-display: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }

@@ -1,6 +1,14 @@
-/* Thứ tự import có ý nghĩa: legacy.css đứng CUỐI để luật cũ vẫn thắng ở
-   những màn chưa di trú sang hệ mới. Mỗi task màn xoá dần phần legacy của
-   nó; Task 18 xoá hẳn file legacy.css. */
+/* Thứ tự import có ý nghĩa: legacy.css đứng CUỐI.
+ *
+ * legacy.css KHÔNG phải code chờ xoá — nó là CSS gốc (v2) cho các phần tử
+ * chi tiết dữ liệu chưa thuộc phạm vi viết lại của v5: badge, timeline,
+ * hành trình đơn, sổ chi phí, gallery ảnh, tracking, form field cũ. Bản
+ * thiết kế mobile-first chỉ tách primitive mới (Sheet/ListRow/Chip/
+ * StickyBar) cho phần điều hướng, nhập liệu, và danh sách — không đặt mục
+ * tiêu viết lại toàn bộ 1700 dòng CSS. Đứng cuối để nó vẫn thắng ở những
+ * chỗ file mới không định nghĩa cùng luật; token/luật hard constraint
+ * (16px input, 44px nút, safe-area) đã được vá thẳng vào legacy.css khi
+ * phát hiện xung đột, không dựa vào thứ tự import để giải quyết. */
 @import "../styles/tokens.css";
 @import "../styles/base.css";
 @import "../styles/layout.css";
