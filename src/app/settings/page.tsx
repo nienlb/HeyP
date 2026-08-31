@@ -21,8 +21,8 @@ export default async function SettingsPage({
       <section className="card" style={{ maxWidth: 520 }}>
         <h2 className="card-title">Công thức giá</h2>
 
-        <form action={saveSettingsAction} className="stack-form">
-          <label>
+        <form action={saveSettingsAction}>
+          <label className="field">
             <span>Tỷ giá bán (₫ cho 1¥)</span>
             <input
               type="text"
@@ -32,7 +32,7 @@ export default async function SettingsPage({
             />
           </label>
 
-          <label>
+          <label className="field">
             <span>Lời mặc định mỗi món (₫)</span>
             <input
               type="text"
