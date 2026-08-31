@@ -114,3 +114,20 @@
   min-height: var(--tap);
   padding: 0 var(--sp-5);
 }
+
+/* ---------- Nút "Nhập nhanh từ ảnh" neo vào ô hành động của header ---------- */
+.header-action-float {
+  position: fixed;
+  top: var(--sat);
+  right: var(--sp-2);
+  z-index: 26;
+  width: var(--tap);
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--brand);
+  cursor: pointer;
+}

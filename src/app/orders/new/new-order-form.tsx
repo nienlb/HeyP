@@ -18,8 +18,10 @@ import {
 import { itemAttributes, type ZaloExtract } from "@/lib/zalo-extract";
 import { mergeItems, mergeMoneyFields } from "@/lib/zalo-merge";
 import { StickyBar } from "../../_components/sticky-bar";
+import { Icon } from "../../_components/icons";
 import { CustomerSheet, type CustomerPick } from "./customer-sheet";
 import { ItemSheet } from "./item-sheet";
+import { QuickImportSheet } from "./quick-import-sheet";
 import { emptyItem, type CustomerOption, type ItemRow } from "./types";
 
 export function NewOrderForm({
@@ -57,6 +59,7 @@ export function NewOrderForm({
   const [itemSheet, setItemSheet] = useState<
     { open: false } | { open: true; index: number | null }
   >({ open: false });
+  const [importOpen, setImportOpen] = useState(false);
 
   const num = (s: string) => Number(String(s).replace(/[.,\s]/g, "")) || 0;
 
@@ -207,6 +210,18 @@ export function NewOrderForm({
 
   return (
     <>
+      {/* Nút này thuộc về header nhưng state của nó nằm trong form (Client
+          Component), còn header do AppShell (Server Component) dựng — neo
+          bằng position: fixed vào đúng ô hành động thay vì kéo state lên. */}
+      <button
+        type="button"
+        className="header-action-float"
+        onClick={() => setImportOpen(true)}
+        aria-label="Nhập nhanh từ ảnh"
+      >
+        <Icon name="image" size={22} />
+      </button>
+
       <form action={formAction} className="order-form" id="new-order-form">
         {state.error && <div className="error">{state.error}</div>}
 
@@ -396,6 +411,13 @@ export function NewOrderForm({
         onDelete={
           itemSheet.open && itemSheet.index !== null ? deleteItem : undefined
         }
+      />
+
+      <QuickImportSheet
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        quotedTotal={quotedTotal}
+        onExtract={onExtract}
       />
     </>
   );

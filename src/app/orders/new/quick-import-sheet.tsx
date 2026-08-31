@@ -9,22 +9,34 @@ import {
   type ZaloExtract,
 } from "@/lib/zalo-extract";
 import { mergeMoneyFields } from "@/lib/zalo-merge";
+import { Sheet } from "../../_components/sheet";
 import type { DroppedPhoto, PendingPhoto } from "./types";
 
 /**
- * Đọc ảnh chốt đơn Zalo bằng AI (Gemini). Ảnh mới thả nằm ở `pendingPhotos`
- * — CHƯA gửi lên server, chỉ gửi khi bấm "Đọc ảnh". Xem ghi chú dài ở
- * src/lib/zalo-merge.ts vì sao không còn gộp nhiều ảnh vào một lần gọi.
+ * Nhập nhanh từ ảnh — đọc ảnh chốt đơn bằng AI (Gemini). Nguồn ảnh không
+ * nhất thiết là Zalo (có thể Messenger, tin nhắn, ảnh chụp ghi chép tay);
+ * tên file/biến nội bộ giữ "zalo" vì đó vẫn là nguồn phổ biến nhất và đổi
+ * chỉ tạo nhiễu diff. Ảnh mới thả nằm ở `pendingPhotos` — CHƯA gửi lên
+ * server, chỉ gửi khi bấm "Đọc ảnh". Xem ghi chú dài ở src/lib/zalo-merge.ts
+ * vì sao không còn gộp nhiều ảnh vào một lần gọi.
  *
  * Toàn bộ state ở đây (ảnh, trạng thái đang đọc, lỗi, thông báo, id ảnh chốt
  * đơn) chỉ phục vụ chính khối này — form cha không bao giờ đọc lại. Kết quả
  * đọc được báo ra ngoài qua `onExtract`, cha tự áp vào state tiền/khách/sản
  * phẩm của mình để giữ một nguồn chân lý duy nhất.
+ *
+ * Sheet này nằm NGOÀI DOM của <form> (như CustomerSheet/ItemSheet), nên
+ * hidden input `zaloPhotoId` dùng `form="new-order-form"` để vẫn được gửi
+ * kèm khi submit — giống cách nút Lưu đơn trong StickyBar đã làm.
  */
-export function ZaloDropzone({
+export function QuickImportSheet({
+  open,
+  onClose,
   quotedTotal,
   onExtract,
 }: {
+  open: boolean;
+  onClose: () => void;
   quotedTotal: string;
   onExtract: (
     order: ZaloExtract,
@@ -40,10 +52,14 @@ export function ZaloDropzone({
   const [zaloInfo, setZaloInfo] = useState<string | null>(null);
   const [zaloDragOver, setZaloDragOver] = useState(false);
 
-  /** Nghe sự kiện dán ảnh (Ctrl+V) — chỉ xử lý khi focus không ở trong input/textarea/contenteditable. */
+  /**
+   * Nghe sự kiện dán ảnh (Ctrl+V) — chỉ khi sheet đang mở, và chỉ xử lý khi
+   * focus không ở trong input/textarea/contenteditable. Gắn listener toàn
+   * cục kể cả lúc sheet đóng sẽ cướp thao tác dán ở ô nhập khác của form.
+   */
   useEffect(() => {
+    if (!open) return;
     function handlePaste(e: ClipboardEvent) {
-      // Bỏ qua nếu focus ở trong input/textarea hoặc element chỉnh sửa được
       const activeElement = document.activeElement;
       if (
         activeElement instanceof HTMLInputElement ||
@@ -53,7 +69,6 @@ export function ZaloDropzone({
         return;
       }
 
-      // Lấy ảnh từ clipboard
       const files = e.clipboardData?.files;
       if (!files || files.length === 0) return;
 
@@ -66,7 +81,7 @@ export function ZaloDropzone({
 
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
-  }, []);
+  }, [open]);
 
   /** Thêm ảnh mới thả/chọn vào hàng chờ — CHƯA gửi đi đâu, chỉ xem trước. */
   function addPending(fileList: FileList | File[]) {
@@ -191,127 +206,130 @@ export function ZaloDropzone({
   const quoteImages = photos.filter((p) => p.kind === "chot_don");
 
   return (
-    <>
-      <input type="hidden" name="zaloPhotoId" value={zaloPhotoId} />
-      {/* Đọc ảnh chốt đơn Zalo bằng AI */}
-      <section className="card zalo-reader">
-        <h2 className="card-title">🤖 Đọc ảnh chốt đơn Zalo</h2>
-        <p className="muted" style={{ margin: "0 0 10px" }}>
-          Thả <strong>tất cả ảnh đang có</strong> — ảnh chốt đơn, ảnh thông tin
-          khách, ảnh sản phẩm. Thả xong xem lại, gỡ ảnh nào thả nhầm, rồi bấm{" "}
-          <strong>Đọc ảnh</strong> khi sẵn sàng — thiếu gì bổ sung sau cũng được.
-        </p>
-        <div
-          className={`dropzone${zaloDragOver ? " over" : ""}`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setZaloDragOver(true);
-          }}
-          onDragLeave={() => setZaloDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setZaloDragOver(false);
-            if (e.dataTransfer.files.length) addPending(e.dataTransfer.files);
-          }}
-          onClick={() => zaloInputRef.current?.click()}
-          role="button"
-          tabIndex={0}
-        >
-          Kéo-thả ảnh vào đây, dán bằng Ctrl+V, hoặc bấm để chọn (chọn được nhiều ảnh)
-        </div>
-        <input
-          ref={zaloInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          hidden
-          onChange={(e) => {
-            if (e.target.files?.length) addPending(e.target.files);
-            e.target.value = "";
-          }}
-        />
+    <Sheet open={open} title="Nhập nhanh từ ảnh" onClose={onClose}>
+      {/* Nằm ngoài DOM của <form> — liên kết bằng thuộc tính form. */}
+      <input
+        type="hidden"
+        name="zaloPhotoId"
+        value={zaloPhotoId}
+        form="new-order-form"
+      />
 
-        {pendingPhotos.length > 0 && (
-          <>
-            <div className="photo-kinds" style={{ marginTop: 12 }}>
-              {pendingPhotos.map((p) => (
-                <div key={p.url} className="photo-kind photo-kind-pending">
-                  <img src={p.url} alt="" />
-                  <span className="photo-pending-name" title={p.file.name}>
-                    {p.file.name}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-outline"
-                    onClick={() => removePending(p.url)}
-                    disabled={zaloBusy}
-                  >
-                    Xoá
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="btn"
-              style={{ marginTop: 12 }}
-              onClick={readPendingFiles}
-              disabled={zaloBusy}
-            >
-              {zaloBusy
-                ? "🤖 Đang đọc…"
-                : photos.length > 0
-                  ? `Đọc lại (${pendingPhotos.length} ảnh)`
-                  : `Đọc ${pendingPhotos.length} ảnh`}
-            </button>
-          </>
-        )}
+      <p className="muted" style={{ margin: "0 0 10px" }}>
+        Thả <strong>tất cả ảnh đang có</strong> — ảnh chốt đơn, ảnh thông tin
+        khách, ảnh sản phẩm. Thả xong xem lại, gỡ ảnh nào thả nhầm, rồi bấm{" "}
+        <strong>Đọc ảnh</strong> khi sẵn sàng — thiếu gì bổ sung sau cũng được.
+      </p>
+      <div
+        className={`dropzone${zaloDragOver ? " over" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setZaloDragOver(true);
+        }}
+        onDragLeave={() => setZaloDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setZaloDragOver(false);
+          if (e.dataTransfer.files.length) addPending(e.dataTransfer.files);
+        }}
+        onClick={() => zaloInputRef.current?.click()}
+        role="button"
+        tabIndex={0}
+      >
+        Kéo-thả ảnh vào đây, dán bằng Ctrl+V, hoặc bấm để chọn (chọn được nhiều ảnh)
+      </div>
+      <input
+        ref={zaloInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files?.length) addPending(e.target.files);
+          e.target.value = "";
+        }}
+      />
 
-        {zaloError && (
-          <div className="error" style={{ marginTop: 10 }}>
-            {zaloError}
-          </div>
-        )}
-        {zaloInfo && (
-          <div className="zalo-info" style={{ marginTop: 10 }}>
-            {zaloBusy ? zaloInfo : `✓ ${zaloInfo} — kiểm tra lại bên dưới nhé.`}
-          </div>
-        )}
-
-        {quoteImages.length > 1 && (
-          <div className="warn-flag" style={{ marginTop: 10 }}>
-            ⚠️ Phát hiện {quoteImages.length} ảnh chốt đơn. Nếu đây là các đơn
-            riêng, hãy tạo đơn này trước rồi thả ảnh còn lại vào đơn mới.
-          </div>
-        )}
-
-        {photos.length > 0 && (
+      {pendingPhotos.length > 0 && (
+        <>
           <div className="photo-kinds" style={{ marginTop: 12 }}>
-            {photos.map((ph) => (
-              <div key={ph.id} className="photo-kind">
-                <img src={`/api/photo/${ph.id}`} alt="" />
-                <select
-                  value={ph.kind}
-                  onChange={(e) => setPhotoKind(ph.id, e.target.value as ImageKind)}
-                >
-                  {IMAGE_KINDS.map((k) => (
-                    <option key={k} value={k}>
-                      {IMAGE_KIND_LABELS[k]}
-                    </option>
-                  ))}
-                </select>
+            {pendingPhotos.map((p) => (
+              <div key={p.url} className="photo-kind photo-kind-pending">
+                <img src={p.url} alt="" />
+                <span className="photo-pending-name" title={p.file.name}>
+                  {p.file.name}
+                </span>
                 <button
                   type="button"
                   className="btn btn-sm btn-outline"
-                  onClick={() => removePhoto(ph.id)}
+                  onClick={() => removePending(p.url)}
+                  disabled={zaloBusy}
                 >
                   Xoá
                 </button>
               </div>
             ))}
           </div>
-        )}
-      </section>
-    </>
+          <button
+            type="button"
+            className="btn"
+            style={{ marginTop: 12 }}
+            onClick={readPendingFiles}
+            disabled={zaloBusy}
+          >
+            {zaloBusy
+              ? "🤖 Đang đọc…"
+              : photos.length > 0
+                ? `Đọc lại (${pendingPhotos.length} ảnh)`
+                : `Đọc ${pendingPhotos.length} ảnh`}
+          </button>
+        </>
+      )}
+
+      {zaloError && (
+        <div className="error" style={{ marginTop: 10 }}>
+          {zaloError}
+        </div>
+      )}
+      {zaloInfo && (
+        <div className="zalo-info" style={{ marginTop: 10 }}>
+          {zaloBusy ? zaloInfo : `✓ ${zaloInfo} — kiểm tra lại bên dưới nhé.`}
+        </div>
+      )}
+
+      {quoteImages.length > 1 && (
+        <div className="warn-flag" style={{ marginTop: 10 }}>
+          ⚠️ Phát hiện {quoteImages.length} ảnh chốt đơn. Nếu đây là các đơn
+          riêng, hãy tạo đơn này trước rồi thả ảnh còn lại vào đơn mới.
+        </div>
+      )}
+
+      {photos.length > 0 && (
+        <div className="photo-kinds" style={{ marginTop: 12 }}>
+          {photos.map((ph) => (
+            <div key={ph.id} className="photo-kind">
+              <img src={`/api/photo/${ph.id}`} alt="" />
+              <select
+                value={ph.kind}
+                onChange={(e) => setPhotoKind(ph.id, e.target.value as ImageKind)}
+              >
+                {IMAGE_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {IMAGE_KIND_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                onClick={() => removePhoto(ph.id)}
+              >
+                Xoá
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Sheet>
   );
 }
