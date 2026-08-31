@@ -21,16 +21,18 @@ const BACKUP_WARN_DAYS = 14;
 
 export default async function HomePage() {
   const now = new Date();
-  const [session, orders, statusCounts, customers, wallet, pnlData, settings] =
+  const [session, orders, customers, wallet, pnlData, settings] =
     await Promise.all([
       requireAuth(),
       listOrdersWithGaps(),
-      countOrdersByStatus(),
       listCustomersWithTotals(),
       getWallet(),
       getPnlData(now.getFullYear(), now.getMonth() + 1),
       getSettings(),
     ]);
+  // Đếm từ danh sách đã fetch — không quét lại bảng orders lần hai (xem
+  // ghi chú tại định nghĩa countOrdersByStatus trong queries.ts).
+  const statusCounts = countOrdersByStatus(orders);
   const pnl = computePnl(pnlData);
 
   const daysSinceBackup =
