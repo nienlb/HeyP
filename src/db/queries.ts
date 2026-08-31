@@ -1403,10 +1403,18 @@ export async function listOrders(query?: string): Promise<OrderListRow[]> {
 }
 
 /** Đếm số đơn ở mỗi trạng thái (chỉ trạng thái có đơn), theo thứ tự vòng đời. */
-export async function countOrdersByStatus(): Promise<
-  { status: OrderStatus; count: number }[]
-> {
-  const rows = await listOrders();
+/**
+ * Đếm đơn theo trạng thái từ danh sách ĐÃ có sẵn — không tự query.
+ *
+ * Trước đây hàm này tự gọi `listOrders()` riêng, nghĩa là Tổng quan (gọi
+ * cả `listOrdersWithGaps()` lẫn hàm này trong cùng Promise.all) quét bảng
+ * `orders` HAI LẦN mỗi lần tải trang. Ở vùng có độ trễ DB cao (Vercel
+ * sin1 ↔ Supabase Sydney), mỗi câu quét thừa là một cơ hội để request vượt
+ * ngưỡng 10s của Vercel Hobby. Nhận `rows` từ nơi gọi đã fetch sẵn.
+ */
+export function countOrdersByStatus(
+  rows: { status: OrderStatus }[],
+): { status: OrderStatus; count: number }[] {
   const order = [...MAIN_CHAIN, ...BRANCH_STATUSES];
   const counts = new Map<string, number>();
   for (const r of rows) counts.set(r.status, (counts.get(r.status) ?? 0) + 1);
