@@ -1,1 +1,28 @@
 /* Luật riêng của từng màn. */
+
+/* ---------- Sheet chọn khách ---------- */
+.sheet-search {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  margin-bottom: var(--sp-3);
+}
+.sheet-list {
+  display: flex;
+  flex-direction: column;
+}
+.sheet-item-create {
+  color: var(--brand);
+  font-weight: 600;
+}
+.warn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning);
+  margin-right: var(--sp-2);
+  flex: none;
+}
