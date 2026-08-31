@@ -1408,9 +1408,8 @@ export async function listOrders(query?: string): Promise<OrderListRow[]> {
  *
  * Trước đây hàm này tự gọi `listOrders()` riêng, nghĩa là Tổng quan (gọi
  * cả `listOrdersWithGaps()` lẫn hàm này trong cùng Promise.all) quét bảng
- * `orders` HAI LẦN mỗi lần tải trang. Ở vùng có độ trễ DB cao (Vercel
- * sin1 ↔ Supabase Sydney), mỗi câu quét thừa là một cơ hội để request vượt
- * ngưỡng 10s của Vercel Hobby. Nhận `rows` từ nơi gọi đã fetch sẵn.
+ * `orders` HAI LẦN mỗi lần tải trang — thừa một câu query không cần thiết
+ * mỗi lần tải trang. Nhận `rows` từ nơi gọi đã fetch sẵn.
  */
 export function countOrdersByStatus(
   rows: { status: OrderStatus }[],

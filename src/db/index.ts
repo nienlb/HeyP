@@ -21,6 +21,18 @@ export const sqlClient = postgres(config.databaseUrl, {
   prepare: false,
   max: 5,
   idle_timeout: 20,
+  // statement_timeout: khi Vercel giết function ở mốc 300s (đã tái hiện thật
+  // trên production — log "Vercel Runtime Timeout Error"), connection
+  // Postgres đang dở dang bị bỏ lại "mồ côi" (active, chờ ClientRead) vì
+  // phía Node không còn sống để đóng nó. Connection mồ côi chiếm slot trong
+  // pool dùng chung của Supavisor, khiến request sau xếp hàng rồi cũng bị
+  // Postgres tự hủy vì statement_timeout mặc định (lỗi 57014) — vòng lặp
+  // càng lúc càng nặng, đúng hiện tượng "lúc được lúc không". Ép timeout
+  // ngắn hơn nhiều 300s để câu SQL tự chết ở Postgres trước khi Vercel kịp
+  // giết cả tiến trình, không để lại connection mồ côi.
+  connection: {
+    statement_timeout: 15000,
+  },
 });
 
 export const db = drizzle(sqlClient, { schema });
