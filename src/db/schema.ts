@@ -18,6 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { ORDER_STATUSES, ORDER_TYPES } from "@/lib/order-status";
 import { PHOTO_LABELS } from "@/lib/photos";
+import { USER_ROLES } from "@/lib/roles";
 import {
   EXPENSE_CATEGORIES,
   LEDGER_KINDS,
@@ -232,4 +233,15 @@ export const payments = pgTable("payments", {
     .notNull()
     .default("chuyen_khoan"),
   note: text("note"),
+});
+
+// 11) Người dùng (v6) — thay APP_ACCOUNTS trong .env. Mật khẩu lưu dạng
+// chuỗi scrypt tự mô tả tham số (src/lib/password.ts), không bao giờ plaintext.
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role", { enum: USER_ROLES }).notNull().default("nhan_vien"),
+  active: boolean("active").notNull().default(true),
+  createdAt: createdAt(),
 });
