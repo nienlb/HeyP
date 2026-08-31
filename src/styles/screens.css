@@ -210,3 +210,20 @@
   gap: var(--sp-2);
   text-align: right;
 }
+
+/* ---------- Tổng quan: nhắc sao lưu + số lớn ---------- */
+.warn-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  background: var(--warning-tint);
+  border-color: var(--warning-border);
+  color: var(--text);
+  text-decoration: none;
+}
+.dash-big {
+  font-size: var(--fs-6);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand);
+}
