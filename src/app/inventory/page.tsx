@@ -1,6 +1,6 @@
 import { requireAuth } from "@/lib/auth";
 import { AppShell } from "../_components/app-shell";
-import { listInventory, listPhotosForInventory } from "@/db/queries";
+import { getSettings, listInventory, listPhotosForInventory } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import {
   INVENTORY_SOURCES,
@@ -10,9 +10,14 @@ import {
 import { PhotoUpload } from "../_components/photo-upload";
 import { PhotoGallery } from "../_components/photo-gallery";
 import { SellForm } from "./sell-form";
+import { StockInSheet } from "./stock-in-sheet";
 
 export default async function InventoryPage() {
-  const [session, rows] = await Promise.all([requireAuth(), listInventory()]);
+  const [session, rows, settings] = await Promise.all([
+    requireAuth(),
+    listInventory(),
+    getSettings(),
+  ]);
   const inStock = rows.filter((r) => r.quantity > 0);
   const photosByItem = new Map(
     await Promise.all(
@@ -30,11 +35,13 @@ export default async function InventoryPage() {
 
   return (
     <AppShell username={session.username} title="Tồn kho">
+        <StockInSheet defaultRate={settings.sellRate} />
+
         {inStock.length === 0 ? (
           <div className="card empty">
             <p>
-              Kho trống. Hàng vào kho từ đơn Nhập kho (về VN), hàng lỗi NCC, đổi
-              trả, hoặc khách bom.
+              Kho trống. Bấm + ở góc trên để nhập hàng, hoặc hàng vào kho từ
+              đơn Nhập kho, hàng lỗi NCC, đổi trả, hoặc khách bom.
             </p>
           </div>
         ) : (
