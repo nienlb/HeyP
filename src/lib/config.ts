@@ -24,6 +24,10 @@ function parseAccounts(raw: string | undefined): Account[] {
 
 export const config = {
   databaseUrl: process.env.DATABASE_URL ?? "",
+  /**
+   * Hạt giống cho lần nạp tài khoản ĐẦU TIÊN (src/db/users.ts). Sau khi bảng
+   * `users` có dữ liệu, biến này không còn tác dụng lên đường đăng nhập.
+   */
   accounts: parseAccounts(process.env.APP_ACCOUNTS),
   sessionSecret: process.env.SESSION_SECRET ?? "insecure-dev-secret-doi-di",
   staleOrderDays: Number(process.env.STALE_ORDER_DAYS ?? "7"),
@@ -35,11 +39,3 @@ export const config = {
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   storageBucket: process.env.SUPABASE_STORAGE_BUCKET ?? "photos",
 } as const;
-
-export function findAccount(username: string, password: string): Account | null {
-  return (
-    config.accounts.find(
-      (a) => a.username === username && a.password === password,
-    ) ?? null
-  );
-}
