@@ -1,1 +1,116 @@
 /* Khung app: header dính đỉnh, tabbar, sheet, thanh dính đáy. */
+
+/* ---------- Sheet ---------- */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 22, 31, 0.45);
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+}
+.sheet {
+  width: 100%;
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  box-shadow: var(--shadow-lg);
+  padding-bottom: var(--sab);
+  transition: transform 0.2s ease;
+}
+.sheet-grab {
+  padding: var(--sp-3) 0 var(--sp-2);
+  display: flex;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none; /* để pointermove không bị trình duyệt nuốt mất */
+}
+.sheet-grab-bar {
+  width: 40px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-4) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+.sheet-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: var(--fs-4);
+}
+.sheet-close {
+  width: var(--tap);
+  height: var(--tap);
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-4);
+}
+.sheet-foot {
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- Thanh dính đáy ---------- */
+.sticky-bar {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + var(--sab));
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- Header màn ---------- */
+.screen-header {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: calc(var(--header-h) + var(--sat));
+  padding: var(--sat) var(--sp-2) 0;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.sh-back,
+.sh-action > * {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand);
+}
+.sh-back-spacer {
+  width: var(--tap);
+}
+.sh-title {
+  flex: 1;
+  text-align: center;
+  font-size: var(--fs-3);
+  font-weight: 600;
+}
+.sh-action {
+  min-width: var(--tap);
+  display: flex;
+  justify-content: flex-end;
+}
