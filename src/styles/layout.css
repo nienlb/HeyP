@@ -202,6 +202,36 @@
   cursor: pointer;
 }
 
+/* ---------- Ba lớp bố cục dùng chung (v8-A) ----------
+   Mobile-first: mặc định là bố cục điện thoại, desktop ghi đè trong media
+   query bên dưới.
+   Xem docs/superpowers/specs/2026-09-01-heyp-v8a-giao-dien-desktop-design.md */
+
+/* Hàng ô số liệu. Điện thoại 2×2, desktop 4 cột. */
+.kpi-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+/* Lưới thẻ tự xếp. auto-fit lo luôn phần điện thoại — không cần media query. */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--sp-3);
+  align-items: start;
+}
+
+/* Nội dung + cột phải. Điện thoại: một cột, cột phải rơi xuống dưới —
+   hoặc giữ nguyên thanh dính đáy, xem .with-rail .sticky-bar. */
+.with-rail {
+  display: block;
+}
+.rail-detail {
+  display: none;
+}
+
 /* ---------- Desktop: từ 900px trở lên ----------
    Cùng component, chỉ đổi vị trí. Sidebar quay lại, tabbar ẩn, sheet
    thành modal giữa màn hình. */
@@ -306,12 +336,54 @@
     margin-left: 240px;
   }
   .app-main {
-    max-width: 960px;
+    max-width: 1280px;
     padding: var(--sp-5);
     padding-bottom: var(--sp-7);
   }
   .app-shell.has-bottom-bar .app-main {
-    padding-bottom: 96px;
+    /* Desktop không có thanh dính đáy nữa — khối tiền thành cột phải
+       (xem .with-rail bên dưới), nên không cần chừa 96px ở đáy. */
+    padding-bottom: var(--sp-7);
+  }
+
+  .kpi-row {
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--sp-4);
+  }
+
+  .with-rail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: var(--sp-5);
+    align-items: start;
+  }
+  .rail {
+    position: sticky;
+    top: calc(var(--header-h) + var(--sat) + var(--sp-4));
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .rail-detail {
+    display: block;
+  }
+
+  /* Khối tiền thôi làm thanh dính đáy, thành thẻ trong cột phải.
+     PHẢI gỡ margin-left: 240px ở luật gộp phía trên — nếu không cột bị
+     đẩy lệch đúng 240px. Độ đặc hiệu .with-rail .sticky-bar (0,2,0) thắng
+     .sticky-bar (0,1,0) nên không phụ thuộc thứ tự. */
+  .with-rail .sticky-bar {
+    position: static;
+    inset: auto;
+    margin-left: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+    background: var(--surface);
+    backdrop-filter: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
 
   /* Sheet thành modal giữa màn hình — cùng component, khác chỗ đứng. */
