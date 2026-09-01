@@ -245,3 +245,17 @@ export const users = pgTable("users", {
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
 });
+
+export const DELETION_ENTITIES = ["order", "customer"] as const;
+
+// 12) Nhật ký xoá (v6). Xoá là không hoàn tác được — bảng này là thứ duy
+// nhất trả lời được "đơn đó đi đâu mất rồi?" khi có nhiều người dùng.
+export const deletionLog = pgTable("deletion_log", {
+  id: serial("id").primaryKey(),
+  entity: text("entity", { enum: DELETION_ENTITIES }).notNull(),
+  entityId: integer("entity_id").notNull(),
+  deletedBy: text("deleted_by").notNull(),
+  deletedAt: epochSeconds("deleted_at").notNull().default(NOW_EPOCH),
+  /** JSON: bản chụp dữ liệu trước khi xoá. */
+  snapshot: text("snapshot").notNull(),
+});
