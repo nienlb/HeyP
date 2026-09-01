@@ -1371,6 +1371,8 @@ export type OrderListRow = {
   customerName: string;
   amountDue: number;
   deposit: number;
+  /** Cần cho cảnh báo "sẽ trừ …¥" của thao tác hàng loạt (v6). */
+  goodsTotalCny: number;
   createdAt: Date;
   statusChangedAt: Date;
   ageDays: number;
@@ -1386,6 +1388,7 @@ export async function listOrders(query?: string): Promise<OrderListRow[]> {
       status: orders.status,
       amountDue: orders.amountDue,
       deposit: orders.deposit,
+      goodsTotalCny: orders.goodsTotalCny,
       createdAt: orders.createdAt,
       statusChangedAt: orders.statusChangedAt,
       customerName: customers.name,
