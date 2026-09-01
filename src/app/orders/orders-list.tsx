@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ListRow } from "../_components/list-row";
+import { DataTable, type Column } from "../_components/data-table";
 import { StickyBar } from "../_components/sticky-bar";
 import { BULK_LIMIT, planBulkAdvance, type BulkOrder } from "@/lib/bulk-status";
+import type { SortDir } from "@/lib/table-sort";
 import { bulkAdvanceAction } from "./actions";
 import { BulkSheet } from "./bulk-sheet";
 
@@ -12,13 +13,43 @@ import { BulkSheet } from "./bulk-sheet";
 export type OrderRowItem = BulkOrder & {
   href: string;
   customerName: string;
-  metaText: string;
+  statusText: string;
+  /** null = đơn bình thường, không hiện badge. */
+  ageBadgeText: string | null;
+  itemCount: number;
+  deposit: number;
+  depositText: string;
+  amountDue: number;
   amountText: string;
   hasGap: boolean;
   gapTitle: string;
 };
 
-export function OrdersList({ rows }: { rows: OrderRowItem[] }) {
+export function OrdersList({
+  rows,
+  sort,
+  dir,
+  sortBase,
+}: {
+  rows: OrderRowItem[];
+  sort?: string;
+  dir: SortDir;
+  /**
+   * Chuỗi query đã có sẵn (q/gap/f), KHÔNG gồm sort và dir.
+   *
+   * Phải là chuỗi chứ không phải hàm: component này là "use client", mà
+   * React không cho truyền hàm từ server component sang client component
+   * (không tuần tự hoá được). Vì vậy server gửi phần nền, client tự ghép.
+   */
+  sortBase: string;
+}) {
+  const sortHref = (key: string, nextDir: SortDir) => {
+    const p = new URLSearchParams(sortBase);
+    p.set("sort", key);
+    p.set("dir", nextDir);
+    return `/orders?${p.toString()}`;
+  };
+
   const router = useRouter();
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<number>>(new Set());
@@ -61,6 +92,84 @@ export function OrdersList({ rows }: { rows: OrderRowItem[] }) {
     router.refresh();
   }
 
+  // COLUMNS nằm TRONG component vì ô "Khách hàng" phải đọc `selecting`
+  // và `picked` của chế độ chọn hàng loạt.
+  const COLUMNS: Column<OrderRowItem>[] = [
+    {
+      key: "id",
+      header: "#",
+      width: "56px",
+      cell: (r) => <span className="lr-id">{r.id}</span>,
+    },
+    {
+      key: "khach",
+      header: "Khách hàng",
+      width: "minmax(0, 2fr)",
+      mobile: true,
+      sortBy: (r) => r.customerName,
+      cell: (r) => (
+        <>
+          <span className="dt-name">
+            {selecting && (
+              <span
+                className={`pick-box${picked.has(r.id) ? " on" : ""}`}
+                aria-hidden="true"
+              >
+                {picked.has(r.id) ? "✓" : ""}
+              </span>
+            )}
+            {r.customerName}
+            {r.hasGap && <span className="gap-dot" title={r.gapTitle} />}
+          </span>
+          {/* Chỉ hiện trên điện thoại — desktop có cột riêng cho từng mẩu.
+              Mã đơn phải nằm ở đây: trước v8-A nó là `trailing` của ListRow
+              nên vẫn thấy được trên điện thoại, bỏ đi là mất thông tin. */}
+          <span className="dt-sub">
+            #{r.id} · {r.statusText}
+            {r.ageBadgeText ? ` · ${r.ageBadgeText}` : ""} · {r.itemCount} món
+          </span>
+        </>
+      ),
+    },
+    {
+      key: "trang_thai",
+      header: "Trạng thái",
+      width: "160px",
+      sortBy: (r) => r.statusText,
+      cell: (r) => (
+        <>
+          {r.statusText}
+          {r.ageBadgeText && <span className="dt-badge">{r.ageBadgeText}</span>}
+        </>
+      ),
+    },
+    {
+      key: "mon",
+      header: "Món",
+      width: "64px",
+      align: "right",
+      sortBy: (r) => r.itemCount,
+      cell: (r) => r.itemCount,
+    },
+    {
+      key: "da_thu",
+      header: "Đã thu",
+      width: "120px",
+      align: "right",
+      sortBy: (r) => r.deposit,
+      cell: (r) => r.depositText,
+    },
+    {
+      key: "con_thu",
+      header: "Còn thu",
+      width: "130px",
+      align: "right",
+      mobile: true,
+      sortBy: (r) => r.amountDue,
+      cell: (r) => r.amountText,
+    },
+  ];
+
   return (
     <>
       <button
@@ -73,30 +182,16 @@ export function OrdersList({ rows }: { rows: OrderRowItem[] }) {
 
       {notice && <div className="ok-banner">{notice}</div>}
 
-      {rows.map((r) => (
-        <ListRow
-          key={r.id}
-          href={selecting ? undefined : r.href}
-          onClick={selecting ? () => toggle(r.id) : undefined}
-          title={
-            <>
-              {selecting && (
-                <span
-                  className={`pick-box${picked.has(r.id) ? " on" : ""}`}
-                  aria-hidden="true"
-                >
-                  {picked.has(r.id) ? "✓" : ""}
-                </span>
-              )}
-              {r.customerName}
-              {r.hasGap && <span className="gap-dot" title={r.gapTitle} />}
-            </>
-          }
-          meta={r.metaText}
-          amount={r.amountText}
-          trailing={<span className="lr-id">#{r.id}</span>}
-        />
-      ))}
+      <DataTable
+        columns={COLUMNS}
+        rows={rows}
+        rowKey={(r) => r.id}
+        rowHref={(r) => (selecting ? undefined : r.href)}
+        rowOnClick={selecting ? (r) => toggle(r.id) : undefined}
+        sort={sort}
+        dir={dir}
+        sortHref={sortHref}
+      />
 
       {selecting && (
         <StickyBar>

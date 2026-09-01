@@ -2154,7 +2154,7 @@ export async function sellFromStock(
 
 /** Danh sách đơn kèm cờ "cần bổ sung" (v3-A). */
 export async function listOrdersWithGaps(): Promise<
-  (OrderListRow & { gaps: GapCode[] })[]
+  (OrderListRow & { gaps: GapCode[]; itemCount: number })[]
 > {
   const rows = await listOrders();
   const meta = await raw.all<{
@@ -2167,6 +2167,7 @@ export async function listOrdersWithGaps(): Promise<
     address: string | null;
     unconfirmed: number;
     productPhotos: number;
+    itemCount: number;
   }>(
     `SELECT o.id                                         AS id,
             o.order_type                                 AS "orderType",
@@ -2178,16 +2179,22 @@ export async function listOrdersWithGaps(): Promise<
             (SELECT COUNT(*)::int FROM order_items i
               WHERE i.order_id = o.id AND i.cost_confirmed = false) AS unconfirmed,
             (SELECT COUNT(*)::int FROM photos p
-              WHERE p.order_id = o.id AND p.label = 'product')      AS "productPhotos"
+              WHERE p.order_id = o.id AND p.label = 'product')      AS "productPhotos",
+            -- SUM(quantity), KHÔNG phải COUNT(*): một dòng "Dép × 3" là ba
+            -- món khách mua, không phải một. Cùng định nghĩa với cột "Món"
+            -- ở màn Khách hàng (listCustomerStats).
+            (SELECT COALESCE(SUM(i.quantity), 0)::int FROM order_items i
+              WHERE i.order_id = o.id)                              AS "itemCount"
        FROM orders o LEFT JOIN customers c ON c.id = o.customer_id`,
   );
 
   const byId = new Map(meta.map((m) => [m.id, m]));
   return rows.map((r) => {
     const m = byId.get(r.id);
-    if (!m) return { ...r, gaps: [] as GapCode[] };
+    if (!m) return { ...r, gaps: [] as GapCode[], itemCount: 0 };
     return {
       ...r,
+      itemCount: m.itemCount,
       gaps: orderGaps(
         {
           orderType: m.orderType,

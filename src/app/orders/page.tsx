@@ -6,6 +6,8 @@ import { listOrdersWithGaps, type OrderListRow } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import { GAP_CODES, GAP_LABELS, type GapCode } from "@/lib/order-gaps";
 import { STATUS_LABELS } from "@/lib/order-status";
+import { ageBadge } from "@/lib/order-badge";
+import type { SortDir } from "@/lib/table-sort";
 import { OrdersList } from "./orders-list";
 
 type RowWithGaps = OrderListRow & { gaps: GapCode[] };
@@ -37,13 +39,18 @@ function matchesFilter(r: RowWithGaps, code: string): boolean {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; gap?: string; f?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    gap?: string;
+    f?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }) {
-  const [session, { q, gap, f: rawF }, all] = await Promise.all([
-    requireAuth(),
-    searchParams,
-    listOrdersWithGaps(),
-  ]);
+  const [session, { q, gap, f: rawF, sort, dir: rawDir }, all] =
+    await Promise.all([requireAuth(), searchParams, listOrdersWithGaps()]);
+
+  const dir: SortDir = rawDir === "asc" ? "asc" : "desc";
 
   // Lọc tìm kiếm giữ nguyên hành vi cũ của listOrders(q).
   const needle = q?.trim().toLowerCase();
@@ -79,22 +86,36 @@ export default async function OrdersPage({
     const p = new URLSearchParams();
     if (q) p.set("q", q);
     if (activeGap) p.set("gap", activeGap);
+    if (sort) p.set("sort", sort);
+    if (rawDir) p.set("dir", rawDir);
     // Chuỗi rỗng cũng phải ghi để phân biệt "chọn Tất cả" với "chưa chọn gì".
     p.set("f", code);
     return `/orders?${p.toString()}`;
   };
 
+  // Chuỗi nền cho link sắp xếp. Gửi đi dưới dạng CHUỖI, không phải hàm —
+  // OrdersList là client component, hàm không qua được ranh giới đó.
+  const sortBase = (() => {
+    const p = new URLSearchParams();
+    if (q) p.set("q", q);
+    if (activeGap) p.set("gap", activeGap);
+    p.set("f", f);
+    return p.toString();
+  })();
+
   return (
     <AppShell username={session.username} title="Đơn hàng">
-      <form className="search" action="/orders" method="get">
-        <input
-          type="search"
-          name="q"
-          placeholder="Tìm tên khách / mã đơn…"
-          defaultValue={q ?? ""}
-          enterKeyHint="search"
-        />
-      </form>
+      <div className="list-toolbar">
+        <form className="search" action="/orders" method="get">
+          <input
+            type="search"
+            name="q"
+            placeholder="Tìm tên khách / mã đơn…"
+            defaultValue={q ?? ""}
+            enterKeyHint="search"
+          />
+        </form>
+      </div>
 
       <ChipBar>
         {FILTERS.map((it) => (
@@ -127,6 +148,9 @@ export default async function OrdersPage({
         </div>
       ) : (
         <OrdersList
+          sort={sort}
+          dir={dir}
+          sortBase={sortBase}
           rows={rows.map((o) => ({
             id: o.id,
             orderType: o.orderType,
@@ -134,13 +158,12 @@ export default async function OrdersPage({
             goodsTotalCny: o.goodsTotalCny,
             href: `/orders/${o.id}`,
             customerName: o.customerName,
-            metaText: `${STATUS_LABELS[o.status]} · ${
-              o.status === "su_co"
-                ? "⚠️ Sự cố"
-                : o.isStale
-                  ? `⏳ ${o.ageDays} ngày`
-                  : `${o.ageDays}n`
-            }`,
+            statusText: STATUS_LABELS[o.status],
+            ageBadgeText: ageBadge(o),
+            itemCount: o.itemCount,
+            deposit: o.deposit,
+            depositText: o.deposit > 0 ? formatVnd(o.deposit) : "—",
+            amountDue: o.amountDue,
             amountText: formatVnd(o.amountDue),
             hasGap: o.gaps.length > 0,
             gapTitle: o.gaps.map((g) => GAP_LABELS[g]).join(" · "),

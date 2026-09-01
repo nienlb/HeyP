@@ -246,3 +246,25 @@
   font-variant-numeric: tabular-nums;
   color: var(--brand);
 }
+
+/* ---------- Màn danh sách trên desktop (v8-A) ---------- */
+@media (min-width: 900px) {
+  /* Ô tìm và nút hành động về cùng một hàng — desktop không có ô hành động
+     cố định ở header để neo vào (xem .header-action-float bên trên). */
+  .list-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+  }
+  .list-toolbar .search {
+    flex: 1;
+  }
+  /* Chip lọc thôi dính và thôi tràn viền — desktop đủ chỗ cho cả hàng. */
+  .chip-bar {
+    position: static;
+    margin: 0 0 var(--sp-4);
+    padding: 0;
+    overflow-x: visible;
+    flex-wrap: wrap;
+  }
+}
