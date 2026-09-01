@@ -91,6 +91,24 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
   `Number("500.000")` = **500**, không lỗi gì, cọc vào DB sai 1000 lần;
   (b) dùng parser kiểu VND cho ¥ biến "207.5" thành 2075, sai giá vốn ~10 lần.
   Bất biến `parseVnd(groupVnd(x)) === x` được test khoá.
+- **Retry chỉ áp cho câu CHỈ ĐỌC, và KHÔNG BAO GIỜ trong transaction**
+  (`src/lib/db-retry.ts`, `runOnce` trong `src/db/raw.ts`) — `transaction_timeout`
+  (0005) khiến server chủ động ngắt phiên bỏ rơi, nhưng pool phía client không
+  biết nên request kế tiếp vớ phải socket chết và ném `CONNECTION_CLOSED`
+  (quan sát được trong log kèm ngay sau dòng "terminating connection due to
+  transaction timeout"). Chạy lại đúng MỘT lần là qua, vì postgres-js lúc đó
+  đã loại socket hỏng.
+  - **Quyết định phải xét CÂU SQL, không xét tên hàm gọi** — `raw.get` nghe
+    như đọc nhưng trong `queries.ts` nó đang chạy
+    `INSERT INTO photos(...) RETURNING id`. Retry theo tên hàm là tạo hai dòng
+    ảnh cho một lần tải lên. Cùng lối đó, chạy lại một UPDATE trừ ví ¥ là trừ
+    tiền hai lần. `isRetryableRead` khoá bằng test, kể cả ca
+    `WITH ... AS (INSERT ...)` mở đầu bằng WITH nhưng thực chất là câu ghi.
+  - **`withTx` truyền `retryReads = false`** — chạy lại một câu giữa
+    transaction là chạy nó trên connection khác, ngoài transaction đang mở:
+    câu đó không rollback theo, mà transaction cũ thì vẫn hỏng.
+  - Đúng một lần, không vòng lặp; và không retry `CONNECTION_CONNECT_TIMEOUT`
+    (không mở nổi connection thì thử lại chỉ nhân đôi thời gian chờ).
 - **SQL thô đi qua lớp `Exec`** (`src/db/raw.ts`: `raw.all/get/run`, `withTx`) — SQL viết placeholder kiểu SQLite (`?`), lớp này tự đổi sang `$1,$2` của Postgres. Trong transaction (`withTx`) **PHẢI** dùng `x` được truyền vào, KHÔNG dùng `raw` toàn cục — dùng nhầm thì câu đó chạy ngoài transaction, không rollback theo.
 - **Alias camelCase trong SQL thô phải bọc nháy kép** (`AS "orderType"`, không phải `AS orderType`) — Postgres hạ chữ thường alias không nháy kép, code JS đọc `undefined`. Bug loại này không lỗi cú pháp, chỉ âm thầm trả sai dữ liệu.
 - **`SUM()`/`COUNT()` trên cột `integer` phải ép `::int`** — nếu không, kiểu trả về của Postgres qua postgres-js là `bigint`→string, JS `+` sẽ nối chuỗi thay vì cộng số. Cột `double precision` (giá ¥, tỷ giá) không cần ép.

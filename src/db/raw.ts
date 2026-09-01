@@ -1,6 +1,7 @@
 import "server-only";
 import type { Sql } from "postgres";
 import { sqlClient } from "./index";
+import { runWithRetry } from "@/lib/db-retry";
 
 /** Thay unixepoch() của SQLite. Nối vào chuỗi SQL, không phải tham số. */
 export const NOW_EPOCH_SQL = "EXTRACT(EPOCH FROM now())::bigint";
@@ -21,29 +22,51 @@ function toPgPlaceholders(text: string): string {
   return text.replace(/\?/g, () => `$${++i}`);
 }
 
-function makeExec(client: Sql): Exec {
+/**
+ * Chạy một câu, và chạy lại ĐÚNG MỘT LẦN nếu connection đứt giữa chừng.
+ *
+ * Vì sao cần: transaction_timeout (drizzle/0005) khiến server chủ động ngắt
+ * phiên giữ transaction bỏ rơi. Pool phía client không hay biết, nên request
+ * kế tiếp vớ phải socket chết và ném CONNECTION_CLOSED — người dùng thấy
+ * trang lỗi cho một sự cố mà lần thử thứ hai đã qua, vì postgres-js lúc đó đã
+ * loại socket hỏng và mở connection mới.
+ *
+ * Chỉ một lần, không vòng lặp: nếu DB thật sự chết thì thử mãi chỉ kéo dài
+ * thời gian người dùng ngồi chờ rồi cũng ra lỗi. Một lần đủ phân biệt "socket
+ * mồ côi" với "DB sập".
+ */
+async function runOnce<T>(
+  client: Sql,
+  text: string,
+  params: unknown[],
+  retryReads: boolean,
+): Promise<T> {
+  const pg = toPgPlaceholders(text);
+  // Điều kiện được chạy lại nằm trong runWithRetry (lib/db-retry.ts) — để ở
+  // module thuần vì đó là chỗ dễ sai nhất và cần test khoá.
+  return runWithRetry(
+    async () => (await client.unsafe(pg, params as never[])) as unknown as T,
+    text,
+    retryReads,
+  );
+}
+
+function makeExec(client: Sql, retryReads: boolean): Exec {
   return {
     async all<T>(text: string, params: unknown[] = []): Promise<T[]> {
-      const rows = await client.unsafe(
-        toPgPlaceholders(text),
-        params as never[],
-      );
-      return rows as unknown as T[];
+      return runOnce<T[]>(client, text, params, retryReads);
     },
     async get<T>(text: string, params: unknown[] = []): Promise<T | undefined> {
-      const rows = await client.unsafe(
-        toPgPlaceholders(text),
-        params as never[],
-      );
-      return (rows as unknown as T[])[0];
+      const rows = await runOnce<T[]>(client, text, params, retryReads);
+      return rows[0];
     },
     async run(text: string, params: unknown[] = []): Promise<void> {
-      await client.unsafe(toPgPlaceholders(text), params as never[]);
+      await runOnce<unknown>(client, text, params, retryReads);
     },
   };
 }
 
-export const raw: Exec = makeExec(sqlClient);
+export const raw: Exec = makeExec(sqlClient, true);
 
 /**
  * Bọc transaction. Throw bên trong → tự ROLLBACK; kết thúc êm → COMMIT.
@@ -51,7 +74,9 @@ export const raw: Exec = makeExec(sqlClient);
  * toàn cục — dùng sai thì câu đó chạy ngoài transaction và không rollback.
  */
 export async function withTx<T>(fn: (x: Exec) => Promise<T>): Promise<T> {
+  // retryReads = false: xem chú thích trong runOnce — chạy lại một câu giữa
+  // transaction thì câu đó rơi ra ngoài transaction, không rollback theo.
   return sqlClient.begin(async (tx) =>
-    fn(makeExec(tx as unknown as Sql)),
+    fn(makeExec(tx as unknown as Sql, false)),
   ) as Promise<T>;
 }
