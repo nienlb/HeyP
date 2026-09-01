@@ -118,8 +118,9 @@ export function QuickImportSheet({
     try {
       await deletePhotoAction(id);
     } catch {
-      // Xoá server lỗi thì ảnh vẫn đã biến mất khỏi form — không chặn người dùng,
-      // ảnh mồ côi (chưa gắn đơn) không gây hại gì thêm.
+      // Xoá server lỗi thì ảnh vẫn đã biến mất khỏi form — không chặn người
+      // dùng. Ảnh còn sót lại trên server sẽ được job dọn ảnh mồ côi
+      // (/api/cron/track) xoá sau 24h.
     }
   }
 
