@@ -280,3 +280,21 @@
     display: block;
   }
 }
+
+/* ---------- Chi tiết đơn: cột phải trên desktop (v8-A) ---------- */
+@media (min-width: 900px) {
+  /* order-head thôi làm tiêu đề trôi trong luồng, thành thẻ ở cột phải. */
+  .rail .order-head {
+    padding: var(--sp-4);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    gap: var(--sp-2);
+  }
+  /* Tab thôi dính đỉnh: nằm trong cột trái của lưới thì sticky đo theo khung
+     cha, nên nó dính sai chỗ. */
+  .with-rail .tabs {
+    position: static;
+    margin-top: 0;
+  }
+}

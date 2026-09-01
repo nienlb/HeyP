@@ -223,12 +223,29 @@
   align-items: start;
 }
 
-/* Nội dung + cột phải. Điện thoại: một cột, cột phải rơi xuống dưới —
-   hoặc giữ nguyên thanh dính đáy, xem .with-rail .sticky-bar. */
+/* Nội dung + cột phải.
+   Điện thoại: một cột, và `.rail` bị kéo LÊN TRƯỚC bằng `order: -1`.
+   Bắt buộc phải vậy: ở màn chi tiết đơn, cột phải chứa số tiền và hành
+   trình đơn — trước v8-A hai khối đó nằm trên đầu, trên tabs. Để nguyên
+   thứ tự DOM là chúng rơi xuống cuối trang, tức là ĐỔI giao diện điện
+   thoại, đúng thứ v8-A cấm.
+   Ở màn tạo đơn `.rail` chỉ bọc một .sticky-bar `position: fixed` (ngoài
+   luồng), nên `order` không ảnh hưởng gì. */
 .with-rail {
-  display: block;
+  display: flex;
+  flex-direction: column;
+}
+.with-rail > .rail {
+  order: -1;
 }
 .rail-detail {
+  display: none;
+}
+/* Nút chỉ có nghĩa ở cột phải desktop — điện thoại đã có tabs ngay đó.
+   Bọc thêm `.rail` để đủ đặc hiệu (0,2,0) THẮNG `.btn` của legacy.css:
+   legacy.css import CUỐI nên luật cùng đặc hiệu (0,1,0) ở đây sẽ thua và
+   nút vẫn hiện — đã xảy ra thật lúc làm v8-A. */
+.rail .rail-action {
   display: none;
 }
 
@@ -366,6 +383,12 @@
   }
   .rail-detail {
     display: block;
+  }
+  .rail .rail-action {
+    display: inline-flex;
+  }
+  .with-rail > .rail {
+    order: 0;
   }
 
   /* Khối tiền thôi làm thanh dính đáy, thành thẻ trong cột phải.

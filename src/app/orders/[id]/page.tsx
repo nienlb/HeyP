@@ -156,363 +156,379 @@ export default async function OrderDetailPage({
       title={`#${order.id}`}
       backHref="/orders"
     >
-      <section className="order-head">
-        <span className="oh-label">Còn phải thu</span>
-        <strong className="oh-amount num">{formatVnd(money.amountDue)}</strong>
-        <span className="oh-meta">
-          {ORDER_TYPE_LABELS[order.orderType]} ·{" "}
-          {ageInDays(order.statusChangedAt)} ngày
-        </span>
-      </section>
-
       {err && <div className="error">{err}</div>}
 
-      {/* Hành trình đơn hàng: stepper + hành động chuyển trạng thái — hiện
-          ở mọi tab, luôn thấy được, không phải cuộn tới mới tìm ra. */}
-      <OrderJourney
-        orderId={order.id}
-        orderType={order.orderType}
-        status={order.status}
-        positionStatus={positionStatus}
-        nextStatuses={nextStatuses}
-      />
+      <div className="with-rail">
+        <div>
+          <OrderTabs orderId={order.id} active={tab} />
 
-      <OrderTabs orderId={order.id} active={tab} />
-
-      {tab === "tom_tat" && (
-        <>
-          {gaps.length > 0 && (
-            <div className="gap-banner">
-              <div className="gap-chips">
-                {gaps.map((g) => (
-                  <span key={g} className="gap-chip">
-                    {GAP_LABELS[g]}
-                  </span>
-                ))}
-              </div>
-              <p className="muted small" style={{ margin: "6px 0 0" }}>
-                Đơn vẫn chạy bình thường — các mục này chỉ để nhắc bổ sung.
-              </p>
-            </div>
-          )}
-
-          {customer?.warningFlag && (
-            <div className="warn-flag">
-              ⚠️ Khách có cờ cảnh báo
-              {customer.warningReason ? `: ${customer.warningReason}` : ""}.
-            </div>
-          )}
-
-          <CustomerBlock
-            orderId={order.id}
-            customer={
-              customer
-                ? {
-                    id: customer.id,
-                    name: customer.name,
-                    phone: customer.phone,
-                    address: customer.address,
-                  }
-                : null
-            }
-            customers={allCustomers.map((c) => ({
-              id: c.id,
-              name: c.name,
-              warningFlag: c.warningFlag,
-              warningReason: c.warningReason,
-            }))}
-          />
-
-          <OrderMetaBlock
-            orderId={order.id}
-            note={order.note}
-            exchangeRate={order.exchangeRate}
-            canEditRate={canEditExchangeRate(order.status)}
-          />
-
-          <section className="card">
-            <h2 className="card-title">
-              Kiện vận chuyển ({orderPackages.length})
-            </h2>
-            {orderPackages.length === 0 ? (
-              <p className="muted">
-                Chưa gắn kiện nào.{" "}
-                <Link href="/tracking">Thêm ở màn Tracking →</Link>
-              </p>
-            ) : (
-              <ul className="pkg-list-mini">
-                {orderPackages.map((p) => (
-                  <li key={p.id}>
-                    <strong>{p.trackingCode}</strong>
-                    {p.carrier ? ` · ${p.carrier}` : ""} —{" "}
-                    {p.trackingStatus ?? "chưa có trạng thái"}
-                    {p.needsManualCheck && " ⚠️"}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="card">
-            <h2 className="card-title">Lịch sử trạng thái</h2>
-            <ol className="timeline">
-              {history.map((h) => (
-                <li key={h.id}>
-                  <div className="tl-main">
-                    {h.fromStatus
-                      ? `${STATUS_LABELS[h.fromStatus]} → ${STATUS_LABELS[h.toStatus]}`
-                      : STATUS_LABELS[h.toStatus]}
+          {tab === "tom_tat" && (
+            <>
+              {gaps.length > 0 && (
+                <div className="gap-banner">
+                  <div className="gap-chips">
+                    {gaps.map((g) => (
+                      <span key={g} className="gap-chip">
+                        {GAP_LABELS[g]}
+                      </span>
+                    ))}
                   </div>
-                  <div className="tl-meta">
-                    {formatDateTime(h.changedAt)}
-                    {h.changedBy ? ` · ${h.changedBy}` : ""}
-                    {h.note ? ` · ${h.note}` : ""}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </section>
-        </>
-      )}
+                  <p className="muted small" style={{ margin: "6px 0 0" }}>
+                    Đơn vẫn chạy bình thường — các mục này chỉ để nhắc bổ sung.
+                  </p>
+                </div>
+              )}
 
-      {tab === "mon" && (
-        <>
-          <section className="card">
-            <h2 className="card-title">Sản phẩm ({items.length})</h2>
-            {items.map((it) => {
-              const money2 = (n: number) =>
-                isStockSale ? formatVnd(n) : formatCny(n);
-              const lineActions = showLineActions ? (
-                it.lineStatus === "supplier_defect" ? (
-                  <span className="badge status-su_co">Lỗi NCC</span>
-                ) : it.lineStatus === "returned" ? (
-                  <span className="badge status-huy">Đã trả</span>
-                ) : canDefect ? (
-                  <form action={lineExceptionAction}>
-                    <input type="hidden" name="orderId" value={order.id} />
-                    <input type="hidden" name="itemId" value={it.id} />
-                    <input type="hidden" name="kind" value="defect" />
-                    <button className="btn btn-warn btn-sm" type="submit">
-                      Lỗi NCC
-                    </button>
-                  </form>
-                ) : canReturn ? (
-                  <form action={lineExceptionAction}>
-                    <input type="hidden" name="orderId" value={order.id} />
-                    <input type="hidden" name="itemId" value={it.id} />
-                    <input type="hidden" name="kind" value="return" />
-                    <button className="btn btn-warn btn-sm" type="submit">
-                      Đổi/trả
-                    </button>
-                  </form>
-                ) : null
-              ) : null;
+              {customer?.warningFlag && (
+                <div className="warn-flag">
+                  ⚠️ Khách có cờ cảnh báo
+                  {customer.warningReason ? `: ${customer.warningReason}` : ""}.
+                </div>
+              )}
 
-              return (
-                <ListRow
-                  key={it.id}
-                  title={
-                    it.productUrl ? (
-                      <a href={it.productUrl} target="_blank" rel="noreferrer">
-                        {it.name}
-                      </a>
-                    ) : (
-                      it.name
-                    )
-                  }
-                  meta={`${it.attributes ?? "—"} · ×${it.quantity}`}
-                  amount={money2(it.quantity * it.unitPriceCny)}
-                  trailing={
-                    <span className="lr-actions">
-                      {lineActions}
-                      <ItemSheetButton
-                        orderId={order.id}
-                        sellRate={sellRate}
-                        defaultMarginVnd={settings.defaultMarginVnd}
-                        label="Sửa"
-                        initial={{
-                          id: it.id,
-                          name: it.name,
-                          attributes: it.attributes ?? "",
-                          productUrl: it.productUrl ?? "",
-                          quantity: it.quantity,
-                          // PHẢI dùng order.exchangeRate, KHÔNG dùng biến
-                          // `sellRate` (= order.exchangeRate || settings.sellRate).
-                          // updateOrderItemFields suy ngược bằng đúng
-                          // order.exchange_rate; hai bên lệch tỷ giá thì
-                          // sellVnd lệch theo và hàm tưởng nhầm là người dùng
-                          // vừa đổi giá, rồi tính lại khối tiền một cách vô cớ.
-                          sellVnd: sellPerUnitVnd(
-                            {
-                              quantity: it.quantity,
-                              unitPriceCny: it.unitPriceCny,
-                              marginVnd: it.marginVnd,
-                            },
-                            order.exchangeRate,
-                          ),
-                          unitPriceCny: it.unitPriceCny,
-                          costConfirmed: it.costConfirmed,
-                        }}
-                      />
-                      {canEditOrderItems(order.status) && items.length > 1 && (
-                        <form action={removeItemAction}>
-                          <input type="hidden" name="orderId" value={order.id} />
-                          <input type="hidden" name="itemId" value={it.id} />
-                          <button
-                            type="submit"
-                            className="btn btn-sm btn-ghost"
-                            aria-label={`Xoá món ${it.name}`}
-                          >
-                            Xoá
-                          </button>
-                        </form>
-                      )}
-                    </span>
-                  }
-                />
-              );
-            })}
-            {order.note && (
-              <p className="order-note">Ghi chú: {order.note}</p>
-            )}
-            {canEditOrderItems(order.status) && (
-              <ItemSheetButton
+              <CustomerBlock
                 orderId={order.id}
-                sellRate={sellRate}
-                defaultMarginVnd={settings.defaultMarginVnd}
-                label="+ Thêm món"
+                customer={
+                  customer
+                    ? {
+                        id: customer.id,
+                        name: customer.name,
+                        phone: customer.phone,
+                        address: customer.address,
+                      }
+                    : null
+                }
+                customers={allCustomers.map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                  warningFlag: c.warningFlag,
+                  warningReason: c.warningReason,
+                }))}
               />
-            )}
-          </section>
 
-          {/* Bóc lớp giá theo món — chỉ đơn tính giá vốn bằng ¥. Giữ nguyên
-              dạng bảng (không rebuild thành sheet): các form sửa giá/lời
-              theo dòng ở đây đụng trực tiếp luật đã test trong
-              line-pricing.test.ts, rủi ro rebuild không đáng. */}
-          {!isStockSale && items.length > 0 && (
-            <LinePricingTable
-              orderId={order.id}
-              rows={items.map((it) => ({
-                id: it.id,
-                name: it.name,
-                attributes: it.attributes,
-                quantity: it.quantity,
-                unitPriceCny: it.unitPriceCny,
-                marginVnd: it.marginVnd,
-                costConfirmed: it.costConfirmed,
-              }))}
-              sellRate={sellRate}
-              quotedTotalVnd={order.quotedTotalVnd}
-              shippingFee={order.shippingFee}
-              shipStatus={order.shipStatus}
-            />
+              <OrderMetaBlock
+                orderId={order.id}
+                note={order.note}
+                exchangeRate={order.exchangeRate}
+                canEditRate={canEditExchangeRate(order.status)}
+              />
+
+              <section className="card">
+                <h2 className="card-title">
+                  Kiện vận chuyển ({orderPackages.length})
+                </h2>
+                {orderPackages.length === 0 ? (
+                  <p className="muted">
+                    Chưa gắn kiện nào.{" "}
+                    <Link href="/tracking">Thêm ở màn Tracking →</Link>
+                  </p>
+                ) : (
+                  <ul className="pkg-list-mini">
+                    {orderPackages.map((p) => (
+                      <li key={p.id}>
+                        <strong>{p.trackingCode}</strong>
+                        {p.carrier ? ` · ${p.carrier}` : ""} —{" "}
+                        {p.trackingStatus ?? "chưa có trạng thái"}
+                        {p.needsManualCheck && " ⚠️"}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className="card">
+                <h2 className="card-title">Lịch sử trạng thái</h2>
+                <ol className="timeline">
+                  {history.map((h) => (
+                    <li key={h.id}>
+                      <div className="tl-main">
+                        {h.fromStatus
+                          ? `${STATUS_LABELS[h.fromStatus]} → ${STATUS_LABELS[h.toStatus]}`
+                          : STATUS_LABELS[h.toStatus]}
+                      </div>
+                      <div className="tl-meta">
+                        {formatDateTime(h.changedAt)}
+                        {h.changedBy ? ` · ${h.changedBy}` : ""}
+                        {h.note ? ` · ${h.note}` : ""}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </>
           )}
-        </>
-      )}
 
-      {tab === "tien" && (
-        <>
-          <section className="card">
-            <h2 className="card-title">Khối tiền</h2>
-            {isStockSale ? (
-              <>
-                <div className="kv">
-                  <span>Giá bán</span>
-                  <span>{formatVnd(money.goodsTotalVnd)}</span>
-                </div>
-                <div className="kv">
-                  <span>Giá vốn</span>
-                  <span>{formatVnd(order.saleCost ?? 0)}</span>
-                </div>
-                <div className="kv">
-                  <span>{saleProfit >= 0 ? "Lãi" : "Lỗ"}</span>
-                  <strong className={saleProfit >= 0 ? "pos" : "neg"}>
-                    {formatVnd(Math.abs(saleProfit))}
-                  </strong>
-                </div>
-                <div className="kv">
-                  <span>Đã cọc</span>
-                  <span>−{formatVnd(order.deposit)}</span>
-                </div>
-                <div className="kv kv-total">
-                  <span>Còn phải thu</span>
-                  <strong>{formatVnd(money.amountDue)}</strong>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="kv">
-                  <span>Tiền hàng</span>
-                  <span>
-                    {order.exchangeRate === 1
-                      ? formatVnd(money.goodsTotalVnd)
-                      : `${formatCny(order.goodsTotalCny)} × ${order.exchangeRate.toLocaleString("vi-VN")} = ${formatVnd(money.goodsTotalVnd)}`}
-                  </span>
-                </div>
-                <div className="kv">
-                  <span>Lời</span>
-                  <span>{formatVnd(order.marginVnd)}</span>
-                </div>
-                <div className="kv">
-                  <span>Phí ship</span>
-                  <span>{formatVnd(order.shippingFee)}</span>
-                </div>
-                <div className="kv">
-                  <span>Tạm tính</span>
-                  <span>{formatVnd(money.subtotalVnd)}</span>
-                </div>
-                <div className="kv">
-                  <span>Đã cọc</span>
-                  <span>−{formatVnd(order.deposit)}</span>
-                </div>
-                <div className="kv kv-total">
-                  <span>Còn phải thu</span>
-                  <strong>{formatVnd(money.amountDue)}</strong>
-                </div>
-                <div style={{ marginTop: 14 }}>
-                  <TotalEditor
+          {tab === "mon" && (
+            <>
+              <section className="card">
+                <h2 className="card-title">Sản phẩm ({items.length})</h2>
+                {items.map((it) => {
+                  const money2 = (n: number) =>
+                    isStockSale ? formatVnd(n) : formatCny(n);
+                  const lineActions = showLineActions ? (
+                    it.lineStatus === "supplier_defect" ? (
+                      <span className="badge status-su_co">Lỗi NCC</span>
+                    ) : it.lineStatus === "returned" ? (
+                      <span className="badge status-huy">Đã trả</span>
+                    ) : canDefect ? (
+                      <form action={lineExceptionAction}>
+                        <input type="hidden" name="orderId" value={order.id} />
+                        <input type="hidden" name="itemId" value={it.id} />
+                        <input type="hidden" name="kind" value="defect" />
+                        <button className="btn btn-warn btn-sm" type="submit">
+                          Lỗi NCC
+                        </button>
+                      </form>
+                    ) : canReturn ? (
+                      <form action={lineExceptionAction}>
+                        <input type="hidden" name="orderId" value={order.id} />
+                        <input type="hidden" name="itemId" value={it.id} />
+                        <input type="hidden" name="kind" value="return" />
+                        <button className="btn btn-warn btn-sm" type="submit">
+                          Đổi/trả
+                        </button>
+                      </form>
+                    ) : null
+                  ) : null;
+
+                  return (
+                    <ListRow
+                      key={it.id}
+                      title={
+                        it.productUrl ? (
+                          <a href={it.productUrl} target="_blank" rel="noreferrer">
+                            {it.name}
+                          </a>
+                        ) : (
+                          it.name
+                        )
+                      }
+                      meta={`${it.attributes ?? "—"} · ×${it.quantity}`}
+                      amount={money2(it.quantity * it.unitPriceCny)}
+                      trailing={
+                        <span className="lr-actions">
+                          {lineActions}
+                          <ItemSheetButton
+                            orderId={order.id}
+                            sellRate={sellRate}
+                            defaultMarginVnd={settings.defaultMarginVnd}
+                            label="Sửa"
+                            initial={{
+                              id: it.id,
+                              name: it.name,
+                              attributes: it.attributes ?? "",
+                              productUrl: it.productUrl ?? "",
+                              quantity: it.quantity,
+                              // PHẢI dùng order.exchangeRate, KHÔNG dùng biến
+                              // `sellRate` (= order.exchangeRate || settings.sellRate).
+                              // updateOrderItemFields suy ngược bằng đúng
+                              // order.exchange_rate; hai bên lệch tỷ giá thì
+                              // sellVnd lệch theo và hàm tưởng nhầm là người dùng
+                              // vừa đổi giá, rồi tính lại khối tiền một cách vô cớ.
+                              sellVnd: sellPerUnitVnd(
+                                {
+                                  quantity: it.quantity,
+                                  unitPriceCny: it.unitPriceCny,
+                                  marginVnd: it.marginVnd,
+                                },
+                                order.exchangeRate,
+                              ),
+                              unitPriceCny: it.unitPriceCny,
+                              costConfirmed: it.costConfirmed,
+                            }}
+                          />
+                          {canEditOrderItems(order.status) && items.length > 1 && (
+                            <form action={removeItemAction}>
+                              <input type="hidden" name="orderId" value={order.id} />
+                              <input type="hidden" name="itemId" value={it.id} />
+                              <button
+                                type="submit"
+                                className="btn btn-sm btn-ghost"
+                                aria-label={`Xoá món ${it.name}`}
+                              >
+                                Xoá
+                              </button>
+                            </form>
+                          )}
+                        </span>
+                      }
+                    />
+                  );
+                })}
+                {order.note && (
+                  <p className="order-note">Ghi chú: {order.note}</p>
+                )}
+                {canEditOrderItems(order.status) && (
+                  <ItemSheetButton
                     orderId={order.id}
-                    quotedTotalVnd={order.quotedTotalVnd}
-                    canEdit={canEditOrderItems(order.status)}
+                    sellRate={sellRate}
+                    defaultMarginVnd={settings.defaultMarginVnd}
+                    label="+ Thêm món"
+                  />
+                )}
+              </section>
+
+              {/* Bóc lớp giá theo món — chỉ đơn tính giá vốn bằng ¥. Giữ nguyên
+                  dạng bảng (không rebuild thành sheet): các form sửa giá/lời
+                  theo dòng ở đây đụng trực tiếp luật đã test trong
+                  line-pricing.test.ts, rủi ro rebuild không đáng. */}
+              {!isStockSale && items.length > 0 && (
+                <LinePricingTable
+                  orderId={order.id}
+                  rows={items.map((it) => ({
+                    id: it.id,
+                    name: it.name,
+                    attributes: it.attributes,
+                    quantity: it.quantity,
+                    unitPriceCny: it.unitPriceCny,
+                    marginVnd: it.marginVnd,
+                    costConfirmed: it.costConfirmed,
+                  }))}
+                  sellRate={sellRate}
+                  quotedTotalVnd={order.quotedTotalVnd}
+                  shippingFee={order.shippingFee}
+                  shipStatus={order.shipStatus}
+                />
+              )}
+            </>
+          )}
+
+          {tab === "tien" && (
+            <>
+              <section className="card">
+                <h2 className="card-title">Khối tiền</h2>
+                {isStockSale ? (
+                  <>
+                    <div className="kv">
+                      <span>Giá bán</span>
+                      <span>{formatVnd(money.goodsTotalVnd)}</span>
+                    </div>
+                    <div className="kv">
+                      <span>Giá vốn</span>
+                      <span>{formatVnd(order.saleCost ?? 0)}</span>
+                    </div>
+                    <div className="kv">
+                      <span>{saleProfit >= 0 ? "Lãi" : "Lỗ"}</span>
+                      <strong className={saleProfit >= 0 ? "pos" : "neg"}>
+                        {formatVnd(Math.abs(saleProfit))}
+                      </strong>
+                    </div>
+                    <div className="kv">
+                      <span>Đã cọc</span>
+                      <span>−{formatVnd(order.deposit)}</span>
+                    </div>
+                    <div className="kv kv-total">
+                      <span>Còn phải thu</span>
+                      <strong>{formatVnd(money.amountDue)}</strong>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="kv">
+                      <span>Tiền hàng</span>
+                      <span>
+                        {order.exchangeRate === 1
+                          ? formatVnd(money.goodsTotalVnd)
+                          : `${formatCny(order.goodsTotalCny)} × ${order.exchangeRate.toLocaleString("vi-VN")} = ${formatVnd(money.goodsTotalVnd)}`}
+                      </span>
+                    </div>
+                    <div className="kv">
+                      <span>Lời</span>
+                      <span>{formatVnd(order.marginVnd)}</span>
+                    </div>
+                    <div className="kv">
+                      <span>Phí ship</span>
+                      <span>{formatVnd(order.shippingFee)}</span>
+                    </div>
+                    <div className="kv">
+                      <span>Tạm tính</span>
+                      <span>{formatVnd(money.subtotalVnd)}</span>
+                    </div>
+                    <div className="kv">
+                      <span>Đã cọc</span>
+                      <span>−{formatVnd(order.deposit)}</span>
+                    </div>
+                    <div className="kv kv-total">
+                      <span>Còn phải thu</span>
+                      <strong>{formatVnd(money.amountDue)}</strong>
+                    </div>
+                    <div style={{ marginTop: 14 }}>
+                      <TotalEditor
+                        orderId={order.id}
+                        quotedTotalVnd={order.quotedTotalVnd}
+                        canEdit={canEditOrderItems(order.status)}
+                      />
+                    </div>
+                    <div style={{ marginTop: 14 }}>
+                      <CopyButton text={quote} />
+                    </div>
+                  </>
+                )}
+              </section>
+
+              <PaymentsBlock
+                orderId={order.id}
+                rows={payments}
+                quotedTotalVnd={order.quotedTotalVnd}
+                shippingFee={order.shippingFee}
+                suggestedFinal={suggestedFinal}
+              />
+            </>
+          )}
+
+          {tab === "anh" && (
+            <>
+              <section className="card">
+                <h2 className="card-title">Ảnh ({photos.length})</h2>
+                <PhotoUpload orderId={order.id} defaultLabel="zalo_confirm" />
+                <div style={{ marginTop: 14 }}>
+                  <PhotoGallery
+                    photos={photos.map((p) => ({ id: p.id, label: p.label }))}
                   />
                 </div>
-                <div style={{ marginTop: 14 }}>
-                  <CopyButton text={quote} />
-                </div>
-              </>
-            )}
-          </section>
+              </section>
 
-          <PaymentsBlock
-            orderId={order.id}
-            rows={payments}
-            quotedTotalVnd={order.quotedTotalVnd}
-            shippingFee={order.shippingFee}
-            suggestedFinal={suggestedFinal}
-          />
-        </>
-      )}
-
-      {tab === "anh" && (
-        <>
-          <section className="card">
-            <h2 className="card-title">Ảnh ({photos.length})</h2>
-            <PhotoUpload orderId={order.id} defaultLabel="zalo_confirm" />
-            <div style={{ marginTop: 14 }}>
-              <PhotoGallery
-                photos={photos.map((p) => ({ id: p.id, label: p.label }))}
-              />
-            </div>
-          </section>
-
-          {session.role === "admin" && (
-            <DangerZone
-              orderId={order.id}
-              summary={`${customer?.name ?? "Chưa có khách"} · ${items.length} món · ${formatVnd(order.quotedTotalVnd)}`}
-            />
+              {session.role === "admin" && (
+                <DangerZone
+                  orderId={order.id}
+                  summary={`${customer?.name ?? "Chưa có khách"} · ${items.length} món · ${formatVnd(order.quotedTotalVnd)}`}
+                />
+              )}
+            </>
           )}
-        </>
-      )}
+        </div>
+
+        <div className="rail">
+          <section className="order-head">
+            <span className="oh-label">Còn phải thu</span>
+            <strong className="oh-amount num">{formatVnd(money.amountDue)}</strong>
+            <span className="oh-meta">
+              {ORDER_TYPE_LABELS[order.orderType]} ·{" "}
+              {ageInDays(order.statusChangedAt)} ngày
+            </span>
+          </section>
+
+          {/* LINK, không phải nút thu tiền. Thu tiền là thao tác ghi tiền
+              thật — đặt cùng một hành động ở hai nơi là cách chắc chắn để có
+              người bấm hai lần. Form thu tiền ở nguyên tab Tiền. */}
+          {tab !== "tien" && money.amountDue > 0 && (
+            <Link
+              href={`/orders/${order.id}?tab=tien`}
+              className="btn btn-outline rail-action"
+            >
+              Thu tiền →
+            </Link>
+          )}
+
+          <OrderJourney
+            orderId={order.id}
+            orderType={order.orderType}
+            status={order.status}
+            positionStatus={positionStatus}
+            nextStatuses={nextStatuses}
+          />
+        </div>
+      </div>
     </AppShell>
   );
 }
