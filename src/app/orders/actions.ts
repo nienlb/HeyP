@@ -47,7 +47,7 @@ export async function createOrderAction(
     ? (orderTypeRaw as OrderType)
     : "order_ho";
 
-  const exchangeRate = parseDecimal(formData.get("exchangeRate"));
+  const exchangeRate = parseVnd(formData.get("exchangeRate"));
   const shippingFee = parseVnd(formData.get("shippingFee"));
   const deposit = parseVnd(formData.get("deposit"));
   const note = String(formData.get("note") ?? "").trim() || null;

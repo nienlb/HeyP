@@ -55,3 +55,12 @@ test("BẤT BIẾN: định dạng rồi đọc lại phải ra đúng số ban 
     assert.equal(parseVnd(groupVnd(String(n))), n, `lỗi ở ${n}`);
   }
 });
+
+test("tỷ giá đọc bằng parseVnd: '4.000' phải ra 4000, không phải 4", () => {
+  // Màn Cài đặt hiển thị tỷ giá đã định dạng ("4.000"). Dùng parseDecimal ở
+  // đây từng làm tỷ giá sai 1000 lần — client và server phải cùng một luật.
+  assert.equal(parseVnd("4.000"), 4000);
+  assert.equal(parseVnd("4000"), 4000);
+  // Đối chiếu: parseDecimal sẽ hiểu sai chuỗi đó.
+  assert.equal(parseDecimal("4.000"), 4);
+});

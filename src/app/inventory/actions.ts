@@ -67,7 +67,7 @@ export async function stockInAction(
   const name = String(formData.get("productName") ?? "").trim();
   const quantity = parseVnd(formData.get("quantity"));
   const unitPriceCny = parseDecimal(formData.get("unitPriceCny"));
-  const rateRaw = parseDecimal(formData.get("exchangeRate"));
+  const rateRaw = parseVnd(formData.get("exchangeRate"));
   const exchangeRate = rateRaw > 0 ? rateRaw : (await getSettings()).sellRate;
 
   if (!name) return { error: "Thiếu tên hàng." };

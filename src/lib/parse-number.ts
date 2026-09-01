@@ -11,8 +11,13 @@
  *      sai giá vốn ~10 lần.
  *
  * Hai loại số, hai luật, không được dùng lẫn:
- *   - Tiền VND        → `parseVnd`     (dấu chấm = NGĂN NGHÌN, bỏ đi)
- *   - Giá ¥ / tỷ giá  → `parseDecimal` (dấu chấm = THẬP PHÂN, giữ lại)
+ *   - Tiền VND VÀ TỶ GIÁ → `parseVnd`     (dấu chấm = NGĂN NGHÌN, bỏ đi)
+ *   - Giá ¥              → `parseDecimal` (dấu chấm = THẬP PHÂN, giữ lại)
+ *
+ * TỶ GIÁ thuộc phe `parseVnd` chứ không phải `parseDecimal`, dù cột trong DB
+ * là double: nó luôn ở thang số nguyên (4000 ₫/¥), và màn Cài đặt HIỂN THỊ nó
+ * đã định dạng sẵn ("4.000"). Nếu đọc bằng parseDecimal thì "4.000" thành 4 —
+ * sai 1000 lần. Chỉ giá ¥ mới thực sự có phần thập phân (207.5).
  *
  * Module thuần, không phụ thuộc DB hay React.
  */
