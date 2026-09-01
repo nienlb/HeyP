@@ -516,3 +516,55 @@ export async function removeItemAction(formData: FormData): Promise<void> {
   revalidatePath("/orders");
   redirect(`/orders/${orderId}?tab=mon`);
 }
+
+// ---------- Sửa khách hàng của đơn (v7) ----------
+
+import { setOrderCustomer, updateCustomerInfo } from "@/db/queries";
+
+/** Gắn/đổi khách cho đơn. Chọn khách có sẵn hoặc tạo khách mới theo tên. */
+export async function setOrderCustomerAction(
+  formData: FormData,
+): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = parseVnd(formData.get("orderId"));
+  if (!Number.isInteger(orderId) || orderId <= 0) redirect("/orders");
+
+  const customerId = parseVnd(formData.get("customerId")) || null;
+  const newName = String(formData.get("newCustomerName") ?? "").trim();
+
+  const result = await setOrderCustomer(orderId, {
+    customerId,
+    newCustomer: newName ? { name: newName } : null,
+  });
+  if (!result.ok) {
+    redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  }
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  revalidatePath("/customers");
+  redirect(`/orders/${orderId}`);
+}
+
+/** Sửa tên/SĐT/địa chỉ khách — đổi cho MỌI đơn của khách đó. */
+export async function updateCustomerAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = parseVnd(formData.get("orderId"));
+  const customerId = parseVnd(formData.get("customerId"));
+  if (!Number.isInteger(customerId) || customerId <= 0) redirect("/orders");
+
+  const result = await updateCustomerInfo(customerId, {
+    name: String(formData.get("name") ?? ""),
+    phone: String(formData.get("phone") ?? "").trim() || null,
+    address: String(formData.get("address") ?? "").trim() || null,
+  });
+  if (!result.ok) {
+    redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  }
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/customers");
+  redirect(`/orders/${orderId}`);
+}

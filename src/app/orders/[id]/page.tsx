@@ -11,6 +11,7 @@ import {
   getOrderDetail,
   getPackagesForOrder,
   getSettings,
+  listCustomers,
   suggestFinalPayment,
 } from "@/db/queries";
 import { PaymentsBlock } from "./payments-block";
@@ -38,6 +39,7 @@ import { OrderJourney } from "./order-journey";
 import { OrderTabs, type TabCode } from "./order-tabs";
 import { DangerZone } from "./danger-zone";
 import { AddItemButton } from "./item-editor";
+import { CustomerBlock } from "./customer-block";
 
 const TAB_CODES = ["tom_tat", "mon", "tien", "anh"] as const;
 
@@ -76,15 +78,17 @@ export default async function OrderDetailPage({
   const orderId = Number(id);
   if (!Number.isInteger(orderId)) notFound();
 
-  // Bốn truy vấn này độc lập nhau — chạy song song để chỉ tốn 1 vòng
-  // round-trip thay vì 4. suggestFinalPayment trước đây nằm trong JSX
+  // Năm truy vấn này độc lập nhau — chạy song song để chỉ tốn 1 vòng
+  // round-trip thay vì 5. suggestFinalPayment trước đây nằm trong JSX
   // (await giữa lúc render) nên luôn chạy sau cùng; kéo lên đây.
-  const [detail, orderPackages, settings, suggestedFinal] = await Promise.all([
-    getOrderDetail(orderId),
-    getPackagesForOrder(orderId),
-    getSettings(),
-    suggestFinalPayment(orderId),
-  ]);
+  const [detail, orderPackages, settings, suggestedFinal, allCustomers] =
+    await Promise.all([
+      getOrderDetail(orderId),
+      getPackagesForOrder(orderId),
+      getSettings(),
+      suggestFinalPayment(orderId),
+      listCustomers(),
+    ]);
   if (!detail || !detail.order) notFound();
 
   const { order, customer, items, history, photos, payments } = detail;
@@ -195,38 +199,25 @@ export default async function OrderDetailPage({
             </div>
           )}
 
-          <section className="card">
-            <h2 className="card-title">Khách hàng</h2>
-            <div className="kv">
-              <span>Tên</span>
-              {customer ? (
-                <strong>{customer.name}</strong>
-              ) : (
-                <em className="muted">— chưa có khách —</em>
-              )}
-            </div>
-            {customer?.phone && (
-              <div className="kv">
-                <span>SĐT/Zalo</span>
-                <a href={`tel:${customer.phone.replace(/\s/g, "")}`}>
-                  {customer.phone}
-                </a>
-              </div>
-            )}
-            {customer?.address && (
-              <div className="kv">
-                <span>Địa chỉ</span>
-                <span className="kv-copy">
-                  {customer.address}
-                  <CopyButton
-                    text={customer.address}
-                    label="Copy"
-                    className="btn btn-ghost btn-sm"
-                  />
-                </span>
-              </div>
-            )}
-          </section>
+          <CustomerBlock
+            orderId={order.id}
+            customer={
+              customer
+                ? {
+                    id: customer.id,
+                    name: customer.name,
+                    phone: customer.phone,
+                    address: customer.address,
+                  }
+                : null
+            }
+            customers={allCustomers.map((c) => ({
+              id: c.id,
+              name: c.name,
+              warningFlag: c.warningFlag,
+              warningReason: c.warningReason,
+            }))}
+          />
 
           {order.note && (
             <section className="card">

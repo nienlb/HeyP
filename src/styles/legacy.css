@@ -272,6 +272,15 @@ a {
   font-size: 16px;
   font-weight: 600;
   margin: 0 0 14px;
+  /* Nút Sửa (v7) nằm cùng hàng với tiêu đề — .card-title-action đặt ngay
+     đây, cạnh luật gốc, vì file này import CUỐI nên thắng components.css. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.card-title-action {
+  font-weight: 400;
 }
 .two-col {
   display: grid;

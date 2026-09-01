@@ -173,6 +173,68 @@ export async function getCustomer(id: number) {
   return rows[0];
 }
 
+/**
+ * Gắn hoặc đổi khách cho một đơn (v7).
+ *
+ * KHÔNG khoá theo trạng thái: đơn đã hoàn tất vẫn được gán khách nếu lúc tạo
+ * quên — đó là bổ sung thông tin, không phải sửa sổ sách. Tiền không đổi.
+ */
+export async function setOrderCustomer(
+  orderId: number,
+  input: { customerId?: number | null; newCustomer?: { name: string } | null },
+): Promise<LineActionResult> {
+  try {
+    return await withTx(async (x) => {
+      const order = await x.get<{ id: number }>(
+        "SELECT id FROM orders WHERE id = ?",
+        [orderId],
+      );
+      if (!order) throw new Error("Không tìm thấy đơn");
+
+      let customerId = input.customerId ?? null;
+      if (!customerId && input.newCustomer) {
+        const name = input.newCustomer.name.trim();
+        if (name === "") throw new Error("Chưa nhập tên khách mới.");
+        const c = await x.get<{ id: number }>(
+          "INSERT INTO customers(name) VALUES(?) RETURNING id",
+          [name],
+        );
+        customerId = c!.id;
+      }
+      if (!customerId) throw new Error("Chưa chọn khách.");
+
+      await x.run("UPDATE orders SET customer_id = ? WHERE id = ?", [
+        customerId,
+        orderId,
+      ]);
+      return { ok: true } as LineActionResult;
+    });
+  } catch (err) {
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/**
+ * Sửa thông tin khách. LƯU Ý: đụng bảng `customers` nên đổi cho MỌI đơn của
+ * khách đó — một khách một bản ghi. Giao diện phải nói rõ điều này.
+ */
+export async function updateCustomerInfo(
+  customerId: number,
+  input: { name: string; phone: string | null; address: string | null },
+): Promise<LineActionResult> {
+  const name = input.name.trim();
+  if (name === "") return { ok: false, reason: "Tên khách không được để trống." };
+  try {
+    await raw.run(
+      "UPDATE customers SET name = ?, phone = ?, address = ? WHERE id = ?",
+      [name, input.phone, input.address, customerId],
+    );
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
 // ---------- Tạo đơn (có transaction) ----------
 
 export type NewOrderItemInput = {
