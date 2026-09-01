@@ -22,15 +22,17 @@ function createSqlClient() {
     prepare: false,
     max: 5,
     idle_timeout: 20,
-    // statement_timeout: khi Vercel giết function ở mốc 300s (đã tái hiện thật
-    // trên production — log "Vercel Runtime Timeout Error"), connection
-    // Postgres đang dở dang bị bỏ lại "mồ côi" (active, chờ ClientRead) vì
-    // phía Node không còn sống để đóng nó. Connection mồ côi chiếm slot trong
-    // pool dùng chung của Supavisor, khiến request sau xếp hàng rồi cũng bị
-    // Postgres tự hủy vì statement_timeout mặc định (lỗi 57014) — vòng lặp
-    // càng lúc càng nặng, đúng hiện tượng "lúc được lúc không". Ép timeout
-    // ngắn hơn nhiều 300s để câu SQL tự chết ở Postgres trước khi Vercel kịp
-    // giết cả tiến trình, không để lại connection mồ côi.
+    // Pooler tắc thì thà báo lỗi nhanh còn hơn treo cả trang: mặc định của
+    // postgres.js là 30s, quá dài cho một trang web.
+    connect_timeout: 10,
+    // KHÔNG dựa vào option này để chống connection mồ côi trên production.
+    // Đo thực tế ngày 01/09: kết nối qua Supavisor transaction pooler (6543,
+    // đúng cổng production) với option này thì `SHOW statement_timeout` vẫn
+    // trả 2min — pooler chế độ transaction KHÔNG truyền tham số khởi tạo của
+    // client xuống server connection. Option chỉ có tác dụng khi đi đường
+    // session pooler / direct (các script chạy bằng DIRECT_URL).
+    //
+    // Bảo vệ thật nằm ở mức ROLE, xem drizzle/0004_db_guardrails.sql.
     connection: {
       statement_timeout: 15000,
     },
