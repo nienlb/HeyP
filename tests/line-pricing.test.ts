@@ -2,8 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   allocateMargins,
+  cnyFromSellPrice,
   lineCostVnd,
   lineSellVnd,
+  marginFromSellPrice,
   orderProfit,
   quotedTotalFromLines,
   redistribute,
@@ -121,4 +123,44 @@ test("số lượng > 1 nhân đúng", () => {
 test("danh sách rỗng không làm vỡ", () => {
   assert.deepEqual(allocateMargins(410000, [], 4000, 170000), []);
   assert.equal(orderProfit([]), 0);
+});
+
+test("suy ngược ¥ từ giá phải thu", () => {
+  // 1.000.000 − 170.000 lời = 830.000 tiền hàng; / 3600 = 230,555… → 230,56
+  assert.equal(cnyFromSellPrice(1_000_000, 3600, 170_000), 230.56);
+});
+
+test("giá thu thấp hơn hoặc bằng lời mặc định → ¥ = 0", () => {
+  assert.equal(cnyFromSellPrice(170_000, 3600, 170_000), 0);
+  assert.equal(cnyFromSellPrice(50_000, 3600, 170_000), 0);
+});
+
+test("tỷ giá không hợp lệ → ¥ = 0, không chia cho 0", () => {
+  assert.equal(cnyFromSellPrice(1_000_000, 0, 170_000), 0);
+  assert.equal(cnyFromSellPrice(1_000_000, -1, 170_000), 0);
+});
+
+test("lời của dòng là phần dư: Σ giá bán khớp đúng giá thu × SL", () => {
+  const sell = 1_000_000;
+  const rate = 3600;
+  const cny = cnyFromSellPrice(sell, rate, 170_000);
+  const l: PricingLine = { quantity: 2, unitPriceCny: cny, marginVnd: 0 };
+  const margin = marginFromSellPrice(sell, l, rate);
+  assert.equal(lineSellVnd({ ...l, marginVnd: margin }, rate), sell * 2);
+});
+
+test("phần lẻ do làm tròn ¥ rơi vào lời, Total không lệch 1₫", () => {
+  const rate = 3600;
+  const lines = [
+    { sell: 1_000_000, qty: 2 },
+    { sell: 450_000, qty: 1 },
+    { sell: 333_333, qty: 3 },
+  ];
+  const built = lines.map(({ sell, qty }) => {
+    const unitPriceCny = cnyFromSellPrice(sell, rate, 170_000);
+    const base: PricingLine = { quantity: qty, unitPriceCny, marginVnd: 0 };
+    return { ...base, marginVnd: marginFromSellPrice(sell, base, rate) };
+  });
+  const expected = lines.reduce((s, l) => s + l.sell * l.qty, 0);
+  assert.equal(quotedTotalFromLines(built, rate), expected);
 });

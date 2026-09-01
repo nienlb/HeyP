@@ -66,12 +66,17 @@ export function validateOrderMoney(input: OrderMoneyInput): ValidationError[] {
   return errors;
 }
 
-/** Kiểm tra một dòng sản phẩm: số lượng và đơn giá phải > 0. */
+/**
+ * Giá ¥ KHÔNG bắt buộc (spec v3-A): đơn tạo từ ảnh chốt hoặc nhập theo giá
+ * phải thu (v6) có thể chưa biết giá vốn — cờ `thieu_gia_von` của order-gaps
+ * lo phần nhắc bổ sung. Chỉ chặn số ÂM, vì âm là dữ liệu hỏng chứ không phải
+ * "chưa biết".
+ */
 export function validateLineItem(item: LineItemLike): ValidationError[] {
   const errors: ValidationError[] = [];
   if (!(item.quantity > 0))
     errors.push({ field: "quantity", message: "Số lượng phải lớn hơn 0" });
-  if (!(item.unitPriceCny > 0))
-    errors.push({ field: "unitPriceCny", message: "Đơn giá phải lớn hơn 0" });
+  if (item.unitPriceCny < 0)
+    errors.push({ field: "unitPriceCny", message: "Đơn giá không được âm" });
   return errors;
 }

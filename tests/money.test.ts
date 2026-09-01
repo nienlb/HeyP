@@ -94,16 +94,18 @@ test("validate khối tiền hợp lệ → không lỗi", () => {
   assert.equal(errs.length, 0);
 });
 
-test("validate dòng sản phẩm: số lượng & giá phải > 0", () => {
-  assert.equal(validateLineItem({ quantity: 1, unitPriceCny: 10 }).length, 0);
-  assert.ok(
-    validateLineItem({ quantity: 0, unitPriceCny: 10 }).some(
-      (e) => e.field === "quantity",
-    ),
-  );
-  assert.ok(
-    validateLineItem({ quantity: 1, unitPriceCny: 0 }).some(
-      (e) => e.field === "unitPriceCny",
-    ),
-  );
+test("dòng thiếu giá ¥ vẫn hợp lệ — cờ thiếu giá vốn lo phần nhắc", () => {
+  assert.deepEqual(validateLineItem({ quantity: 1, unitPriceCny: 0 }), []);
+});
+
+test("số lượng phải lớn hơn 0", () => {
+  const errs = validateLineItem({ quantity: 0, unitPriceCny: 100 });
+  assert.equal(errs.length, 1);
+  assert.equal(errs[0].field, "quantity");
+});
+
+test("giá ¥ âm vẫn bị chặn", () => {
+  const errs = validateLineItem({ quantity: 1, unitPriceCny: -1 });
+  assert.equal(errs.length, 1);
+  assert.equal(errs[0].field, "unitPriceCny");
 });

@@ -110,9 +110,10 @@ export async function createOrderAction(
     return { error: "Cần ít nhất 1 dòng sản phẩm có tên." };
 
   for (const it of items) {
-    if (validateLineItem(it).length > 0)
+    const errs = validateLineItem(it);
+    if (errs.length > 0)
       return {
-        error: `Sản phẩm "${it.name}": số lượng và đơn giá phải lớn hơn 0.`,
+        error: `Sản phẩm "${it.name}": ${errs.map((e) => e.message).join("; ")}.`,
       };
   }
 

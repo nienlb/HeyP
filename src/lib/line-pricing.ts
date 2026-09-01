@@ -150,3 +150,41 @@ export function suggestCnyFromTotal(
   if (!(perLineCny > 0)) return 0;
   return Math.round(perLineCny * 100) / 100;
 }
+
+/**
+ * Suy ngược giá ¥ mỗi đơn vị từ GIÁ PHẢI THU của khách (v6 — đảo chiều nhập).
+ *
+ *   ¥ = (giá_thu − lời_mặc_định) / tỷ_giá_bán
+ *
+ * Người chốt đơn biết giá thu của khách, không biết giá ¥ ở shop TQ. Số trả
+ * về là số MÁY ĐOÁN — dòng dùng nó phải giữ cost_confirmed = false, đúng quy
+ * ước sẵn có: giá vốn chưa xác nhận không vào phần "chắc chắn" của báo cáo.
+ *
+ * Giá thu ≤ lời mặc định → 0 (toàn bộ giá thu là lời). Tỷ giá ≤ 0 → 0.
+ */
+export function cnyFromSellPrice(
+  sellVnd: number,
+  sellRate: number,
+  defaultMargin: number,
+): number {
+  if (!(sellRate > 0)) return 0;
+  const goods = Math.round(sellVnd) - Math.round(defaultMargin);
+  if (!(goods > 0)) return 0;
+  return Math.round((goods / sellRate) * 100) / 100;
+}
+
+/**
+ * Lời của một dòng khi nhập theo giá phải thu = phần dư.
+ *
+ *   lời = giá_thu × SL − giá_vốn_dòng
+ *
+ * Vì ¥ đã bị làm tròn hai số lẻ, phần lẻ tự rơi vào đây — nhờ vậy Σ giá bán
+ * khớp ĐÚNG Total, không lệch 1₫. Luật này bị test khoá.
+ */
+export function marginFromSellPrice(
+  sellVnd: number,
+  line: PricingLine,
+  sellRate: number,
+): number {
+  return Math.round(sellVnd) * line.quantity - lineCostVnd(line, sellRate);
+}
