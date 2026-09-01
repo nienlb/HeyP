@@ -21,7 +21,13 @@ import {
   parseSettings,
   type AppSettings,
 } from "@/lib/settings";
-import { allocateMargins, redistribute } from "@/lib/line-pricing";
+import {
+  allocateMargins,
+  marginFromSellPrice,
+  redistribute,
+  totalAfterAddLine,
+  totalAfterRemoveLine,
+} from "@/lib/line-pricing";
 import {
   orderGaps,
   type GapCode,
@@ -45,6 +51,8 @@ import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import {
   BRANCH_STATUSES,
   MAIN_CHAIN,
+  STATUS_LABELS,
+  canEditOrderItems,
   initialStatus,
   isTerminal,
   isTerminalFor,
@@ -1147,6 +1155,161 @@ export async function updateLineMargin(
           r.id,
         ]);
       }
+
+      await recomputeOrderMoneyRow(x, orderId, order);
+      return { ok: true } as LineActionResult;
+    });
+  } catch (err) {
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/**
+ * Thêm một món vào đơn ĐÃ TẠO (v6). Total tăng thêm giá bán của món mới;
+ * lời các dòng cũ KHÔNG bị rải lại — mỗi dòng giữ nguyên lời của nó.
+ */
+export async function addOrderItem(
+  orderId: number,
+  input: {
+    name: string;
+    attributes: string | null;
+    productUrl: string | null;
+    quantity: number;
+    /** Giá phải thu cho 1 cái (₫). */
+    sellVnd: number;
+    unitPriceCny: number;
+    costConfirmed: boolean;
+  },
+): Promise<LineActionResult & { itemId?: number }> {
+  if (input.name.trim() === "")
+    return { ok: false, reason: "Chưa nhập tên hàng." };
+  if (!(input.quantity > 0))
+    return { ok: false, reason: "Số lượng phải lớn hơn 0." };
+  if (!(input.sellVnd > 0))
+    return { ok: false, reason: "Chưa nhập giá phải thu." };
+
+  try {
+    return await withTx(async (x) => {
+      const status = await x.get<{ status: OrderStatus }>(
+        "SELECT status FROM orders WHERE id = ?",
+        [orderId],
+      );
+      if (!status) throw new Error("Không tìm thấy đơn");
+      if (!canEditOrderItems(status.status))
+        throw new Error(
+          `Đơn ở "${STATUS_LABELS[status.status]}" không sửa được danh sách món.`,
+        );
+
+      const order = await readOrderMoneyRow(x, orderId);
+      const quoted = (await x.get<{ total: number }>(
+        "SELECT quoted_total_vnd AS total FROM orders WHERE id = ?",
+        [orderId],
+      ))!;
+
+      const line = {
+        quantity: input.quantity,
+        unitPriceCny: input.unitPriceCny,
+        marginVnd: 0,
+      };
+      const margin = marginFromSellPrice(input.sellVnd, line, order.exchange_rate);
+
+      const row = await x.get<{ id: number }>(
+        `INSERT INTO order_items
+           (order_id, product_url, name, attributes, quantity, unit_price_cny,
+            margin_vnd, cost_confirmed)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         RETURNING id`,
+        [
+          orderId,
+          input.productUrl,
+          input.name.trim(),
+          input.attributes,
+          input.quantity,
+          input.unitPriceCny,
+          margin,
+          input.costConfirmed,
+        ],
+      );
+
+      await x.run("UPDATE orders SET quoted_total_vnd = ? WHERE id = ?", [
+        totalAfterAddLine(quoted.total, input.sellVnd, input.quantity),
+        orderId,
+      ]);
+
+      await recomputeOrderMoneyRow(x, orderId, order);
+      return { ok: true, itemId: row!.id } as LineActionResult & {
+        itemId?: number;
+      };
+    });
+  } catch (err) {
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/**
+ * Xoá một món khỏi đơn ĐÃ TẠO (v6). Total giảm đúng giá bán của dòng đó.
+ * Không xoá được món cuối cùng — đơn phải còn ≥ 1 món; muốn bỏ hẳn thì Xoá
+ * đơn hoặc Hủy.
+ */
+export async function removeOrderItem(
+  orderId: number,
+  itemId: number,
+): Promise<LineActionResult> {
+  try {
+    return await withTx(async (x) => {
+      const status = await x.get<{ status: OrderStatus }>(
+        "SELECT status FROM orders WHERE id = ?",
+        [orderId],
+      );
+      if (!status) throw new Error("Không tìm thấy đơn");
+      if (!canEditOrderItems(status.status))
+        throw new Error(
+          `Đơn ở "${STATUS_LABELS[status.status]}" không sửa được danh sách món.`,
+        );
+
+      const count = (await x.get<{ n: number }>(
+        "SELECT COUNT(*)::int AS n FROM order_items WHERE order_id = ?",
+        [orderId],
+      ))!;
+      if (count.n <= 1)
+        throw new Error(
+          "Đơn phải còn ít nhất 1 món — dùng Xoá đơn hoặc Hủy thay vì xoá món cuối.",
+        );
+
+      const item = await x.get<{
+        quantity: number;
+        unit_price_cny: number;
+        margin_vnd: number;
+      }>(
+        `SELECT quantity, unit_price_cny, margin_vnd
+           FROM order_items WHERE id = ? AND order_id = ?`,
+        [itemId, orderId],
+      );
+      if (!item) throw new Error("Không tìm thấy dòng sản phẩm");
+
+      const order = await readOrderMoneyRow(x, orderId);
+      const quoted = (await x.get<{ total: number }>(
+        "SELECT quoted_total_vnd AS total FROM orders WHERE id = ?",
+        [orderId],
+      ))!;
+
+      await x.run("DELETE FROM order_items WHERE id = ? AND order_id = ?", [
+        itemId,
+        orderId,
+      ]);
+
+      await x.run("UPDATE orders SET quoted_total_vnd = ? WHERE id = ?", [
+        totalAfterRemoveLine(
+          quoted.total,
+          {
+            quantity: item.quantity,
+            unitPriceCny: item.unit_price_cny,
+            marginVnd: item.margin_vnd,
+          },
+          order.exchange_rate,
+        ),
+        orderId,
+      ]);
 
       await recomputeOrderMoneyRow(x, orderId, order);
       return { ok: true } as LineActionResult;

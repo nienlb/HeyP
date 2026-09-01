@@ -118,6 +118,16 @@ export function isTerminalFor(
   return track[track.length - 1] === status;
 }
 
+/**
+ * Đơn đã chốt sổ thì danh sách món khoá lại — sửa món của đơn đã hoàn tất
+ * sẽ làm lệch báo cáo lãi của tháng đã chốt.
+ */
+const ITEMS_LOCKED: readonly OrderStatus[] = ["hoan_tat", "huy", "khach_bom"];
+
+export function canEditOrderItems(status: OrderStatus): boolean {
+  return !ITEMS_LOCKED.includes(status);
+}
+
 /** Trạng thái một đơn mới được tạo ra — bước đầu của trục theo loại đơn. */
 export function initialStatus(orderType: OrderType): OrderStatus {
   return TRACKS[orderType][0];

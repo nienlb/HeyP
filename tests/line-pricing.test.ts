@@ -10,6 +10,8 @@ import {
   quotedTotalFromLines,
   redistribute,
   suggestCnyFromTotal,
+  totalAfterAddLine,
+  totalAfterRemoveLine,
   type PricingLine,
 } from "../src/lib/line-pricing.ts";
 
@@ -163,4 +165,32 @@ test("phần lẻ do làm tròn ¥ rơi vào lời, Total không lệch 1₫", (
   });
   const expected = lines.reduce((s, l) => s + l.sell * l.qty, 0);
   assert.equal(quotedTotalFromLines(built, rate), expected);
+});
+
+test("thêm món: Total tăng đúng giá bán của món mới", () => {
+  assert.equal(totalAfterAddLine(2_000_000, 450_000, 2), 2_900_000);
+});
+
+test("xoá món: Total giảm đúng giá bán của dòng bị xoá", () => {
+  // 60¥ × 4000 = 240.000 giá vốn + 170.000 lời = 410.000 giá bán
+  const removed: PricingLine = {
+    quantity: 1,
+    unitPriceCny: 60,
+    marginVnd: 170_000,
+  };
+  assert.equal(totalAfterRemoveLine(2_000_000, removed, 4000), 1_590_000);
+});
+
+test("thêm rồi xoá đúng món đó thì Total quay về số cũ", () => {
+  const rate = 4000;
+  const sell = 450_000;
+  const qty = 2;
+  const cny = cnyFromSellPrice(sell, rate, 170_000);
+  const base: PricingLine = { quantity: qty, unitPriceCny: cny, marginVnd: 0 };
+  const line: PricingLine = {
+    ...base,
+    marginVnd: marginFromSellPrice(sell, base, rate),
+  };
+  const after = totalAfterAddLine(2_000_000, sell, qty);
+  assert.equal(totalAfterRemoveLine(after, line, rate), 2_000_000);
 });

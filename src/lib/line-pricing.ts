@@ -188,3 +188,27 @@ export function marginFromSellPrice(
 ): number {
   return Math.round(sellVnd) * line.quantity - lineCostVnd(line, sellRate);
 }
+
+/**
+ * Total sau khi THÊM một món (v6).
+ *
+ * Luật cũ "Total bất biến" vẫn đúng với thao tác sửa giá ¥ / kéo lời. Thêm
+ * hay xoá món là đổi PHẠM VI của đơn, không phải đổi giá — Total đổi theo.
+ * Lời các dòng cũ giữ nguyên, không bị rải lại.
+ */
+export function totalAfterAddLine(
+  quotedTotal: number,
+  sellVnd: number,
+  quantity: number,
+): number {
+  return Math.round(quotedTotal) + Math.round(sellVnd) * quantity;
+}
+
+/** Total sau khi XOÁ một dòng — trừ đúng giá bán của dòng đó. */
+export function totalAfterRemoveLine(
+  quotedTotal: number,
+  removed: PricingLine,
+  sellRate: number,
+): number {
+  return Math.round(quotedTotal) - lineSellVnd(removed, sellRate);
+}

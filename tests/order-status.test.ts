@@ -4,6 +4,7 @@ import {
   MAIN_CHAIN,
   RETIRED_STATUSES,
   allowedNextStatuses,
+  canEditOrderItems,
   canTransition,
   initialStatus,
   isTerminal,
@@ -152,4 +153,16 @@ test("đi hết trục order_ho từ đầu tới cuối", () => {
     status = MAIN_CHAIN[i];
   }
   assert.ok(isTerminal(status));
+});
+
+test("đơn đã chốt sổ thì không sửa danh sách món được", () => {
+  for (const s of ["hoan_tat", "huy", "khach_bom"] as const) {
+    assert.equal(canEditOrderItems(s), false, `phải khoá ${s}`);
+  }
+});
+
+test("đơn đang chạy thì sửa danh sách món được", () => {
+  for (const s of ["khach_chot", "da_mua_tq", "da_giao_khach", "su_co"] as const) {
+    assert.equal(canEditOrderItems(s), true, `phải mở ${s}`);
+  }
 });
