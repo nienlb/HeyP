@@ -140,6 +140,34 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
 - **`src/db/schema.ts` dùng alias `@/`** → chỉ Next/tsc nạp được. Script chạy bằng `node` KHÔNG import được schema → viết SQL thô hoặc import trực tiếp `drizzle-orm/pg-core` (xem `scripts/migrate-to-postgres.ts`).
 - **Test import module bằng đuôi `.ts` tường minh** (vd `../src/lib/money.ts`); `tsconfig` đã bật `allowImportingTsExtensions`. Module thuần dùng cho test không được import file khác có alias `@/`.
 - **Điều hướng (v5):** mọi trang có đăng nhập bọc bằng `<AppShell username title backHref? action? bottomBar?>` (`src/app/_components/app-shell.tsx`). `title` bắt buộc — tsc tự bắt trang nào quên. `backHref` là URL tường minh, không dựa vào `history.back()` (chế độ standalone/PWA có thể mở thẳng URL sâu, không có gì để lùi). Có `bottomBar` thì tabbar tự ẩn — một màn không bao giờ có cả hai. Ô `[+]` giữa tabbar **luôn luôn** là "tạo đơn" (`/orders/new`), không đổi nghĩa theo màn đang mở; nút hành động khác (nhập kho, nhập nhanh từ ảnh) là nút riêng ở header, class `.header-action-float`. Sidebar/bottom-tab đọc mục điều hướng từ `nav-config.ts` — thêm màn mới thì sửa 1 chỗ đó, không sửa từng component. Từ 900px trở lên: sidebar quay lại, tabbar ẩn (luật trong `@media (min-width: 900px)` ở `src/styles/layout.css`).
+- **`redirect()` lúc render KHÔNG trả 307 được nữa từ khi có `src/app/loading.tsx`
+  — và đó là cái đã khoá cửa đăng nhập ngày 01/09.** Boundary Suspense ở gốc
+  làm Next đẩy vỏ trang xuống trình duyệt NGAY, header đã gửi đi rồi; lát sau
+  `requireAuth()` gọi `redirect("/login")` thì không còn cách trả mã 307 nữa.
+  Next lùi về hai đường vá, **cả hai đều trượt**: (a) thẻ
+  `<meta id="__next-page-redirect" http-equiv="refresh" content="1;url=/login">`
+  bị React 19 gỡ khỏi `<head>` trước khi đồng hồ 1 giây kịp chạy; (b) lỗi
+  `NEXT_REDIRECT` trong luồng RSC không bao giờ nổ vì React không hydrate nội
+  dung fallback của Suspense. Kết quả: mở app là spinner quay vĩnh viễn, không
+  bao giờ thấy form đăng nhập. Đo được: `curl -i https://…/` trả **200** kèm
+  `NEXT_REDIRECT;replace;/login;307;`; bỏ `loading.tsx` đi thì trả **307** thật.
+  - **Cửa đăng nhập vì vậy nằm ở `src/middleware.ts`**, chạy TRƯỚC khi render
+    nên trả 307 thật, không phụ thuộc React. Nó chỉ kiểm CHỮ KÝ cookie (Web
+    Crypto, không đụng DB) — `requireAuth()`/`requireAdmin()` vẫn phải giữ để
+    kiểm tài khoản còn sống/còn quyền. Middleware **không** thay thế chúng.
+  - **Middleware chỉ gác GET/HEAD.** 307 giữ nguyên method, nên chuyển hướng
+    một POST là bắn lại cả body của server action sang `/login`.
+  - **Định dạng cookie phải dùng Web Crypto, ở `src/lib/session-token.ts`** —
+    middleware chạy Edge runtime, không có `node:crypto`. Một module dùng chung
+    cho cả hai runtime; hai bản cài đặt song song là kiểu lỗi mở toang cửa mà
+    không ai thấy. Định dạng giữ nguyên bản cũ, `tests/session-token.test.ts`
+    khoá điều đó để deploy không đá ai ra.
+  - **`RedirectRescue` (`src/app/_components/redirect-rescue.tsx`) lo phần
+    còn lại** (`requireAdmin` → `/`, tài khoản bị khoá giữa chừng): script thô
+    nhúng trong fallback, đọc thẻ meta của Next và nhảy ngay thay vì đợi 1 giây
+    thua React. Phải là `<script>` thô chứ không phải `useEffect` — React không
+    hydrate fallback. **Kiểm lại khi nâng cấp Next**: `__next-page-redirect` là
+    id nội bộ của Next.
 - **Phản hồi khi tải đi qua BA lớp, mỗi lớp bắt một cảnh khác nhau** (v6) —
   `app/loading.tsx` (Suspense ở gốc) cho lúc chuyển màn, `app/error.tsx` cho
   lúc server ném lỗi, `useFormStatus` cho nút Đăng nhập. Trước đó app không có

@@ -1,72 +1,43 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserById } from "@/db/users";
 import type { UserRole } from "@/lib/roles";
+import {
+  SESSION_COOKIE_NAME,
+  SESSION_MAX_AGE_SECONDS,
+  signSessionToken,
+  verifySessionToken,
+} from "@/lib/session-token";
 import { config } from "./config";
-
-const COOKIE_NAME = "heyp_session";
-const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 ngày
 
 export type Session = { id: number; username: string; role: UserRole };
 
-/** Ký một payload bằng HMAC-SHA256 để cookie phiên không giả mạo được. */
-function sign(payload: string): string {
-  return createHmac("sha256", config.sessionSecret).update(payload).digest("hex");
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
-
 /**
- * Token = base64(userId).timestamp.chữ_ký
+ * Ký/kiểm token nằm ở @/lib/session-token — CỐ Ý không để ở đây nữa.
  *
- * v6 mang userId thay username: vai trò và cờ `active` phải đọc từ DB mỗi
- * request, nếu không thì khoá tài khoản chẳng có tác dụng gì (cookie sống 30
- * ngày). Cookie định dạng cũ (mang username) không parse ra số → coi như
- * không hợp lệ, người dùng đăng nhập lại một lần.
+ * Từ khi có src/middleware.ts, cùng một cookie phải kiểm được ở hai runtime:
+ * Node (các trang) và Edge (middleware). node:crypto không có trên Edge, nên
+ * định dạng token chuyển sang Web Crypto và dọn về một module dùng chung —
+ * hai bản cài đặt song song là kiểu lỗi mở toang cửa mà không ai thấy.
+ * Định dạng không đổi, cookie đang phát hành vẫn dùng được.
  */
-function makeToken(userId: number): string {
-  const payload = `${Buffer.from(String(userId)).toString("base64url")}.${Date.now()}`;
-  return `${payload}.${sign(payload)}`;
-}
-
-function verifyToken(token: string | undefined): { userId: number } | null {
-  if (!token) return null;
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const [idB64, ts, sig] = parts;
-  const payload = `${idB64}.${ts}`;
-  if (!safeEqual(sig, sign(payload))) return null;
-  try {
-    const userId = Number(Buffer.from(idB64, "base64url").toString("utf8"));
-    if (!Number.isInteger(userId) || userId <= 0) return null;
-    return { userId };
-  } catch {
-    return null;
-  }
-}
 
 export async function createSession(userId: number): Promise<void> {
   const store = await cookies();
-  store.set(COOKIE_NAME, makeToken(userId), {
+  store.set(SESSION_COOKIE_NAME, await signSessionToken(userId, config.sessionSecret), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: MAX_AGE_SECONDS,
+    maxAge: SESSION_MAX_AGE_SECONDS,
   });
 }
 
 export async function destroySession(): Promise<void> {
   const store = await cookies();
-  store.delete(COOKIE_NAME);
+  store.delete(SESSION_COOKIE_NAME);
 }
 
 /**
@@ -77,7 +48,10 @@ export async function destroySession(): Promise<void> {
  */
 export const getSession = cache(async (): Promise<Session | null> => {
   const store = await cookies();
-  const parsed = verifyToken(store.get(COOKIE_NAME)?.value);
+  const parsed = await verifySessionToken(
+    store.get(SESSION_COOKIE_NAME)?.value,
+    config.sessionSecret,
+  );
   if (!parsed) return null;
   const user = await getUserById(parsed.userId);
   // Tài khoản bị xoá hoặc bị khoá → phiên chết ngay, không đợi cookie hết hạn.
@@ -98,7 +72,12 @@ export const getSession = cache(async (): Promise<Session | null> => {
  */
 export async function hasValidSessionCookie(): Promise<boolean> {
   const store = await cookies();
-  return verifyToken(store.get(COOKIE_NAME)?.value) !== null;
+  return (
+    (await verifySessionToken(
+      store.get(SESSION_COOKIE_NAME)?.value,
+      config.sessionSecret,
+    )) !== null
+  );
 }
 
 /** Dùng ở đầu server component cần bảo vệ: chưa đăng nhập → về /login. */

@@ -64,15 +64,20 @@ export function LoadingScreen({ label = "Đang tải…" }: { label?: string }) 
           <div className="recovery recovery-static" role="alert">
             <p className="recovery-title">Màn hình đứng lâu bất thường</p>
             <p className="recovery-detail">
-              Máy chủ chưa trả lời. Thử mở lại từ đầu; nếu vẫn vậy thì đăng
-              nhập lại.
+              Máy chủ chưa trả lời. Đăng nhập lại là đường ra chắc ăn nhất.
             </p>
+            {/*
+              Nút chính CỐ Ý là /login chứ không phải "/". Bảng này hiện ra
+              đúng lúc màn hình đang đứng — mà màn hình hay đứng nhất chính là
+              ở "/". Để "Về Tổng quan" làm nút chính thì người dùng bấm xong
+              quay lại đúng chỗ vừa treo, bấm mãi không thoát ra được.
+            */}
             <div className="recovery-actions">
-              <a className="btn" href="/">
-                Về Tổng quan
-              </a>
-              <a className="btn btn-outline" href="/login">
+              <a className="btn" href="/login">
                 Đăng nhập lại
+              </a>
+              <a className="btn btn-outline" href="/">
+                Về Tổng quan
               </a>
             </div>
           </div>
