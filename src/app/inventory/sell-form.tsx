@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { sellFromStockAction, type SellState } from "./actions";
 import { formatVnd } from "@/lib/format";
+import { parseVnd } from "@/lib/parse-number";
 
 export function SellForm({
   inventoryId,
@@ -21,9 +22,8 @@ export function SellForm({
   const [salePrice, setSalePrice] = useState("");
   const [deposit, setDeposit] = useState("");
 
-  const num = (s: string) => Number(String(s).replace(/[,\s]/g, "")) || 0;
-  const cost = num(qty) * avgCost;
-  const profit = num(salePrice) - cost;
+  const cost = parseVnd(qty) * avgCost;
+  const profit = parseVnd(salePrice) - cost;
 
   return (
     <form action={formAction} className="sell-form">
@@ -74,7 +74,7 @@ export function SellForm({
         <button
           type="submit"
           className="btn btn-sm"
-          disabled={pending || num(qty) <= 0 || num(qty) > stock || num(salePrice) <= 0}
+          disabled={pending || parseVnd(qty) <= 0 || parseVnd(qty) > stock || parseVnd(salePrice) <= 0}
         >
           {pending ? "Đang bán…" : "Bán"}
         </button>

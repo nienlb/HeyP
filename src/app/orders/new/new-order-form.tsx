@@ -28,6 +28,7 @@ import { CustomerSheet, type CustomerPick } from "./customer-sheet";
 import { ItemSheet } from "./item-sheet";
 import { QuickImportSheet } from "./quick-import-sheet";
 import { photoUrl } from "@/lib/photos";
+import { groupVnd, parseDecimal, parseVnd } from "@/lib/parse-number";
 import { emptyItem, type CustomerOption, type ItemRow } from "./types";
 
 export function NewOrderForm({
@@ -68,22 +69,6 @@ export function NewOrderForm({
   >({ open: false });
   const [importOpen, setImportOpen] = useState(false);
 
-  const num = (s: string) => Number(String(s).replace(/[.,\s]/g, "")) || 0;
-  /**
-   * ¥ dùng dấu chấm làm THẬP PHÂN (vd "207.5"), không phải dấu ngăn nghìn —
-   * KHÔNG được xoá như num() ở trên. Dùng num() cho ¥ từng biến 207.5 thành
-   * 2075, làm sai giá vốn gấp ~10 lần (bug tiền thật, phát hiện lúc kiểm
-   * giáp v6: đơn giá thu 1.000.000₫ → Lời hiện -7.300.000₫ thay vì 170.000₫).
-   */
-  const numCny = (s: string) => Number(String(s).replace(/[,\s]/g, "")) || 0;
-
-  /** 4520000 → "4.520.000". Chuỗi rỗng giữ nguyên rỗng. */
-  function groupDigits(s: string): string {
-    if (s.trim() === "") return s;
-    const n = Number(String(s).replace(/[.,\s]/g, ""));
-    return Number.isFinite(n) ? n.toLocaleString("vi-VN") : s;
-  }
-
   /** Áp một patch (từ mergeMoneyFields) vào state form — chỉ set trường có mặt. */
   function applyMoneyPatch(patch: ReturnType<typeof mergeMoneyFields>["patch"]) {
     if (patch.newCustomerName !== undefined && patch.newCustomerName !== "")
@@ -120,7 +105,7 @@ export function NewOrderForm({
     } catch {
       // Tra lịch sử hỏng thì vẫn còn cách suy ngược — không chặn.
     }
-    const totalForFallback = order.totalVnd ?? num(currentTotalStr);
+    const totalForFallback = order.totalVnd ?? parseVnd(currentTotalStr);
     const perLineSell =
       order.items.length > 0
         ? Math.round(totalForFallback / order.items.length)
@@ -170,9 +155,9 @@ export function NewOrderForm({
   const parsedItems = useMemo(
     () =>
       items.map((it) => {
-        const quantity = num(it.quantity);
-        const unitPriceCny = numCny(it.unitPriceCny);
-        const sell = num(it.sellPriceVnd);
+        const quantity = parseVnd(it.quantity);
+        const unitPriceCny = parseDecimal(it.unitPriceCny);
+        const sell = parseVnd(it.sellPriceVnd);
         const line = { quantity, unitPriceCny, marginVnd: 0 };
         return {
           name: it.name.trim(),
@@ -184,7 +169,7 @@ export function NewOrderForm({
           sellVnd: sell,
           // Lời là PHẦN DƯ của dòng — phần lẻ do làm tròn ¥ rơi vào đây, nhờ
           // vậy Σ giá bán khớp đúng Total.
-          marginVnd: marginFromSellPrice(sell, line, num(exchangeRate)),
+          marginVnd: marginFromSellPrice(sell, line, parseVnd(exchangeRate)),
           photoIds: it.photos.map((p) => p.id),
         };
       }),
@@ -193,14 +178,14 @@ export function NewOrderForm({
 
   const validItems = parsedItems.filter((it) => it.name !== "");
   const goodsTotalCny = sumLineItemsCny(validItems);
-  const goodsVnd = Math.round(goodsTotalCny * num(exchangeRate));
+  const goodsVnd = Math.round(goodsTotalCny * parseVnd(exchangeRate));
 
   /** Σ giá bán các dòng — Total mặc định của đơn từ v6. */
   const linesTotal = validItems.reduce(
     (s, it) => s + it.sellVnd * it.quantity,
     0,
   );
-  const overrideVnd = num(totalOverride);
+  const overrideVnd = parseVnd(totalOverride);
   const totalVnd = totalOverride.trim() !== "" ? overrideVnd : linesTotal;
 
   /**
@@ -218,7 +203,7 @@ export function NewOrderForm({
         unitPriceCny: it.unitPriceCny,
         marginVnd: it.marginVnd,
       })),
-      num(exchangeRate),
+      parseVnd(exchangeRate),
       defaultMarginVnd,
     );
     let k = 0;
@@ -238,10 +223,10 @@ export function NewOrderForm({
 
   const money = computeOrderMoney({
     goodsTotalCny,
-    exchangeRate: num(exchangeRate),
+    exchangeRate: parseVnd(exchangeRate),
     serviceFee: marginVnd,
-    shippingFee: num(shippingFee),
-    deposit: num(deposit),
+    shippingFee: parseVnd(shippingFee),
+    deposit: parseVnd(deposit),
   });
 
   // KHÔNG bắt buộc có khách: đơn từ ảnh chốt thường chưa có thông tin khách.
@@ -249,7 +234,7 @@ export function NewOrderForm({
   const canSubmit =
     validItems.length > 0 &&
     validItems.every((it) => it.quantity > 0 && it.sellVnd > 0) &&
-    num(exchangeRate) > 0 &&
+    parseVnd(exchangeRate) > 0 &&
     totalVnd > 0;
 
   function handleShippingFeeChange(v: string) {
@@ -373,7 +358,7 @@ export function NewOrderForm({
                 {it.attributes || "—"} · ×{it.quantity || 0}
               </span>
               <span className="ic-price num">
-                {it.sellPriceVnd ? `${groupDigits(it.sellPriceVnd)}₫` : "—"}
+                {it.sellPriceVnd ? `${groupVnd(it.sellPriceVnd)}₫` : "—"}
               </span>
             </button>
           ))}
@@ -395,7 +380,7 @@ export function NewOrderForm({
             value={deposit}
             onChange={(e) => setDeposit(e.target.value)}
             onFocus={(e) => setDeposit(e.target.value.replace(/[.,\s]/g, ""))}
-            onBlur={(e) => setDeposit(groupDigits(e.target.value))}
+            onBlur={(e) => setDeposit(groupVnd(e.target.value))}
             enterKeyHint="done"
           />
         </label>
@@ -411,7 +396,7 @@ export function NewOrderForm({
               onFocus={(e) =>
                 setTotalOverride(e.target.value.replace(/[.,\s]/g, ""))
               }
-              onBlur={(e) => setTotalOverride(groupDigits(e.target.value))}
+              onBlur={(e) => setTotalOverride(groupVnd(e.target.value))}
               placeholder={`Bỏ trống = ${linesTotal.toLocaleString("vi-VN")}`}
             />
           </label>
@@ -434,7 +419,7 @@ export function NewOrderForm({
               onFocus={(e) =>
                 handleShippingFeeChange(e.target.value.replace(/[.,\s]/g, ""))
               }
-              onBlur={(e) => handleShippingFeeChange(groupDigits(e.target.value))}
+              onBlur={(e) => handleShippingFeeChange(groupVnd(e.target.value))}
               placeholder="Chưa biết thì để trống"
             />
           </label>
@@ -499,7 +484,7 @@ export function NewOrderForm({
         onDelete={
           itemSheet.open && itemSheet.index !== null ? deleteItem : undefined
         }
-        sellRate={num(exchangeRate)}
+        sellRate={parseVnd(exchangeRate)}
         defaultMarginVnd={defaultMarginVnd}
       />
 

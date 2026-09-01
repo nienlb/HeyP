@@ -31,11 +31,7 @@ import {
   type OrderType,
 } from "@/lib/order-status";
 import type { ShipStatus } from "@/lib/order-gaps";
-
-function num(v: FormDataEntryValue | null): number {
-  const n = Number(String(v ?? "").replace(/[,\s]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
+import { parseDecimal, parseVnd } from "@/lib/parse-number";
 
 export type CreateOrderState = { error?: string };
 
@@ -51,9 +47,9 @@ export async function createOrderAction(
     ? (orderTypeRaw as OrderType)
     : "order_ho";
 
-  const exchangeRate = num(formData.get("exchangeRate"));
-  const shippingFee = num(formData.get("shippingFee"));
-  const deposit = num(formData.get("deposit"));
+  const exchangeRate = parseDecimal(formData.get("exchangeRate"));
+  const shippingFee = parseVnd(formData.get("shippingFee"));
+  const deposit = parseVnd(formData.get("deposit"));
   const note = String(formData.get("note") ?? "").trim() || null;
 
   const shipStatusRaw = String(formData.get("shipStatus") ?? "");
@@ -81,7 +77,7 @@ export async function createOrderAction(
         String(formData.get("newCustomerAddress") ?? "").trim() || undefined,
     };
   } else {
-    customerId = num(formData.get("customerId")) || null;
+    customerId = parseVnd(formData.get("customerId")) || null;
   }
 
   // Sản phẩm.
@@ -127,9 +123,9 @@ export async function createOrderAction(
   const quotedRaw = formData.get("quotedTotalVnd");
   const quotedTotalVnd =
     quotedRaw !== null
-      ? num(quotedRaw)
+      ? parseVnd(quotedRaw)
       : Math.round(sumLineItemsCny(items) * exchangeRate) +
-        num(formData.get("serviceFee"));
+        parseVnd(formData.get("serviceFee"));
 
   // Ảnh cấp đơn từ màn nhập nhanh: TẤT CẢ ảnh đã thả, không chỉ ảnh chốt đơn.
   const orderPhotoIds = String(formData.get("zaloPhotoIds") ?? "")
@@ -237,7 +233,7 @@ export async function updateLineCostAction(formData: FormData): Promise<void> {
   const result = await updateLineCost(
     orderId,
     itemId,
-    num(formData.get("unitPriceCny")),
+    parseDecimal(formData.get("unitPriceCny")),
   );
 
   if (!result.ok)
@@ -257,7 +253,7 @@ export async function updateLineMarginAction(formData: FormData): Promise<void> 
   const result = await updateLineMargin(
     orderId,
     itemId,
-    num(formData.get("marginVnd")),
+    parseVnd(formData.get("marginVnd")),
   );
 
   if (!result.ok)
@@ -282,7 +278,7 @@ export async function setShipFeeAction(formData: FormData): Promise<void> {
   const result = await setShipFee(
     orderId,
     shipStatus,
-    num(formData.get("shippingFee")),
+    parseVnd(formData.get("shippingFee")),
   );
 
   if (!result.ok)
@@ -332,7 +328,7 @@ export async function addPaymentAction(formData: FormData): Promise<void> {
 
   const result = await addPayment({
     orderId,
-    amountVnd: num(formData.get("amountVnd")),
+    amountVnd: parseVnd(formData.get("amountVnd")),
     paidAt: parseDateInput(formData.get("paidAt")),
     kind,
     method,
@@ -486,8 +482,8 @@ export async function addItemAction(formData: FormData): Promise<void> {
     name: String(formData.get("name") ?? ""),
     attributes: String(formData.get("attributes") ?? "").trim() || null,
     productUrl: String(formData.get("productUrl") ?? "").trim() || null,
-    quantity: num(formData.get("quantity")),
-    sellVnd: num(formData.get("sellVnd")),
+    quantity: parseVnd(formData.get("quantity")),
+    sellVnd: parseVnd(formData.get("sellVnd")),
     unitPriceCny: Number(String(formData.get("unitPriceCny") ?? "0")) || 0,
     costConfirmed: String(formData.get("costConfirmed")) === "true",
   });

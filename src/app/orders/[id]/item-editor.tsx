@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Sheet } from "../../_components/sheet";
 import { cnyFromSellPrice } from "@/lib/line-pricing";
+import { parseVnd } from "@/lib/parse-number";
 import { addItemAction } from "../actions";
 
 export function AddItemButton({
@@ -19,12 +20,10 @@ export function AddItemButton({
   const [cny, setCny] = useState("");
   const [confirmed, setConfirmed] = useState(false);
 
-  const num = (s: string) => Number(String(s).replace(/[.,\s]/g, "")) || 0;
-
   function onSellChange(v: string) {
     setSell(v);
     if (confirmed) return;
-    const next = cnyFromSellPrice(num(v), sellRate, defaultMarginVnd);
+    const next = cnyFromSellPrice(parseVnd(v), sellRate, defaultMarginVnd);
     setCny(next > 0 ? String(next) : "");
   }
 

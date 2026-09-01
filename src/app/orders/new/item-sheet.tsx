@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Sheet } from "../../_components/sheet";
 import { cnyFromSellPrice } from "@/lib/line-pricing";
+import { parseVnd } from "@/lib/parse-number";
 import { emptyItem, type ItemPhoto, type ItemRow } from "./types";
 import { ItemPhotos } from "./item-photos";
 
@@ -32,9 +33,8 @@ export function ItemSheet({
   }, [open, initial]);
 
   const set = (patch: Partial<ItemRow>) => setRow((r) => ({ ...r, ...patch }));
-  const num = (s: string) => Number(String(s).replace(/[.,\s]/g, "")) || 0;
 
-  const sell = num(row.sellPriceVnd);
+  const sell = parseVnd(row.sellPriceVnd);
   const valid = row.name.trim() !== "" && Number(row.quantity) > 0 && sell > 0;
 
   /**
@@ -43,7 +43,7 @@ export function ItemSheet({
    * số suy đoán.
    */
   function setSell(v: string) {
-    const nextSell = num(v);
+    const nextSell = parseVnd(v);
     if (row.costConfirmed && row.unitPriceCny.trim() !== "") {
       set({ sellPriceVnd: v });
       return;

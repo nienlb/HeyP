@@ -15,11 +15,7 @@ import {
   type ExpenseCategory,
   type PaymentMethod,
 } from "@/lib/expenses";
-
-function num(v: FormDataEntryValue | null): number {
-  const n = Number(String(v ?? "").replace(/[,\s]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
+import { parseDecimal, parseVnd } from "@/lib/parse-number";
 
 function parseDate(v: FormDataEntryValue | null): Date {
   const s = String(v ?? "").trim();
@@ -33,8 +29,8 @@ export async function addTopupAction(formData: FormData): Promise<void> {
   if (!session) redirect("/login");
 
   const result = await addTopup({
-    cny: num(formData.get("cny")),
-    vndPaid: num(formData.get("vndPaid")),
+    cny: parseDecimal(formData.get("cny")),
+    vndPaid: parseVnd(formData.get("vndPaid")),
     note: String(formData.get("note") ?? "").trim() || null,
   });
 
@@ -69,12 +65,12 @@ export async function addExpenseAction(formData: FormData): Promise<void> {
   const method = (PAYMENT_METHODS as readonly string[]).includes(methodRaw)
     ? (methodRaw as PaymentMethod)
     : "chuyen_khoan";
-  const orderIdRaw = num(formData.get("orderId"));
+  const orderIdRaw = parseVnd(formData.get("orderId"));
 
   const result = await addExpense({
     spentAt: parseDate(formData.get("spentAt")),
     category,
-    amountVnd: num(formData.get("amountVnd")),
+    amountVnd: parseVnd(formData.get("amountVnd")),
     orderId: orderIdRaw > 0 ? orderIdRaw : null,
     method,
     note: String(formData.get("note") ?? "").trim() || null,

@@ -6,19 +6,16 @@ import { getSession, requireAuth } from "@/lib/auth";
 import { saveSettings } from "@/db/queries";
 import { changeOwnPassword } from "@/db/users";
 import { SETTING_DEFAULTS } from "@/lib/settings";
+import { parseVnd } from "@/lib/parse-number";
 
 /** Bỏ dấu ngăn nghìn kiểu Việt ("170.000" → 170000). */
-function num(v: FormDataEntryValue | null): number {
-  const n = Number(String(v ?? "").replace(/[,.\s]/g, ""));
-  return Number.isFinite(n) ? n : NaN;
-}
 
 export async function saveSettingsAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const sellRate = num(formData.get("sellRate"));
-  const defaultMarginVnd = num(formData.get("defaultMarginVnd"));
+  const sellRate = parseVnd(formData.get("sellRate"));
+  const defaultMarginVnd = parseVnd(formData.get("defaultMarginVnd"));
 
   await saveSettings({
     sellRate: sellRate > 0 ? sellRate : SETTING_DEFAULTS.sellRate,

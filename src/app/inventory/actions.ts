@@ -9,11 +9,7 @@ import {
   getSettings,
   sellFromStock,
 } from "@/db/queries";
-
-function num(v: FormDataEntryValue | null): number {
-  const n = Number(String(v ?? "").replace(/[,\s]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
+import { parseDecimal, parseVnd } from "@/lib/parse-number";
 
 export type SellState = { error?: string };
 
@@ -24,10 +20,10 @@ export async function sellFromStockAction(
   const session = await getSession();
   if (!session) return { error: "Phiên đăng nhập đã hết hạn." };
 
-  const inventoryId = num(formData.get("inventoryId"));
-  const quantity = num(formData.get("quantity"));
-  const salePriceVnd = num(formData.get("salePrice"));
-  const deposit = num(formData.get("deposit"));
+  const inventoryId = parseVnd(formData.get("inventoryId"));
+  const quantity = parseVnd(formData.get("quantity"));
+  const salePriceVnd = parseVnd(formData.get("salePrice"));
+  const deposit = parseVnd(formData.get("deposit"));
   const newName = String(formData.get("customerName") ?? "").trim();
 
   if (!inventoryId) return { error: "Thiếu mã hàng." };
@@ -69,9 +65,9 @@ export async function stockInAction(
   if (!session) return { error: "Phiên đăng nhập đã hết hạn." };
 
   const name = String(formData.get("productName") ?? "").trim();
-  const quantity = num(formData.get("quantity"));
-  const unitPriceCny = num(formData.get("unitPriceCny"));
-  const rateRaw = num(formData.get("exchangeRate"));
+  const quantity = parseVnd(formData.get("quantity"));
+  const unitPriceCny = parseDecimal(formData.get("unitPriceCny"));
+  const rateRaw = parseDecimal(formData.get("exchangeRate"));
   const exchangeRate = rateRaw > 0 ? rateRaw : (await getSettings()).sellRate;
 
   if (!name) return { error: "Thiếu tên hàng." };

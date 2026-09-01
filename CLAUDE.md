@@ -72,6 +72,14 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
   `order_id`/`order_item_id`/`inventory_id` đều NULL và cũ hơn 24h. Ân hạn 24h
   là để không cướp ảnh của form đang mở. Xoá file trên Storage TRƯỚC, xoá dòng
   DB SAU — ngược lại là mất dấu file, nó nằm trên Storage vĩnh viễn.
+- **Đọc số người dùng gõ PHẢI qua `src/lib/parse-number.ts`** — `parseVnd` cho
+  tiền VND (dấu chấm = NGĂN NGHÌN, bỏ đi), `parseDecimal` cho ¥ và tỷ giá (dấu
+  chấm = THẬP PHÂN, giữ lại). Đừng viết `num()` riêng cho từng màn: trước đây
+  có 8 hàm như vậy, mâu thuẫn nhau, và đẻ ra hai bug tiền THẬT —
+  (a) ô Cọc/Phí ship định dạng "500.000" gửi lên server chỉ bỏ dấu phẩy,
+  `Number("500.000")` = **500**, không lỗi gì, cọc vào DB sai 1000 lần;
+  (b) dùng parser kiểu VND cho ¥ biến "207.5" thành 2075, sai giá vốn ~10 lần.
+  Bất biến `parseVnd(groupVnd(x)) === x` được test khoá.
 - **SQL thô đi qua lớp `Exec`** (`src/db/raw.ts`: `raw.all/get/run`, `withTx`) — SQL viết placeholder kiểu SQLite (`?`), lớp này tự đổi sang `$1,$2` của Postgres. Trong transaction (`withTx`) **PHẢI** dùng `x` được truyền vào, KHÔNG dùng `raw` toàn cục — dùng nhầm thì câu đó chạy ngoài transaction, không rollback theo.
 - **Alias camelCase trong SQL thô phải bọc nháy kép** (`AS "orderType"`, không phải `AS orderType`) — Postgres hạ chữ thường alias không nháy kép, code JS đọc `undefined`. Bug loại này không lỗi cú pháp, chỉ âm thầm trả sai dữ liệu.
 - **`SUM()`/`COUNT()` trên cột `integer` phải ép `::int`** — nếu không, kiểu trả về của Postgres qua postgres-js là `bigint`→string, JS `+` sẽ nối chuỗi thay vì cộng số. Cột `double precision` (giá ¥, tỷ giá) không cần ép.
