@@ -2,11 +2,11 @@ import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { AppShell } from "../_components/app-shell";
 import { ChipBar, Chip } from "../_components/chip";
-import { ListRow } from "../_components/list-row";
 import { listOrdersWithGaps, type OrderListRow } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import { GAP_CODES, GAP_LABELS, type GapCode } from "@/lib/order-gaps";
 import { STATUS_LABELS } from "@/lib/order-status";
+import { OrdersList } from "./orders-list";
 
 type RowWithGaps = OrderListRow & { gaps: GapCode[] };
 
@@ -126,35 +126,26 @@ export default async function OrdersPage({
           )}
         </div>
       ) : (
-        rows.map((o) => (
-          <ListRow
-            key={o.id}
-            href={`/orders/${o.id}`}
-            title={
-              <>
-                {o.customerName}
-                {o.gaps.length > 0 && (
-                  <span
-                    className="gap-dot"
-                    title={o.gaps.map((g) => GAP_LABELS[g]).join(" · ")}
-                  />
-                )}
-              </>
-            }
-            meta={
-              <>
-                {STATUS_LABELS[o.status]} ·{" "}
-                {o.status === "su_co"
-                  ? "⚠️ Sự cố"
-                  : o.isStale
-                    ? `⏳ ${o.ageDays} ngày`
-                    : `${o.ageDays}n`}
-              </>
-            }
-            amount={formatVnd(o.amountDue)}
-            trailing={<span className="lr-id">#{o.id}</span>}
-          />
-        ))
+        <OrdersList
+          rows={rows.map((o) => ({
+            id: o.id,
+            orderType: o.orderType,
+            status: o.status,
+            goodsTotalCny: o.goodsTotalCny,
+            href: `/orders/${o.id}`,
+            customerName: o.customerName,
+            metaText: `${STATUS_LABELS[o.status]} · ${
+              o.status === "su_co"
+                ? "⚠️ Sự cố"
+                : o.isStale
+                  ? `⏳ ${o.ageDays} ngày`
+                  : `${o.ageDays}n`
+            }`,
+            amountText: formatVnd(o.amountDue),
+            hasGap: o.gaps.length > 0,
+            gapTitle: o.gaps.map((g) => GAP_LABELS[g]).join(" · "),
+          }))}
+        />
       )}
     </AppShell>
   );

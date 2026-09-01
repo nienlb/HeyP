@@ -141,6 +141,11 @@
   backdrop-filter: blur(20px);
   border-top: 1px solid var(--border);
 }
+/* Thanh chọn hàng loạt (v6) dựng từ trong thân trang, không qua AppShell
+   bottomBar — tabbar và sticky-bar không bao giờ được chồng lên nhau. */
+.app-shell:has(.sticky-bar) .tabbar {
+  display: none;
+}
 .tab-link {
   flex: 1;
   display: flex;

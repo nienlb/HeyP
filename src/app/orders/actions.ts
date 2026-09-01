@@ -430,3 +430,65 @@ export async function deleteOrderAction(formData: FormData): Promise<void> {
   revalidatePath("/orders");
   redirect("/orders");
 }
+
+// ---------- Chuyển bước hàng loạt (v6) ----------
+
+import { raw } from "@/db/raw";
+import { planBulkAdvance, BULK_LIMIT } from "@/lib/bulk-status";
+
+export type BulkResult = { ok: number; failed: { id: number; reason: string }[] };
+
+/**
+ * Chuyển bước tiếp theo cho nhiều đơn.
+ *
+ * Chạy TUẦN TỰ, không Promise.all: side-effect ví ¥ là đọc-rồi-ghi (tính lại
+ * số dư từ cny_ledger rồi ghi dòng mới), chạy song song sẽ đua nhau. Pool
+ * cũng chỉ có max: 5.
+ *
+ * Mỗi đơn đi qua đúng changeOrderStatus — KHÔNG UPDATE thẳng orders.status —
+ * để giữ nguyên side-effect ví/kho, dòng lịch sử, và autoCompleteIfPaid.
+ */
+export async function bulkAdvanceAction(ids: number[]): Promise<BulkResult> {
+  const session = await getSession();
+  if (!session)
+    return { ok: 0, failed: [{ id: 0, reason: "Phiên đăng nhập đã hết hạn." }] };
+
+  const clean = ids
+    .map((n) => Number(n))
+    .filter((n) => Number.isInteger(n) && n > 0)
+    .slice(0, BULK_LIMIT);
+
+  const failed: { id: number; reason: string }[] = [];
+  let ok = 0;
+
+  for (const id of clean) {
+    // Đọc lại trạng thái ngay trước khi chuyển: kế hoạch dựng ở client có thể
+    // đã cũ nếu người kia vừa đổi đơn.
+    const row = await raw.get<{ orderType: OrderType; status: OrderStatus }>(
+      `SELECT order_type AS "orderType", status FROM orders WHERE id = ?`,
+      [id],
+    );
+    if (!row) {
+      failed.push({ id, reason: "Không tìm thấy đơn" });
+      continue;
+    }
+    const plan = planBulkAdvance([
+      { id, orderType: row.orderType, status: row.status, goodsTotalCny: 0 },
+    ]);
+    const to = plan.groups[0]?.to;
+    if (!to) {
+      failed.push({
+        id,
+        reason: plan.skipped[0]?.reason ?? "Không có bước tiếp theo",
+      });
+      continue;
+    }
+
+    const result = await changeOrderStatus(id, to, session.username);
+    if (result.ok) ok += 1;
+    else failed.push({ id, reason: result.reason });
+  }
+
+  revalidatePath("/orders");
+  return { ok, failed };
+}
