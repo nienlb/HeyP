@@ -15,10 +15,14 @@ const MAIN: NavItem[] = [
  *
  * Sao lưu, Thành viên, Nhật ký xoá KHÔNG nằm ở đây — gom cả ba vào trong
  * màn Cài đặt (đỡ dài menu chính), xem src/app/settings/page.tsx.
+ *
+ * Tracking đã bỏ khỏi đây (v8-A) vì CARRIER_ADAPTERS còn rỗng — chưa có đơn
+ * vị vận chuyển nào. Route /tracking, bảng packages/order_packages và cron
+ * sweep GIỮ NGUYÊN: lúc có adapter thật chỉ cần thêm lại đúng một dòng
+ * { href: "/tracking", label: "Tracking", icon: "tracking" } vào mảng dưới.
  */
 const MORE: NavItem[] = [
   { href: "/customers", label: "Khách hàng", icon: "customers" },
-  { href: "/tracking", label: "Tracking", icon: "tracking" },
   { href: "/finance", label: "Tài chính", icon: "finance" },
   { href: "/reports", label: "Báo cáo", icon: "reports" },
   { href: "/settings", label: "Cài đặt", icon: "settings" },
