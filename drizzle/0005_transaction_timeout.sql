@@ -1,0 +1,47 @@
+-- Guardrail #2 chống connection mồ côi (v6, 01/09) — vá lỗ mà 0004 để lọt.
+--
+-- TRIỆU CHỨNG: app đơ trở lại dù 0004 đã chạy đúng (đo được: qua cổng 6543,
+-- `SHOW statement_timeout` trả 15s, `idle_in_transaction_session_timeout`
+-- trả 30s — cả hai đều có hiệu lực thật).
+--
+-- ĐO ĐƯỢC TRÊN PRODUCTION 01/09: 6 phiên giữ transaction mở tới 525 giây,
+-- không phiên nào bị hai guardrail của 0004 đụng tới. Trạng thái của chúng
+-- trong pg_stat_activity:
+--
+--     state = 'active'   wait_event_type = 'Client'   wait_event = 'ClientRead'
+--     xact_start ≈ query_start ≈ 400–525 giây trước
+--
+-- VÌ SAO CẢ HAI GUARDRAIL CŨ ĐỀU BẮT TRƯỢT trạng thái này:
+--   - statement_timeout chỉ đếm thời gian backend THỰC THI. Ở đây backend
+--     không thực thi gì cả, nó đang chờ client gửi message tiếp theo
+--     (ClientRead) → đồng hồ không chạy.
+--   - idle_in_transaction_session_timeout chỉ áp cho state
+--     'idle in transaction'. Postgres báo các phiên này là 'active' → không
+--     khớp điều kiện, timeout không bao giờ nổ.
+--
+-- CƠ CHẾ: trong extended query protocol, client gửi Parse/Bind/Execute rồi
+-- mới tới Sync. Vercel đóng băng function ở đúng quãng giữa đó thì backend
+-- nằm lại chờ Sync vĩnh viễn, mang theo một transaction đang mở. Supavisor
+-- vẫn giữ socket nên server không hề thấy client đã chết. Slot pool mất luôn.
+-- Query kẹt nhiều nhất là `SELECT ... FROM users WHERE id = $1` — chính là
+-- getSession(), chạy ở MỌI request, nên pool cạn là cả app đơ.
+--
+-- CÁCH CHỮA: transaction_timeout (có từ Postgres 17; DB đang chạy 17.6) giới
+-- hạn TỔNG thời gian một transaction, bất kể phiên đang ở state nào và đang
+-- chờ ai. Đây là cái duy nhất trong ba timeout chạm được trạng thái trên.
+-- Quá hạn thì Postgres huỷ transaction VÀ ngắt luôn phiên, trả slot về pool.
+--
+-- Vì sao chọn 60s: dài hơn statement_timeout (15s) và
+-- idle_in_transaction_session_timeout (30s) nên không cướp việc của chúng —
+-- transaction hợp lệ mà chạy lâu vẫn để hai cái kia xử trước. Mọi withTx
+-- thật của app (createOrder, changeOrderStatus, xoá đơn) đều dưới 1 giây.
+-- Đã kiểm: scripts/restore-from-json.ts INSERT từng dòng ngoài transaction,
+-- GET /api/backup không mở transaction — không cái nào bị 60s cắt nhầm.
+--
+-- LƯU Ý KHI VẬN HÀNH (giống 0004): thiết lập mức role chỉ áp cho phiên MỚI.
+-- Sau khi chạy migration này phải pg_terminate_backend các connection cũ mà
+-- Supavisor đang giữ, nếu không chúng vẫn mang giá trị cũ. Và migration nào
+-- có transaction chạy lâu hơn 60s phải tự mở đầu bằng
+-- `SET transaction_timeout = 0;` (song song với `SET statement_timeout = 0;`).
+
+ALTER ROLE postgres SET transaction_timeout = '60s';

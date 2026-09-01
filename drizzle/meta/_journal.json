@@ -36,6 +36,13 @@
       "when": 1788240000000,
       "tag": "0004_db_guardrails",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788246900000,
+      "tag": "0005_transaction_timeout",
+      "breakpoints": true
     }
   ]
 }
