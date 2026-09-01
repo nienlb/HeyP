@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
 import { AppShell } from "../_components/app-shell";
+import { Icon } from "../_components/icons";
 import { getSettings } from "@/db/queries";
 import { saveSettingsAction } from "./actions";
 import { PasswordForm } from "./password-form";
@@ -56,6 +58,25 @@ export default async function SettingsPage({
       </section>
 
       <PasswordForm />
+
+      <section className="card">
+        <h2 className="card-title">Khác</h2>
+        <div className="sheet-menu">
+          <Link href="/backup" className="sheet-item">
+            <Icon name="backup" size={20} /> Sao lưu
+          </Link>
+          {session.role === "admin" && (
+            <>
+              <Link href="/admin/users" className="sheet-item">
+                <Icon name="users" size={20} /> Thành viên
+              </Link>
+              <Link href="/admin/deletions" className="sheet-item">
+                <Icon name="trash" size={20} /> Nhật ký xoá
+              </Link>
+            </>
+          )}
+        </div>
+      </section>
     </AppShell>
   );
 }
