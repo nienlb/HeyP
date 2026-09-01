@@ -198,3 +198,171 @@
   align-items: center;
   gap: var(--sp-2);
 }
+
+/* ---------- Trạng thái tải, lỗi, và khôi phục ---------- */
+
+@keyframes heyp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes heyp-appear {
+  to {
+    opacity: 1;
+  }
+}
+
+.spinner {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid var(--brand-tint-2);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: heyp-spin 0.7s linear infinite;
+}
+
+.spinner-inline {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+  /* Trong nút nền navy, viền nhạt gốc chìm mất — mượn màu chữ của nút. */
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: var(--on-brand);
+}
+
+/* Màn chờ phủ toàn khung. `position: fixed` chứ không phải khối trong luồng:
+   nó thay thế cả màn hình cũ, kể cả tabbar, nên không được để nội dung cũ
+   thò ra dưới nó và làm người dùng tưởng còn bấm được. */
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+  padding-top: calc(var(--sp-5) + var(--sat));
+  padding-bottom: calc(var(--sp-5) + var(--sab));
+  background: var(--bg);
+  /* Hiện trễ: điều hướng bình thường xong trong ~0,3s, component đã tháo
+     trước khi animation kịp chạy nên người dùng KHÔNG thấy spinner nháy.
+     Chỉ lần tải thật sự chậm mới lộ ra. */
+  opacity: 0;
+  animation: heyp-appear 0.2s ease-out 0.25s forwards;
+}
+
+.loading-screen-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  max-width: 380px;
+  width: 100%;
+}
+
+.loading-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-3);
+}
+
+.error-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+  padding-top: calc(var(--sp-5) + var(--sat));
+  padding-bottom: calc(var(--sp-5) + var(--sab));
+  background: var(--bg);
+}
+
+.error-screen-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  max-width: 380px;
+  width: 100%;
+}
+
+.error-screen-heading {
+  margin: 0;
+  font-size: var(--fs-5);
+  font-weight: 650;
+}
+
+.error-digest {
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: var(--fs-2);
+  /* Mã lỗi để đối chiếu log Vercel — chọn được bằng tay để copy. */
+  user-select: text;
+}
+
+.recovery {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: var(--sp-4);
+  text-align: center;
+}
+
+.recovery-title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-4);
+  font-weight: 650;
+}
+
+.recovery-detail {
+  margin: 0 0 var(--sp-4);
+  color: var(--muted);
+  font-size: var(--fs-2);
+  line-height: 1.5;
+}
+
+.recovery-actions {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.recovery-probing {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-2);
+}
+
+/* Bản gọn cho màn đăng nhập: nằm trong thẻ .login-card sẵn có nên bỏ nền và
+   viền, tránh thẻ lồng thẻ. */
+.recovery-compact {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: var(--sp-4) 0 0;
+}
+
+/* Ai tắt hiệu ứng chuyển động thì không quay — nhưng vẫn phải THẤY là đang
+   bận, nên đổi sang nhấp nháy độ mờ chứ không bỏ hẳn tín hiệu. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: heyp-appear 1s ease-in-out infinite alternate;
+    opacity: 0.35;
+  }
+  .loading-screen {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+/* Cảnh báo cho lần mở app đầu tiên, khi React chưa hydrate nên watchdog bằng
+   JS không chạy được (xem chú thích trong loading-screen.tsx).
+   ĐỘ TRỄ 8s PHẢI KHỚP SLOW_AFTER_MS trong src/lib/ui-timeouts.ts — CSS không
+   đọc được hằng số TS, nên hai chỗ này buộc phải sửa cùng nhau. */
+.recovery-static {
+  opacity: 0;
+  animation: heyp-appear 0.3s ease-out 8s forwards;
+}

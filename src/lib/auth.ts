@@ -85,6 +85,22 @@ export const getSession = cache(async (): Promise<Session | null> => {
   return { id: user.id, username: user.username, role: user.role };
 });
 
+/**
+ * Cookie phiên có chữ ký hợp lệ hay không — KHÔNG đụng DB.
+ *
+ * Cố ý tách khỏi getSession(): /api/health cần phân biệt "phiên đã hết hạn"
+ * với "DB đang chết". getSession() gộp hai thứ đó (nó đọc bảng users, nên DB
+ * lỗi cũng trả null y như hết phiên) — dùng nó để chẩn đoán thì lúc DB sập sẽ
+ * báo nhầm cho người dùng là hết phiên, và họ đăng nhập lại trong vô vọng.
+ *
+ * Chỉ nói lên "cookie này do mình ký và chưa bị sửa". KHÔNG khẳng định tài
+ * khoản còn sống hay còn quyền — mọi trang vẫn phải đi qua requireAuth().
+ */
+export async function hasValidSessionCookie(): Promise<boolean> {
+  const store = await cookies();
+  return verifyToken(store.get(COOKIE_NAME)?.value) !== null;
+}
+
 /** Dùng ở đầu server component cần bảo vệ: chưa đăng nhập → về /login. */
 export async function requireAuth(): Promise<Session> {
   const session = await getSession();

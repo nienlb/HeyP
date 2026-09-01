@@ -108,6 +108,29 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
 - **`src/db/schema.ts` dùng alias `@/`** → chỉ Next/tsc nạp được. Script chạy bằng `node` KHÔNG import được schema → viết SQL thô hoặc import trực tiếp `drizzle-orm/pg-core` (xem `scripts/migrate-to-postgres.ts`).
 - **Test import module bằng đuôi `.ts` tường minh** (vd `../src/lib/money.ts`); `tsconfig` đã bật `allowImportingTsExtensions`. Module thuần dùng cho test không được import file khác có alias `@/`.
 - **Điều hướng (v5):** mọi trang có đăng nhập bọc bằng `<AppShell username title backHref? action? bottomBar?>` (`src/app/_components/app-shell.tsx`). `title` bắt buộc — tsc tự bắt trang nào quên. `backHref` là URL tường minh, không dựa vào `history.back()` (chế độ standalone/PWA có thể mở thẳng URL sâu, không có gì để lùi). Có `bottomBar` thì tabbar tự ẩn — một màn không bao giờ có cả hai. Ô `[+]` giữa tabbar **luôn luôn** là "tạo đơn" (`/orders/new`), không đổi nghĩa theo màn đang mở; nút hành động khác (nhập kho, nhập nhanh từ ảnh) là nút riêng ở header, class `.header-action-float`. Sidebar/bottom-tab đọc mục điều hướng từ `nav-config.ts` — thêm màn mới thì sửa 1 chỗ đó, không sửa từng component. Từ 900px trở lên: sidebar quay lại, tabbar ẩn (luật trong `@media (min-width: 900px)` ở `src/styles/layout.css`).
+- **Phản hồi khi tải đi qua BA lớp, mỗi lớp bắt một cảnh khác nhau** (v6) —
+  `app/loading.tsx` (Suspense ở gốc) cho lúc chuyển màn, `app/error.tsx` cho
+  lúc server ném lỗi, `useFormStatus` cho nút Đăng nhập. Trước đó app không có
+  file nào trong số này: bấm mà server render lâu thì màn hình cũ đứng nguyên,
+  không dấu hiệu gì — đó chính là cái người dùng gọi là "đơ".
+  - **Watchdog KHÔNG chạy ở lần mở app đầu tiên** — React không hydrate nội
+    dung fallback của Suspense (nó đợi boundary giải quyết xong), nên
+    `useEffect` trong `LoadingScreen` câm khi tải thẳng URL hoặc chạm icon PWA.
+    Đã kiểm chứng: trang chậm 60s, tới giây thứ 11 vẫn chỉ có spinner. Vì vậy
+    mới có khối `.recovery-static` hiện bằng `animation-delay` của CSS — CSS
+    chạy trong lúc trang đang stream, không cần JS. Đừng xoá nó vì "React lo
+    rồi": React chỉ lo được đường chuyển màn trong app.
+  - **Độ trễ 8s nằm ở HAI chỗ phải sửa cùng nhau**: `SLOW_AFTER_MS` trong
+    `src/lib/ui-timeouts.ts` và `animation-delay` của `.recovery-static` trong
+    `components.css`. CSS không đọc được hằng số TS.
+  - **`/api/health` cố ý KHÔNG yêu cầu đăng nhập** — nếu bắt buộc có phiên thì
+    đúng lúc phiên hết hạn (lúc cần nó nhất) nó lại không nói được gì. Nó chỉ
+    tiết lộ "cookie còn hợp lệ không" + "DB có sống không", không có dữ liệu
+    nghiệp vụ.
+  - **Chẩn đoán dùng `hasValidSessionCookie()` chứ KHÔNG dùng `getSession()`**
+    — `getSession()` đọc bảng `users`, nên DB chết cũng trả `null` y hệt hết
+    phiên. Dùng nó để chẩn đoán thì lúc DB sập sẽ báo nhầm "hết phiên" và
+    người dùng đăng nhập lại trong vô vọng.
 - **Mọi ô nhập PHẢI `font-size: var(--fs-3)` (16px)** — dưới ngưỡng này Safari iOS tự phóng to trang khi chạm vào ô. Luật cứng, áp cho MỌI `input`/`select`/`textarea` kể cả trong `legacy.css`. Đã có lần luật mới (`components.css`) và luật cũ (`legacy.css`, `.field input` v.v.) cùng độ đặc hiệu CSS, luật cũ (import sau) thắng — kiểm bằng `[...document.querySelectorAll("input,select,textarea")].map(el=>getComputedStyle(el).fontSize)` mỗi khi thêm form mới, đừng tin bằng mắt.
 - **Mọi thanh dính đáy/dính đỉnh phải cộng `env(safe-area-inset-*)`** (biến `--sat`/`--sab` trong `tokens.css`) — thiếu dòng này thì tabbar/StickyBar nằm dưới thanh home indicator của iPhone. `viewport-fit=cover` (`src/app/layout.tsx`, `export const viewport`) là điều kiện để các biến này có giá trị thật; thiếu nó thì mọi safe-area luôn ra 0px kể cả trên máy thật.
 - **`Sheet` (`src/app/_components/sheet.tsx`) chỉ render `<button>` khi có `onClick`** — không `href` và không `onClick` thì `ListRow` (không phải Sheet, class tương tự) trả về `<div>` tĩnh. Đụng tới khi `trailing` chứa một `<form><button>` riêng (vd nút Xoá) — HTML không cho `<button>` lồng `<button>`, lồng vào là vỡ hydration ngay (đã xảy ra thật ở `PaymentsBlock`).

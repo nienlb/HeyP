@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getLogoUrl } from "@/lib/logo";
 import { loginAction } from "./actions";
+import { LoginSubmitButton } from "./submit-button";
 
 export default async function LoginPage({
   searchParams,
@@ -51,9 +52,7 @@ export default async function LoginPage({
               required
             />
           </div>
-          <button className="btn" type="submit" style={{ width: "100%" }}>
-            Đăng nhập
-          </button>
+          <LoginSubmitButton />
         </form>
       </div>
     </div>
