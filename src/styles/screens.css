@@ -268,3 +268,15 @@
     flex-wrap: wrap;
   }
 }
+
+/* Ba dòng cuối của "Cần chú ý" chỉ hiện từ 900px — desktop có chỗ cho 8 đơn,
+   điện thoại thì 5 là vừa một màn. Server luôn render đủ 8 (luật một-DOM);
+   đây là chỗ duy nhất cắt bằng CSS. */
+.row-desk-only {
+  display: none;
+}
+@media (min-width: 900px) {
+  .row-desk-only {
+    display: block;
+  }
+}

@@ -19,6 +19,10 @@ import { StatusIcon } from "./_components/status-icon";
 
 const BACKUP_WARN_DAYS = 14;
 
+/** Đơn "Cần chú ý" hiện trên desktop; điện thoại chỉ hiện 5 dòng đầu. */
+const ATTENTION_DESKTOP = 8;
+const ATTENTION_MOBILE = 5;
+
 export default async function HomePage() {
   const now = new Date();
   const [session, orders, customers, wallet, pnlData, settings] =
@@ -35,6 +39,11 @@ export default async function HomePage() {
   const statusCounts = countOrdersByStatus(orders);
   const pnl = computePnl(pnlData);
 
+  // Doanh thu và số đơn gộp cả khối đã xác nhận lẫn khối còn ước tính —
+  // PnlBlock.revenueVnd đã tính sẵn, màn này trước v8-A chỉ chưa hiển thị.
+  const revenueVnd = pnl.confirmed.revenueVnd + pnl.estimated.revenueVnd;
+  const pnlOrderCount = pnl.confirmed.orderCount + pnl.estimated.orderCount;
+
   const daysSinceBackup =
     settings.lastBackupAt === null
       ? null
@@ -49,10 +58,11 @@ export default async function HomePage() {
       if (b.status === "su_co" && a.status !== "su_co") return 1;
       return b.ageDays - a.ageDays;
     })
-    .slice(0, 5);
+    .slice(0, ATTENTION_DESKTOP);
 
   const totalOutstanding = customers.reduce((s, c) => s + c.outstanding, 0);
-  const topDebtors = customers.filter((c) => c.outstanding > 0).slice(0, 5);
+  const debtors = customers.filter((c) => c.outstanding > 0);
+  const topDebtors = debtors.slice(0, 5);
 
   const needInfo = orders.filter((o) => o.gaps.length > 0);
   const gapCounts = GAP_CODES.map((code) => ({
@@ -74,48 +84,47 @@ export default async function HomePage() {
         </Link>
       )}
 
-      {/* Cần chú ý */}
-      <section className="card">
-        <h2 className="card-title">
-          ⚠️ Cần chú ý <span className="count">{attention.length}</span>
-        </h2>
-        {attention.length === 0 ? (
-          <p className="muted">Không có đơn nào cần chú ý. Mọi thứ ổn 👍</p>
-        ) : (
-          attention.map((o) => (
-            <ListRow
-              key={o.id}
-              href={`/orders/${o.id}`}
-              title={o.customerName}
-              meta={o.status === "su_co" ? "⚠️ Sự cố" : `⏳ ${o.ageDays} ngày`}
-              amount={formatVnd(o.amountDue)}
-            />
-          ))
-        )}
-      </section>
+      {/* Số để liếc. Desktop 4 cột, điện thoại 2×2 — cùng thứ tự. */}
+      <div className="kpi-row">
+        <Link href="/reports" className="kpi">
+          <span className="kpi-label">Doanh thu tháng này</span>
+          <strong className="kpi-value">{formatVnd(revenueVnd)}</strong>
+          <span className="kpi-sub">{pnlOrderCount} đơn hoàn tất</span>
+        </Link>
+        <Link href="/reports" className="kpi">
+          <span className="kpi-label">Lãi tháng này</span>
+          <strong
+            className={`kpi-value${
+              pnl.netProfitVnd < 0 ? " profit-negative" : ""
+            }`}
+          >
+            {formatVnd(pnl.netProfitVnd)}
+          </strong>
+          <span className="kpi-sub">
+            {pnl.estimated.orderCount > 0
+              ? `${pnl.estimated.orderCount} đơn còn ước tính`
+              : "đã xác nhận đủ giá vốn"}
+          </span>
+        </Link>
+        <Link href="/customers" className="kpi">
+          <span className="kpi-label">Công nợ</span>
+          <strong className="kpi-value">{formatVnd(totalOutstanding)}</strong>
+          <span className="kpi-sub">{debtors.length} khách còn nợ</span>
+        </Link>
+        <Link href="/finance" className="kpi">
+          <span className="kpi-label">Ví ¥</span>
+          <strong
+            className={`kpi-value${
+              wallet.balance < 0 ? " profit-negative" : ""
+            }`}
+          >
+            {wallet.balance.toLocaleString("vi-VN")}¥
+          </strong>
+          <span className="kpi-sub">≈ {formatVnd(wallet.valueVnd)}</span>
+        </Link>
+      </div>
 
-      {/* Cần bổ sung */}
-      <section className="card">
-        <h2 className="card-title">
-          Cần bổ sung <span className="count">{needInfo.length}</span>
-        </h2>
-        {needInfo.length === 0 ? (
-          <p className="muted">Không đơn nào thiếu thông tin 👍</p>
-        ) : (
-          <ul className="dash-debtors">
-            {gapCounts.map((g) => (
-              <li key={g.code}>
-                <Link href={`/orders?gap=${g.code}`}>
-                  {GAP_LABELS[g.code]}
-                </Link>
-                <span>{g.count} đơn</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* Đơn theo trạng thái */}
+      {/* Đơn theo trạng thái — dải ngang, chiếm cả bề rộng */}
       <section className="card">
         <h2 className="card-title">Đơn theo trạng thái</h2>
         {statusCounts.length === 0 ? (
@@ -155,70 +164,81 @@ export default async function HomePage() {
         )}
       </section>
 
-      {/* Công nợ */}
-      <section className="card">
-        <h2 className="card-title">Công nợ</h2>
-        <div className="dash-big">{formatVnd(totalOutstanding)}</div>
-        <p className="muted" style={{ margin: "0 0 12px" }}>
-          tổng còn phải thu
-        </p>
-        {topDebtors.length > 0 && (
-          <ul className="dash-debtors">
-            {topDebtors.map((c) => (
-              <li key={c.id}>
-                <Link href="/customers">{c.name}</Link>
-                <span>{formatVnd(c.outstanding)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* Việc phải làm — hai lưới, mỗi lưới 2 thẻ trên desktop */}
+      <div className="card-grid">
+        <section className="card">
+          <h2 className="card-title">
+            ⚠️ Cần chú ý <span className="count">{attention.length}</span>
+          </h2>
+          {attention.length === 0 ? (
+            <p className="muted">Không có đơn nào cần chú ý. Mọi thứ ổn 👍</p>
+          ) : (
+            attention.map((o, i) => (
+              <div
+                key={o.id}
+                className={i >= ATTENTION_MOBILE ? "row-desk-only" : undefined}
+              >
+                <ListRow
+                  href={`/orders/${o.id}`}
+                  title={o.customerName}
+                  meta={
+                    o.status === "su_co" ? "⚠️ Sự cố" : `⏳ ${o.ageDays} ngày`
+                  }
+                  amount={formatVnd(o.amountDue)}
+                />
+              </div>
+            ))
+          )}
+        </section>
 
-      {/* Ví ¥ */}
-      <section className="card">
-        <h2 className="card-title">Ví ¥</h2>
-        <div className={`dash-big ${wallet.balance < 0 ? "profit-negative" : ""}`}>
-          {wallet.balance.toLocaleString("vi-VN")}¥
-        </div>
-        <p className="muted" style={{ margin: "0 0 12px" }}>
-          ≈ {formatVnd(wallet.valueVnd)} · giá vốn bq{" "}
-          {Math.round(wallet.avgCost).toLocaleString("vi-VN")}₫/¥
-        </p>
-        <Link href="/finance" className="btn btn-outline">
-          Xem ví
-        </Link>
-      </section>
+        <section className="card">
+          <h2 className="card-title">Khách nợ nhiều nhất</h2>
+          {topDebtors.length === 0 ? (
+            <p className="muted">Không khách nào còn nợ 👍</p>
+          ) : (
+            <ul className="dash-debtors">
+              {topDebtors.map((c) => (
+                <li key={c.id}>
+                  <Link href="/customers">{c.name}</Link>
+                  <span>{formatVnd(c.outstanding)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
 
-      {/* Lãi tháng này */}
-      <section className="card">
-        <h2 className="card-title">Lãi tháng này</h2>
-        <div
-          className={`dash-big ${pnl.netProfitVnd < 0 ? "profit-negative" : ""}`}
-        >
-          {formatVnd(pnl.netProfitVnd)}
-        </div>
-        {pnl.estimated.orderCount > 0 && (
-          <p className="muted" style={{ margin: "0 0 12px" }}>
-            gồm {pnl.estimated.orderCount} đơn còn ước tính
-          </p>
-        )}
-        <Link href="/reports" className="btn btn-outline">
-          Xem báo cáo
-        </Link>
-      </section>
+      <div className="card-grid">
+        <section className="card">
+          <h2 className="card-title">
+            Cần bổ sung <span className="count">{needInfo.length}</span>
+          </h2>
+          {needInfo.length === 0 ? (
+            <p className="muted">Không đơn nào thiếu thông tin 👍</p>
+          ) : (
+            <ul className="dash-debtors">
+              {gapCounts.map((g) => (
+                <li key={g.code}>
+                  <Link href={`/orders?gap=${g.code}`}>{GAP_LABELS[g.code]}</Link>
+                  <span>{g.count} đơn</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      {/* Tác vụ nhanh */}
-      <section className="card">
-        <h2 className="card-title">Tác vụ nhanh</h2>
-        <div className="dash-actions">
-          <Link href="/orders/new" className="btn">
-            <Icon name="plus" size={18} /> Tạo đơn
-          </Link>
-          <Link href="/orders/new" className="btn btn-outline">
-            <Icon name="image" size={18} /> Nhập nhanh từ ảnh
-          </Link>
-        </div>
-      </section>
+        <section className="card">
+          <h2 className="card-title">Tác vụ nhanh</h2>
+          <div className="dash-actions">
+            <Link href="/orders/new" className="btn">
+              <Icon name="plus" size={18} /> Tạo đơn
+            </Link>
+            <Link href="/orders/new" className="btn btn-outline">
+              <Icon name="image" size={18} /> Nhập nhanh từ ảnh
+            </Link>
+          </div>
+        </section>
+      </div>
     </AppShell>
   );
 }

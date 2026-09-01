@@ -487,3 +487,42 @@
     display: none;
   }
 }
+
+/* ---------- Ô số liệu ở Tổng quan (v8-A) ---------- */
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+  min-width: 0;
+}
+.kpi-label {
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--muted);
+}
+.kpi-value {
+  font-size: var(--fs-5);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi-value.profit-negative {
+  color: var(--danger);
+}
+.kpi-sub {
+  font-size: var(--fs-2);
+  color: var(--text-subtle);
+}
+@media (min-width: 900px) {
+  .kpi-value {
+    font-size: var(--fs-6);
+  }
+}
