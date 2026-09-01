@@ -484,8 +484,12 @@ export async function addItemAction(formData: FormData): Promise<void> {
     productUrl: String(formData.get("productUrl") ?? "").trim() || null,
     quantity: parseVnd(formData.get("quantity")),
     sellVnd: parseVnd(formData.get("sellVnd")),
-    unitPriceCny: Number(String(formData.get("unitPriceCny") ?? "0")) || 0,
+    unitPriceCny: parseDecimal(formData.get("unitPriceCny")),
     costConfirmed: String(formData.get("costConfirmed")) === "true",
+    photoIds: String(formData.get("photoIds") ?? "")
+      .split(",")
+      .map((v) => Number(v.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0),
   });
 
   if (!result.ok) {

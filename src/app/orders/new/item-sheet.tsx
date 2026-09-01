@@ -5,7 +5,7 @@ import { Sheet } from "../../_components/sheet";
 import { cnyFromSellPrice } from "@/lib/line-pricing";
 import { parseVnd } from "@/lib/parse-number";
 import { emptyItem, type ItemPhoto, type ItemRow } from "./types";
-import { ItemPhotos } from "./item-photos";
+import { ItemPhotos } from "../../_components/item-photos";
 
 export function ItemSheet({
   open,

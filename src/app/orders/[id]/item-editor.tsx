@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { Sheet } from "../../_components/sheet";
+import { ItemPhotos, type ItemPhoto } from "../../_components/item-photos";
 import { cnyFromSellPrice } from "@/lib/line-pricing";
 import { parseVnd } from "@/lib/parse-number";
-import { addItemAction } from "../actions";
+import { addItemAction, deletePhotoAction } from "../actions";
 
 export function AddItemButton({
   orderId,
@@ -19,6 +20,7 @@ export function AddItemButton({
   const [sell, setSell] = useState("");
   const [cny, setCny] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const [photos, setPhotos] = useState<ItemPhoto[]>([]);
 
   function onSellChange(v: string) {
     setSell(v);
@@ -27,11 +29,21 @@ export function AddItemButton({
     setCny(next > 0 ? String(next) : "");
   }
 
+  /**
+   * Đóng mà KHÔNG lưu thì phải xoá ảnh đã tải lên, nếu không chúng nằm lại
+   * trong DB (order_id NULL) và trên Storage — không màn nào hiện ra để dọn.
+   */
   function close() {
+    for (const p of photos) {
+      deletePhotoAction(p.id).catch(() => {
+        // Xoá hỏng thì job dọn ảnh mồ côi lo nốt.
+      });
+    }
     setOpen(false);
     setSell("");
     setCny("");
     setConfirmed(false);
+    setPhotos([]);
   }
 
   return (
@@ -57,6 +69,11 @@ export function AddItemButton({
             type="hidden"
             name="costConfirmed"
             value={confirmed ? "true" : "false"}
+          />
+          <input
+            type="hidden"
+            name="photoIds"
+            value={photos.map((p) => p.id).join(",")}
           />
 
           <label className="field">
@@ -91,6 +108,8 @@ export function AddItemButton({
               enterKeyHint="next"
             />
           </label>
+
+          <ItemPhotos value={photos} onChange={setPhotos} />
 
           <details className="more-fields">
             <summary>Giá vốn &amp; link</summary>

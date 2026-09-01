@@ -44,6 +44,13 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
   (`ve_kho_vn`/`hoan_tat`/`khach_bom`) thì chặn. KHÔNG dùng xoá mềm: thêm
   điều kiện lọc vào hàng chục câu SQL đang có, sót một chỗ là báo cáo sai âm
   thầm. Mọi lần xoá ghi vào `deletion_log` trong cùng transaction.
+- **Kiểm điều kiện xoá phải nằm TRONG transaction, sau `SELECT … FOR UPDATE`**
+  (`src/db/deletion.ts`) — kiểm ngoài transaction có kẽ hở: giữa lúc kiểm và
+  lúc xoá, người kia có thể vừa thu tiền cho đúng đơn đó, và `payments` gắn
+  khoá ngoại ON DELETE CASCADE nên phiếu thu vừa tạo bị xoá theo mà không ai
+  hay. Khoá dòng `orders` chặn được vì `addPayment` cũng ghi vào dòng đó
+  (`syncOrderDeposit` → `UPDATE orders SET deposit`). Đã kiểm chứng bằng hai
+  transaction chạy song song.
 - **`quoted_total_vnd` bất biến với thao tác GIÁ, không bất biến với PHẠM VI**
   (v6) — sửa ¥ hay kéo lời thì Total giữ nguyên (luật v3-A, test khoá); thêm
   hoặc xoá món thì Total đổi theo (`totalAfterAddLine`/`totalAfterRemoveLine`)
@@ -60,6 +67,10 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
 - **`prepareForAi` và `prepareForStorage` là hai đường KHÁC NHAU, đừng gộp** —
   gửi Gemini cần độ nét để đọc chữ (JPEG 1600), bản lưu cần nhẹ (WebP 1280).
   Nén ảnh gửi AI không tiết kiệm gì (không lưu lại) mà làm giảm độ chính xác OCR.
+- **`ItemPhotos` (`src/app/_components/item-photos.tsx`) dùng chung cho cả màn
+  tạo đơn lẫn màn thêm món vào đơn đã tạo.** Đóng sheet mà không lưu thì phải
+  xoá ảnh đã tải lên, nếu không chúng thành mồ côi. Ảnh đã gắn đơn thì an toàn:
+  `deletePhoto` chỉ xoá dòng có `order_id IS NULL`.
 - **Gắn ảnh vào đơn phải nằm TRONG transaction của `createOrder`**
   (`NewOrderInput.orderPhotoIds`, `NewOrderItemInput.photoIds`) — gắn sau khi
   tạo đơn thì lỗi tạm của DB làm mất liên kết mà không ai biết. Đã xảy ra thật

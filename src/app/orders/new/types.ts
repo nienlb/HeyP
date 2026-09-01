@@ -1,11 +1,9 @@
 import type { ImageKind } from "@/lib/zalo-extract";
 
-/**
- * Ảnh đã upload xong, gắn vào một dòng món. Chỉ giữ `id` — đường dẫn dẫn
- * xuất bằng `photoUrl(id, variant)` để mỗi chỗ hiển thị tự chọn bản chính
- * hay bản nhỏ, không lưu sẵn một URL cứng rồi dùng nhầm chỗ.
- */
-export type ItemPhoto = { id: number };
+// ItemPhotos giờ dùng chung cho cả màn tạo đơn lẫn màn thêm món vào đơn đã
+// tạo, nên kiểu ở cạnh component. Nhập lại và xuất tiếp để chỗ cũ khỏi sửa.
+import type { ItemPhoto } from "../../_components/item-photos";
+export type { ItemPhoto };
 
 export type ItemRow = {
   name: string;

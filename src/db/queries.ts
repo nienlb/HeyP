@@ -1182,6 +1182,8 @@ export async function addOrderItem(
     sellVnd: number;
     unitPriceCny: number;
     costConfirmed: boolean;
+    /** Ảnh đã tải lên trước — gắn trong cùng transaction, xem createOrder. */
+    photoIds?: number[];
   },
 ): Promise<LineActionResult & { itemId?: number }> {
   if (input.name.trim() === "")
@@ -1234,13 +1236,22 @@ export async function addOrderItem(
         ],
       );
 
+      const itemId = row!.id;
+      for (const photoId of input.photoIds ?? []) {
+        await x.run(
+          `UPDATE photos SET order_id = ?, order_item_id = ?
+            WHERE id = ? AND order_id IS NULL`,
+          [orderId, itemId, photoId],
+        );
+      }
+
       await x.run("UPDATE orders SET quoted_total_vnd = ? WHERE id = ?", [
         totalAfterAddLine(quoted.total, input.sellVnd, input.quantity),
         orderId,
       ]);
 
       await recomputeOrderMoneyRow(x, orderId, order);
-      return { ok: true, itemId: row!.id } as LineActionResult & {
+      return { ok: true, itemId } as LineActionResult & {
         itemId?: number;
       };
     });

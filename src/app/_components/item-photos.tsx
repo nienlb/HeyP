@@ -1,9 +1,15 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { deletePhotoAction } from "../actions";
+import { deletePhotoAction } from "../orders/actions";
 import { photoUrl } from "@/lib/photos";
-import type { ItemPhoto } from "./types";
+
+/**
+ * Ảnh đã upload xong, gắn vào một dòng món. Chỉ giữ `id` — đường dẫn dẫn
+ * xuất bằng `photoUrl(id, variant)` để mỗi chỗ hiển thị tự chọn bản chính
+ * hay bản nhỏ, không lưu sẵn một URL cứng rồi dùng nhầm chỗ.
+ */
+export type ItemPhoto = { id: number };
 
 /**
  * Chọn nhiều ảnh cho MỘT món. Upload ngay lúc chọn (label=product, chưa có
