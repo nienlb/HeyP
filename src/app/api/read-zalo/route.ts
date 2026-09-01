@@ -3,7 +3,8 @@ import { getSession } from "@/lib/auth";
 import { addPhoto } from "@/db/queries";
 import type { PhotoLabel } from "@/lib/photos";
 import { readZaloBatch } from "@/lib/gemini";
-import { downsizeImage } from "@/lib/image";
+import { prepareForAi, prepareForStorage } from "@/lib/image";
+import { thumbFileName } from "@/lib/photos";
 import { uploadPhotoFile } from "@/lib/storage";
 import type { ImageKind } from "@/lib/zalo-extract";
 
@@ -59,15 +60,16 @@ export async function POST(req: Request): Promise<Response> {
     files.map(async (f) => Buffer.from(await f.arrayBuffer())),
   );
 
-  // Downsize TRƯỚC khi gửi Gemini và lưu đĩa — ảnh gốc chụp điện thoại
-  // thường vài MB; downsize giảm cả thời gian gọi AI lẫn dung lượng lưu trữ.
-  const downsized = await Promise.all(
-    buffers.map((buf, i) => downsizeImage(buf, files[i].type)),
+  // Bản gửi AI KHÁC bản đem lưu: gửi AI cần độ nét để đọc chữ cho chính xác,
+  // bản lưu cần nhẹ. Xem hai hàm trong src/lib/image.ts.
+  const forAi = await Promise.all(
+    buffers.map((buf, i) => prepareForAi(buf, files[i].type)),
   );
 
-  // Gọi Gemini TRƯỚC khi lưu, để biết nhãn nào cho ảnh nào.
+  // Gọi Gemini TRƯỚC khi lưu, để biết nhãn nào cho ảnh nào — nhãn quyết định
+  // độ phân giải bản lưu (ảnh chốt đơn là chữ, giữ nét hơn ảnh sản phẩm).
   const result = await readZaloBatch(
-    downsized.map((d) => ({
+    forAi.map((d) => ({
       base64: d.buffer.toString("base64"),
       mimeType: d.mimeType,
     })),
@@ -82,11 +84,25 @@ export async function POST(req: Request): Promise<Response> {
   const photos: { id: number; kind: ImageKind; name: string }[] = [];
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    const fname = `${Date.now()}-${randomBytes(6).toString("hex")}.${downsized[i].ext}`;
-    await uploadPhotoFile(fname, downsized[i].buffer, downsized[i].mimeType);
     const kind = kinds[i] ?? "san_pham";
+    const label = LABEL_OF[kind];
+
+    // Nén lại TỪ ẢNH GỐC (không phải từ bản đã nén cho AI) — nén chồng nén
+    // hai lần làm ảnh nhoè mà chẳng nhỏ thêm bao nhiêu.
+    const { main, thumb } = await prepareForStorage(buffers[i], file.type, label);
+    const fname = `${Date.now()}-${randomBytes(6).toString("hex")}.${main.ext}`;
+
+    await uploadPhotoFile(fname, main.buffer, main.mimeType);
+    if (thumb) {
+      try {
+        await uploadPhotoFile(thumbFileName(fname), thumb.buffer, thumb.mimeType);
+      } catch {
+        // Bản nhỏ hỏng không chặn luồng — route ảnh tự lùi về bản chính.
+      }
+    }
+
     photos.push({
-      id: await addPhoto({ filePath: fname, label: LABEL_OF[kind] }),
+      id: await addPhoto({ filePath: fname, label }),
       kind,
       name: file.name,
     });

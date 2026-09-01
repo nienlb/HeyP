@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { photoUrl } from "@/lib/photos";
 
 /** Copy ảnh vào clipboard để dán thẳng khi đăng bài (Facebook/Zalo). */
 export function CopyImageButton({ photoId }: { photoId: number }) {
@@ -8,7 +9,7 @@ export function CopyImageButton({ photoId }: { photoId: number }) {
 
   async function copy() {
     try {
-      const res = await fetch(`/api/photo/${photoId}`);
+      const res = await fetch(photoUrl(photoId));
       const blob = await res.blob();
       // Clipboard ảnh cần kiểu png; nếu khác thì vẽ lại qua canvas.
       const item = new ClipboardItem({ [blob.type]: blob });

@@ -9,8 +9,6 @@ import {
   changeOrderStatus,
   createOrder,
   deletePhoto,
-  linkPhotoToOrder,
-  linkPhotoToOrderItem,
   addPayment,
   deletePayment,
   markLineDefect,
@@ -88,32 +86,26 @@ export async function createOrderAction(
 
   // Sản phẩm.
   let items: NewOrderItemInput[] = [];
-  // photoIds tách riêng: chúng không thuộc NewOrderItemInput, chỉ dùng sau
-  // khi đã có id món thật.
-  let photoIdsByItem: number[][] = [];
   try {
     const parsed = JSON.parse(String(formData.get("items") ?? "[]"));
     if (Array.isArray(parsed)) {
-      const kept = parsed.filter(
-        (it) => String(it.name ?? "").trim() !== "",
-      );
-      items = kept.map((it) => ({
-        name: String(it.name ?? "").trim(),
-        productUrl: String(it.productUrl ?? "").trim() || null,
-        attributes: String(it.attributes ?? "").trim() || null,
-        quantity: Number(it.quantity) || 0,
-        unitPriceCny: Number(it.unitPriceCny) || 0,
-        // Người gõ tay = đã xác nhận; số máy suy ngược thì form gửi false.
-        costConfirmed: it.costConfirmed === true,
-        marginVnd: Number(it.marginVnd) || 0,
-      }));
-      photoIdsByItem = kept.map((it) =>
-        Array.isArray(it.photoIds)
-          ? (it.photoIds as unknown[])
-              .map((n) => Number(n))
-              .filter((n) => Number.isInteger(n) && n > 0)
-          : [],
-      );
+      items = parsed
+        .filter((it) => String(it.name ?? "").trim() !== "")
+        .map((it) => ({
+          name: String(it.name ?? "").trim(),
+          productUrl: String(it.productUrl ?? "").trim() || null,
+          attributes: String(it.attributes ?? "").trim() || null,
+          quantity: Number(it.quantity) || 0,
+          unitPriceCny: Number(it.unitPriceCny) || 0,
+          // Người gõ tay = đã xác nhận; số máy suy ngược thì form gửi false.
+          costConfirmed: it.costConfirmed === true,
+          marginVnd: Number(it.marginVnd) || 0,
+          photoIds: Array.isArray(it.photoIds)
+            ? (it.photoIds as unknown[])
+                .map((n) => Number(n))
+                .filter((n) => Number.isInteger(n) && n > 0)
+            : [],
+        }));
     }
   } catch {
     return { error: "Dữ liệu sản phẩm không hợp lệ." };
@@ -139,6 +131,12 @@ export async function createOrderAction(
       : Math.round(sumLineItemsCny(items) * exchangeRate) +
         num(formData.get("serviceFee"));
 
+  // Ảnh cấp đơn từ màn nhập nhanh: TẤT CẢ ảnh đã thả, không chỉ ảnh chốt đơn.
+  const orderPhotoIds = String(formData.get("zaloPhotoIds") ?? "")
+    .split(",")
+    .map((v) => Number(v.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+
   const moneyErrors = validateOrderMoney({
     goodsTotalCny: 0,
     exchangeRate,
@@ -162,6 +160,7 @@ export async function createOrderAction(
       deposit,
       note,
       items,
+      orderPhotoIds,
       changedBy: session.username,
     });
   } catch (err) {
@@ -169,29 +168,8 @@ export async function createOrderAction(
   }
   const orderId = created.orderId;
 
-  // Gắn ảnh sản phẩm vào ĐÚNG dòng món. Lỗi ở đây không được chặn việc tạo
-  // đơn — đơn đã nằm trong DB rồi, ảnh gắn thiếu thì bổ sung ở tab Ảnh.
-  for (const [i, ids] of photoIdsByItem.entries()) {
-    const itemId = created.itemIds[i];
-    if (!itemId) continue;
-    for (const photoId of ids) {
-      try {
-        await linkPhotoToOrderItem(photoId, itemId, orderId);
-      } catch {
-        // bỏ qua có chủ đích
-      }
-    }
-  }
-
-  // Gắn ảnh chốt đơn Zalo (nếu tạo đơn từ ảnh) vào đơn vừa tạo.
-  const zaloPhotoId = Number(formData.get("zaloPhotoId"));
-  if (zaloPhotoId > 0) {
-    try {
-      await linkPhotoToOrder(zaloPhotoId, orderId);
-    } catch {
-      // không chặn tạo đơn nếu gắn ảnh lỗi
-    }
-  }
+  // Mọi ảnh (cấp đơn lẫn cấp món) đã được gắn BÊN TRONG transaction của
+  // createOrder — xem NewOrderInput.orderPhotoIds và NewOrderItemInput.photoIds.
 
   revalidatePath("/orders");
   redirect(`/orders/${orderId}`);

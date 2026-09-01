@@ -52,6 +52,26 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
   `createOrder` đi nhánh `hasMargins` và không tự rải. Chỉ khi ghi đè Total
   thì client mới gọi `allocateMargins` rồi gửi lời đã rải. `¥` là số máy suy
   ngược (`cnyFromSellPrice`) nên luôn mang `cost_confirmed = false`.
+- **Ảnh lưu HAI file mỗi ảnh** (v6) — bản chính + bản nhỏ `_t` (`thumbFileName`),
+  cả hai WebP. Đo trên ảnh thật: lưu trữ giảm 48%, băng thông màn danh sách
+  giảm 93%. Mọi chỗ hiển thị ≤140px PHẢI dùng `photoUrl(id, "thumb")`; dùng
+  bản chính là tải nặng gấp ~10 lần. Ảnh chốt đơn (`zalo_confirm`) giữ cạnh
+  1600 vì là ảnh chụp CHỮ làm bằng chứng — xem `src/lib/image.ts`.
+- **`prepareForAi` và `prepareForStorage` là hai đường KHÁC NHAU, đừng gộp** —
+  gửi Gemini cần độ nét để đọc chữ (JPEG 1600), bản lưu cần nhẹ (WebP 1280).
+  Nén ảnh gửi AI không tiết kiệm gì (không lưu lại) mà làm giảm độ chính xác OCR.
+- **Gắn ảnh vào đơn phải nằm TRONG transaction của `createOrder`**
+  (`NewOrderInput.orderPhotoIds`, `NewOrderItemInput.photoIds`) — gắn sau khi
+  tạo đơn thì lỗi tạm của DB làm mất liên kết mà không ai biết. Đã xảy ra thật
+  với đơn #1 ngày 01/09: ảnh upload lúc 12:13:17, đơn tạo 12:14:01, `order_id`
+  vẫn NULL vì pool đang kẹt và lỗi bị `catch {}` nuốt.
+- **Màn nhập nhanh gửi TẤT CẢ ảnh đã thả** (`zaloPhotoIds`), không chỉ ảnh chốt
+  đơn — trước v6 chỉ gắn một ảnh, số còn lại thành mồ côi. Từ khi có job dọn
+  ảnh mồ côi thì bỏ sót = MẤT DỮ LIỆU chứ không chỉ là rác.
+- **Job dọn ảnh mồ côi** chạy nhờ cron 4h (`/api/cron/track`): xoá ảnh
+  `order_id`/`order_item_id`/`inventory_id` đều NULL và cũ hơn 24h. Ân hạn 24h
+  là để không cướp ảnh của form đang mở. Xoá file trên Storage TRƯỚC, xoá dòng
+  DB SAU — ngược lại là mất dấu file, nó nằm trên Storage vĩnh viễn.
 - **SQL thô đi qua lớp `Exec`** (`src/db/raw.ts`: `raw.all/get/run`, `withTx`) — SQL viết placeholder kiểu SQLite (`?`), lớp này tự đổi sang `$1,$2` của Postgres. Trong transaction (`withTx`) **PHẢI** dùng `x` được truyền vào, KHÔNG dùng `raw` toàn cục — dùng nhầm thì câu đó chạy ngoài transaction, không rollback theo.
 - **Alias camelCase trong SQL thô phải bọc nháy kép** (`AS "orderType"`, không phải `AS orderType`) — Postgres hạ chữ thường alias không nháy kép, code JS đọc `undefined`. Bug loại này không lỗi cú pháp, chỉ âm thầm trả sai dữ liệu.
 - **`SUM()`/`COUNT()` trên cột `integer` phải ép `::int`** — nếu không, kiểu trả về của Postgres qua postgres-js là `bigint`→string, JS `+` sẽ nối chuỗi thay vì cộng số. Cột `double precision` (giá ¥, tỷ giá) không cần ép.

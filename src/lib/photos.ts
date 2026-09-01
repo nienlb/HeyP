@@ -37,3 +37,39 @@ export function contentTypeFromName(name: string): string {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   return IMAGE_CONTENT_TYPES[ext] ?? "application/octet-stream";
 }
+
+/**
+ * Hậu tố của bản ảnh nhỏ. Mỗi ảnh lưu HAI file trên Storage: bản chính để
+ * xem/tải, và bản nhỏ cho danh sách + lưới ảnh.
+ *
+ * Lý do: bản chính ~70KB còn bản nhỏ ~8KB. Màn danh sách/lưới hiển thị ảnh ở
+ * 40–140px mà tải bản chính là phí băng thông gấp ~10 lần — Supabase free
+ * tier tính cả dung lượng lưu lẫn băng thông tải xuống.
+ */
+const THUMB_SUFFIX = "_t";
+
+/**
+ * `abc.webp` → `abc_t.webp`. Không có đuôi thì nối thẳng vào cuối.
+ *
+ * Thuần chuỗi, không đụng Storage — để test được và để route ảnh suy ra tên
+ * bản nhỏ mà không cần thêm cột trong DB.
+ */
+export function thumbFileName(fileName: string): string {
+  const dot = fileName.lastIndexOf(".");
+  if (dot <= 0) return `${fileName}${THUMB_SUFFIX}`;
+  return `${fileName.slice(0, dot)}${THUMB_SUFFIX}${fileName.slice(dot)}`;
+}
+
+/** Bản ảnh cần lấy. `thumb` chỉ dùng cho chỗ hiển thị nhỏ (≤140px). */
+export type PhotoVariant = "full" | "thumb" | "download";
+
+/**
+ * Một nguồn chân lý cho đường dẫn ảnh — tránh mỗi chỗ tự ghép chuỗi rồi quên
+ * mất `?size=thumb`, làm danh sách tải bản chính nặng gấp ~10 lần.
+ */
+export function photoUrl(id: number, variant: PhotoVariant = "full"): string {
+  const base = `/api/photo/${id}`;
+  if (variant === "thumb") return `${base}?size=thumb`;
+  if (variant === "download") return `${base}?download`;
+  return base;
+}

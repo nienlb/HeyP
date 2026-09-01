@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { deletePhotoAction } from "../actions";
+import { photoUrl } from "@/lib/photos";
 import type { ItemPhoto } from "./types";
 
 /**
@@ -36,10 +37,7 @@ export function ItemPhotos({
       if (!res.ok || data.ok !== true) {
         setError(data.error ?? "Tải ảnh thất bại");
       } else {
-        const added: ItemPhoto[] = (data.ids as number[]).map((id) => ({
-          id,
-          url: `/api/photo/${id}`,
-        }));
+        const added: ItemPhoto[] = (data.ids as number[]).map((id) => ({ id }));
         onChange([...value, ...added]);
       }
     } catch {
@@ -67,7 +65,7 @@ export function ItemPhotos({
         {value.map((p) => (
           <span key={p.id} className="item-photo">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.url} alt="" />
+            <img src={photoUrl(p.id, "thumb")} alt="" loading="lazy" />
             <button
               type="button"
               className="item-photo-x"

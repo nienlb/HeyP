@@ -185,6 +185,13 @@ export type NewOrderItemInput = {
   marginVnd?: number;
   /** Giá ¥ do người dùng xác nhận, hay chỉ là số máy gợi ý? */
   costConfirmed?: boolean;
+  /**
+   * Ảnh đã tải lên trước, gắn vào đúng dòng món này. Gắn NGAY TRONG
+   * transaction tạo đơn (xem createOrder) chứ không gắn sau — gắn sau thì lỗi
+   * tạm của DB làm mất liên kết mà không ai biết, ảnh thành mồ côi rồi bị job
+   * dọn xoá mất. Đã xảy ra thật với đơn #1 ngày 01/09.
+   */
+  photoIds?: number[];
 };
 
 export type NewOrderInput = {
@@ -200,6 +207,12 @@ export type NewOrderInput = {
   deposit: number;
   note?: string | null;
   items: NewOrderItemInput[];
+  /**
+   * Ảnh ở cấp ĐƠN (ảnh chốt đơn, ảnh thông tin khách từ màn nhập nhanh) —
+   * không thuộc món nào. Gắn trong cùng transaction, cùng lý do như
+   * NewOrderItemInput.photoIds.
+   */
+  orderPhotoIds?: number[];
   changedBy?: string | null;
 };
 
@@ -309,7 +322,27 @@ export async function createOrder(
           it.costConfirmed ?? false,
         ],
       );
-      itemIds.push(row!.id);
+      const itemId = row!.id;
+      itemIds.push(itemId);
+
+      // Gắn ảnh của món ngay đây: cùng transaction với việc tạo đơn nên
+      // hoặc cả hai cùng vào, hoặc cả hai cùng không — không còn cửa sổ để
+      // ảnh mất liên kết. Điều kiện order_id IS NULL giữ nguyên tinh thần
+      // linkPhotoToOrder: chỉ nhận ảnh chưa thuộc đơn nào.
+      for (const photoId of it.photoIds ?? []) {
+        await x.run(
+          `UPDATE photos SET order_id = ?, order_item_id = ?
+            WHERE id = ? AND order_id IS NULL`,
+          [orderId, itemId, photoId],
+        );
+      }
+    }
+
+    for (const photoId of input.orderPhotoIds ?? []) {
+      await x.run(
+        "UPDATE photos SET order_id = ? WHERE id = ? AND order_id IS NULL",
+        [orderId, photoId],
+      );
     }
 
     await x.run(
@@ -411,36 +444,6 @@ export async function addPhoto(input: {
     ],
   );
   return row!.id;
-}
-
-/** Gắn ảnh (đang chưa thuộc đơn nào) vào một đơn — dùng cho ảnh chốt đơn Zalo. */
-export async function linkPhotoToOrder(
-  photoId: number,
-  orderId: number,
-): Promise<void> {
-  await raw.run(
-    "UPDATE photos SET order_id = ? WHERE id = ? AND order_id IS NULL",
-    [orderId, photoId],
-  );
-}
-
-/**
- * Gắn một ảnh đã tải lên vào ĐÚNG dòng sản phẩm (v6).
- *
- * Cột photos.order_item_id có trong schema từ MVP nhưng trước v6 chưa đường
- * nào ghi vào. Điều kiện `order_id IS NULL` giữ nguyên tinh thần của
- * linkPhotoToOrder: chỉ gắn ảnh chưa thuộc đơn nào, không cướp ảnh của đơn khác.
- */
-export async function linkPhotoToOrderItem(
-  photoId: number,
-  orderItemId: number,
-  orderId: number,
-): Promise<void> {
-  await raw.run(
-    `UPDATE photos SET order_id = ?, order_item_id = ?
-      WHERE id = ? AND order_id IS NULL`,
-    [orderId, orderItemId, photoId],
-  );
 }
 
 export async function getPhoto(
@@ -1947,4 +1950,37 @@ export async function getAssetSnapshot() {
     receivableVnd: receivable.total,
     heldDepositsVnd: heldDeposits.total,
   };
+}
+
+// ---------- Dọn ảnh mồ côi (v6) ----------
+
+/**
+ * Ảnh đã tải lên nhưng KHÔNG bao giờ gắn được vào đâu.
+ *
+ * Sinh ra khi người dùng chọn ảnh ở màn tạo đơn rồi đóng tab / bỏ giữa chừng:
+ * file đã nằm trên Storage và đã có dòng trong `photos`, nhưng không đơn nào,
+ * không món nào, không kho nào trỏ tới. Không màn nào hiện chúng ra nên không
+ * ai dọn tay được — để lâu thì ăn dần 1GB Storage của gói free.
+ *
+ * `olderThanHours` là khoảng ân hạn: ảnh vừa tải lên của một form ĐANG mở
+ * cũng chưa gắn đơn, xoá ngay là cướp ảnh khỏi tay người đang nhập liệu.
+ */
+export async function listOrphanPhotos(
+  olderThanHours = 24,
+): Promise<{ id: number; filePath: string }[]> {
+  return raw.all<{ id: number; filePath: string }>(
+    `SELECT id, file_path AS "filePath" FROM photos
+      WHERE order_id IS NULL
+        AND order_item_id IS NULL
+        AND inventory_id IS NULL
+        AND uploaded_at < ${NOW_EPOCH_SQL} - ?`,
+    [Math.round(olderThanHours * 3600)],
+  );
+}
+
+/** Xoá dòng ảnh mồ côi khỏi DB. File trên Storage do nơi gọi xoá. */
+export async function deleteOrphanPhotoRows(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  const holes = ids.map(() => "?").join(", ");
+  await raw.run(`DELETE FROM photos WHERE id IN (${holes})`, ids);
 }

@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { deletePhotoAction } from "../actions";
+import { photoUrl } from "@/lib/photos";
 import {
   IMAGE_KINDS,
   IMAGE_KIND_LABELS,
@@ -208,10 +209,14 @@ export function QuickImportSheet({
   return (
     <Sheet open={open} title="Nhập nhanh từ ảnh" onClose={onClose}>
       {/* Nằm ngoài DOM của <form> — liên kết bằng thuộc tính form. */}
+      {/* TẤT CẢ ảnh đã thả, không chỉ ảnh chốt đơn: người dùng được mời "thả
+          tất cả ảnh đang có", nên mọi ảnh ở đây đều thuộc về đơn sắp tạo. Gửi
+          thiếu thì ảnh còn lại thành mồ côi và bị job dọn xoá sau 24h — mất
+          dữ liệu thật, không chỉ là rác. */}
       <input
         type="hidden"
-        name="zaloPhotoId"
-        value={zaloPhotoId}
+        name="zaloPhotoIds"
+        value={photos.map((p) => p.id).join(",")}
         form="new-order-form"
       />
 
@@ -308,7 +313,7 @@ export function QuickImportSheet({
         <div className="photo-kinds" style={{ marginTop: 12 }}>
           {photos.map((ph) => (
             <div key={ph.id} className="photo-kind">
-              <img src={`/api/photo/${ph.id}`} alt="" />
+              <img src={photoUrl(ph.id, "thumb")} alt="" loading="lazy" />
               <select
                 value={ph.kind}
                 onChange={(e) => setPhotoKind(ph.id, e.target.value as ImageKind)}

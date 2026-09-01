@@ -1,4 +1,9 @@
-import { PHOTO_LABELS, PHOTO_LABEL_LABELS, type PhotoLabel } from "@/lib/photos";
+import {
+  PHOTO_LABELS,
+  PHOTO_LABEL_LABELS,
+  photoUrl,
+  type PhotoLabel,
+} from "@/lib/photos";
 import { CopyImageButton } from "./copy-image-button";
 
 export type GalleryPhoto = { id: number; label: PhotoLabel };
@@ -30,10 +35,14 @@ export function PhotoGallery({
             {g.items.map((p) => (
               <figure key={p.id} className="thumb">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/api/photo/${p.id}`} alt={PHOTO_LABEL_LABELS[g.label]} />
+                <img
+                  src={photoUrl(p.id, "thumb")}
+                  alt={PHOTO_LABEL_LABELS[g.label]}
+                  loading="lazy"
+                />
                 <figcaption>
                   <a
-                    href={`/api/photo/${p.id}?download`}
+                    href={photoUrl(p.id, "download")}
                     className="btn btn-ghost btn-sm"
                   >
                     Tải về

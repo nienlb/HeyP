@@ -3,6 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import {
   createOrderAction,
+  deletePhotoAction,
   suggestCnyAction,
   type CreateOrderState,
 } from "../actions";
@@ -26,6 +27,7 @@ import { Icon } from "../../_components/icons";
 import { CustomerSheet, type CustomerPick } from "./customer-sheet";
 import { ItemSheet } from "./item-sheet";
 import { QuickImportSheet } from "./quick-import-sheet";
+import { photoUrl } from "@/lib/photos";
 import { emptyItem, type CustomerOption, type ItemRow } from "./types";
 
 export function NewOrderForm({
@@ -268,6 +270,16 @@ export function NewOrderForm({
   function deleteItem() {
     if (!itemSheet.open || itemSheet.index === null) return;
     const i = itemSheet.index;
+
+    // Ảnh của món phải xoá theo, nếu không chúng nằm lại trong DB
+    // (order_id NULL) và trên Storage vĩnh viễn — không màn nào hiện ra nên
+    // không ai biết mà dọn.
+    for (const p of items[i]?.photos ?? []) {
+      deletePhotoAction(p.id).catch(() => {
+        // Xoá hỏng thì job dọn ảnh mồ côi (api/cron/track) lo nốt.
+      });
+    }
+
     setItems((prev) => prev.filter((_, idx) => idx !== i));
     setItemSheet({ open: false });
   }
@@ -349,7 +361,12 @@ export function NewOrderForm({
             >
               {it.photos[0] && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={it.photos[0].url} alt="" className="ic-thumb" />
+                <img
+                  src={photoUrl(it.photos[0].id, "thumb")}
+                  alt=""
+                  className="ic-thumb"
+                  loading="lazy"
+                />
               )}
               <span className="ic-name">{it.name || "(chưa đặt tên)"}</span>
               <span className="ic-meta">

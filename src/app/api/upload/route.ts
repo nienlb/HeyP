@@ -2,8 +2,9 @@ import { randomBytes } from "node:crypto";
 import { getSession } from "@/lib/auth";
 import { addPhoto } from "@/db/queries";
 import { PHOTO_LABELS, type PhotoLabel } from "@/lib/photos";
-import { downsizeImage } from "@/lib/image";
+import { prepareForStorage } from "@/lib/image";
 import { uploadPhotoFile } from "@/lib/storage";
+import { thumbFileName } from "@/lib/photos";
 
 // sharp là native module → bắt buộc Node runtime, không chạy được trên edge.
 export const runtime = "nodejs";
@@ -41,9 +42,19 @@ export async function POST(req: Request): Promise<Response> {
         { status: 400 },
       );
     const buf = Buffer.from(await file.arrayBuffer());
-    const downsized = await downsizeImage(buf, file.type);
-    const fname = `${Date.now()}-${randomBytes(6).toString("hex")}.${downsized.ext}`;
-    await uploadPhotoFile(fname, downsized.buffer, downsized.mimeType);
+    const { main, thumb } = await prepareForStorage(buf, file.type, label);
+    const fname = `${Date.now()}-${randomBytes(6).toString("hex")}.${main.ext}`;
+
+    await uploadPhotoFile(fname, main.buffer, main.mimeType);
+    // Bản nhỏ hỏng thì KHÔNG chặn: route ảnh tự lùi về bản chính khi thiếu.
+    // Mất bản nhỏ chỉ tốn băng thông, mất bản chính mới là mất dữ liệu.
+    if (thumb) {
+      try {
+        await uploadPhotoFile(thumbFileName(fname), thumb.buffer, thumb.mimeType);
+      } catch {
+        // bỏ qua có chủ đích
+      }
+    }
     ids.push(await addPhoto({ filePath: fname, label, orderId, inventoryId }));
   }
 

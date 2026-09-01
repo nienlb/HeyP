@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { config } from "./config";
+import { thumbFileName } from "./photos";
 
 /**
  * Ảnh nằm trên Supabase Storage ở bucket private. Dùng service_role key nên
@@ -33,6 +34,13 @@ export async function downloadPhotoFile(
   return Buffer.from(await data.arrayBuffer());
 }
 
+/**
+ * Xoá ảnh: gỡ CẢ bản chính lẫn bản nhỏ.
+ *
+ * `remove` của Supabase không báo lỗi khi file không tồn tại, nên gọi kèm
+ * tên bản nhỏ là an toàn kể cả với ảnh cũ (lưu trước khi có bản nhỏ) hoặc
+ * GIF (không sinh bản nhỏ).
+ */
 export async function deletePhotoFile(fileName: string): Promise<void> {
-  await bucket().remove([fileName]);
+  await bucket().remove([fileName, thumbFileName(fileName)]);
 }
