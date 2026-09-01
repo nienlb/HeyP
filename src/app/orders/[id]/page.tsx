@@ -6,7 +6,7 @@ import { CopyButton } from "../../_components/copy-button";
 import { ListRow } from "../../_components/list-row";
 import { PhotoUpload } from "../../_components/photo-upload";
 import { PhotoGallery } from "../../_components/photo-gallery";
-import { lineExceptionAction } from "../actions";
+import { lineExceptionAction, removeItemAction } from "../actions";
 import {
   getOrderDetail,
   getPackagesForOrder,
@@ -24,6 +24,7 @@ import {
 } from "@/lib/format";
 import {
   allowedNextStatuses,
+  canEditOrderItems,
   earliestOriginFor,
   journeyTrack,
   ORDER_TYPE_LABELS,
@@ -36,6 +37,7 @@ import { LinePricingTable } from "./line-pricing-table";
 import { OrderJourney } from "./order-journey";
 import { OrderTabs, type TabCode } from "./order-tabs";
 import { DangerZone } from "./danger-zone";
+import { AddItemButton } from "./item-editor";
 
 const TAB_CODES = ["tom_tat", "mon", "tien", "anh"] as const;
 
@@ -285,6 +287,32 @@ export default async function OrderDetailPage({
             {items.map((it) => {
               const money2 = (n: number) =>
                 isStockSale ? formatVnd(n) : formatCny(n);
+              const lineActions = showLineActions ? (
+                it.lineStatus === "supplier_defect" ? (
+                  <span className="badge status-su_co">Lỗi NCC</span>
+                ) : it.lineStatus === "returned" ? (
+                  <span className="badge status-huy">Đã trả</span>
+                ) : canDefect ? (
+                  <form action={lineExceptionAction}>
+                    <input type="hidden" name="orderId" value={order.id} />
+                    <input type="hidden" name="itemId" value={it.id} />
+                    <input type="hidden" name="kind" value="defect" />
+                    <button className="btn btn-warn btn-sm" type="submit">
+                      Lỗi NCC
+                    </button>
+                  </form>
+                ) : canReturn ? (
+                  <form action={lineExceptionAction}>
+                    <input type="hidden" name="orderId" value={order.id} />
+                    <input type="hidden" name="itemId" value={it.id} />
+                    <input type="hidden" name="kind" value="return" />
+                    <button className="btn btn-warn btn-sm" type="submit">
+                      Đổi/trả
+                    </button>
+                  </form>
+                ) : null
+              ) : null;
+
               return (
                 <ListRow
                   key={it.id}
@@ -300,37 +328,35 @@ export default async function OrderDetailPage({
                   meta={`${it.attributes ?? "—"} · ×${it.quantity}`}
                   amount={money2(it.quantity * it.unitPriceCny)}
                   trailing={
-                    showLineActions ? (
-                      it.lineStatus === "supplier_defect" ? (
-                        <span className="badge status-su_co">Lỗi NCC</span>
-                      ) : it.lineStatus === "returned" ? (
-                        <span className="badge status-huy">Đã trả</span>
-                      ) : canDefect ? (
-                        <form action={lineExceptionAction}>
+                    <span className="lr-actions">
+                      {lineActions}
+                      {canEditOrderItems(order.status) && items.length > 1 && (
+                        <form action={removeItemAction}>
                           <input type="hidden" name="orderId" value={order.id} />
                           <input type="hidden" name="itemId" value={it.id} />
-                          <input type="hidden" name="kind" value="defect" />
-                          <button className="btn btn-warn btn-sm" type="submit">
-                            Lỗi NCC
+                          <button
+                            type="submit"
+                            className="btn btn-sm btn-ghost"
+                            aria-label={`Xoá món ${it.name}`}
+                          >
+                            Xoá
                           </button>
                         </form>
-                      ) : canReturn ? (
-                        <form action={lineExceptionAction}>
-                          <input type="hidden" name="orderId" value={order.id} />
-                          <input type="hidden" name="itemId" value={it.id} />
-                          <input type="hidden" name="kind" value="return" />
-                          <button className="btn btn-warn btn-sm" type="submit">
-                            Đổi/trả
-                          </button>
-                        </form>
-                      ) : null
-                    ) : undefined
+                      )}
+                    </span>
                   }
                 />
               );
             })}
             {order.note && (
               <p className="order-note">Ghi chú: {order.note}</p>
+            )}
+            {canEditOrderItems(order.status) && (
+              <AddItemButton
+                orderId={order.id}
+                sellRate={sellRate}
+                defaultMarginVnd={settings.defaultMarginVnd}
+              />
             )}
           </section>
 

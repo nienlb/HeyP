@@ -192,3 +192,9 @@
   margin-top: var(--sp-1);
   color: var(--danger);
 }
+
+.lr-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}

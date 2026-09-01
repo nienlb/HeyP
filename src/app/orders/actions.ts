@@ -492,3 +492,49 @@ export async function bulkAdvanceAction(ids: number[]): Promise<BulkResult> {
   revalidatePath("/orders");
   return { ok, failed };
 }
+
+// ---------- Thêm / xoá món trong đơn đã tạo (v6) ----------
+
+import { addOrderItem, removeOrderItem } from "@/db/queries";
+
+export async function addItemAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = Number(formData.get("orderId"));
+  if (!Number.isInteger(orderId) || orderId <= 0) redirect("/orders");
+
+  const result = await addOrderItem(orderId, {
+    name: String(formData.get("name") ?? ""),
+    attributes: String(formData.get("attributes") ?? "").trim() || null,
+    productUrl: String(formData.get("productUrl") ?? "").trim() || null,
+    quantity: num(formData.get("quantity")),
+    sellVnd: num(formData.get("sellVnd")),
+    unitPriceCny: Number(String(formData.get("unitPriceCny") ?? "0")) || 0,
+    costConfirmed: String(formData.get("costConfirmed")) === "true",
+  });
+
+  if (!result.ok) {
+    redirect(`/orders/${orderId}?tab=mon&err=${encodeURIComponent(result.reason)}`);
+  }
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  redirect(`/orders/${orderId}?tab=mon`);
+}
+
+export async function removeItemAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = Number(formData.get("orderId"));
+  const itemId = Number(formData.get("itemId"));
+  if (!Number.isInteger(orderId) || !Number.isInteger(itemId)) redirect("/orders");
+
+  const result = await removeOrderItem(orderId, itemId);
+  if (!result.ok) {
+    redirect(`/orders/${orderId}?tab=mon&err=${encodeURIComponent(result.reason)}`);
+  }
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  redirect(`/orders/${orderId}?tab=mon`);
+}
