@@ -2041,6 +2041,114 @@ export async function listCustomersWithTotals(): Promise<CustomerListRow[]> {
   }));
 }
 
+export type CustomerStatsRow = {
+  id: number;
+  name: string;
+  phone: string | null;
+  warningFlag: boolean;
+  warningReason: string | null;
+  orderCount: number;
+  itemCount: number;
+  paidVnd: number;
+  outstandingVnd: number;
+};
+
+/**
+ * Thống kê khách theo NĂM TẠO ĐƠN (v8-A).
+ *
+ * `year === null` = tất cả các năm, và hiện MỌI khách kể cả khách chưa có đơn
+ * nào. Chọn một năm cụ thể thì chỉ hiện khách có ít nhất một đơn trong năm đó
+ * — nếu không danh sách đầy khách toàn số 0, đúng thứ không ai cần nhìn.
+ *
+ * BA CÁI BẪY, cả ba đều cho ra SỐ SAI mà không báo lỗi:
+ *
+ * 1. KHÔNG JOIN order_items rồi SUM(o.deposit). JOIN món nhân bản dòng đơn:
+ *    một đơn 3 món bị cộng tiền 3 lần. Vì vậy `agg` (gom đơn) và `itm` (gom
+ *    món) là HAI CTE riêng, ghép vào customers bằng hai JOIN độc lập.
+ * 2. Cắt năm theo giờ Việt Nam, không theo UTC. Đơn tạo 5h sáng 01/01 giờ VN
+ *    là 22h 31/12 giờ UTC — thiếu AT TIME ZONE là nó rơi nhầm sang năm trước.
+ *    Phải khớp với yearInVn() trong src/lib/vn-time.ts.
+ * 3. ::int cho mọi SUM/COUNT trên cột integer, alias camelCase bọc nháy kép.
+ */
+export async function listCustomerStats(
+  year: number | null,
+): Promise<CustomerStatsRow[]> {
+  const yearWhere =
+    year === null
+      ? ""
+      : ` AND EXTRACT(YEAR FROM to_timestamp(o.created_at)
+                       AT TIME ZONE 'Asia/Ho_Chi_Minh') = ?`;
+  const params = year === null ? [] : [year];
+  // Chọn một năm thì bỏ khách không có đơn nào trong năm đó.
+  const joinAgg = year === null ? "LEFT JOIN" : "JOIN";
+
+  const rows = await raw.all<{
+    id: number;
+    name: string;
+    phone: string | null;
+    warning_flag: boolean;
+    warning_reason: string | null;
+    orderCount: number;
+    itemCount: number;
+    paidVnd: number;
+    outstandingVnd: number;
+  }>(
+    `WITH ord AS (
+       SELECT o.id, o.customer_id, o.deposit, o.amount_due,
+              o.status, o.order_type
+         FROM orders o
+        WHERE o.customer_id IS NOT NULL${yearWhere}
+     ),
+     agg AS (
+       SELECT ord.customer_id,
+              COUNT(*)::int                                  AS order_count,
+              SUM(ord.deposit)::int                          AS paid,
+              SUM(CASE WHEN ${openOrderSql("ord")}
+                       THEN ord.amount_due ELSE 0 END)::int  AS outstanding
+         FROM ord GROUP BY ord.customer_id
+     ),
+     itm AS (
+       SELECT ord.customer_id, SUM(i.quantity)::int AS item_count
+         FROM ord JOIN order_items i ON i.order_id = ord.id
+        GROUP BY ord.customer_id
+     )
+     SELECT c.id, c.name, c.phone, c.warning_flag, c.warning_reason,
+            COALESCE(agg.order_count, 0)  AS "orderCount",
+            COALESCE(itm.item_count, 0)   AS "itemCount",
+            COALESCE(agg.paid, 0)         AS "paidVnd",
+            COALESCE(agg.outstanding, 0)  AS "outstandingVnd"
+       FROM customers c
+       ${joinAgg} agg ON agg.customer_id = c.id
+       LEFT JOIN itm ON itm.customer_id = c.id
+      ORDER BY "outstandingVnd" DESC, c.name`,
+    params,
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    phone: r.phone,
+    warningFlag: r.warning_flag === true,
+    warningReason: r.warning_reason,
+    orderCount: r.orderCount,
+    itemCount: r.itemCount,
+    paidVnd: r.paidVnd,
+    outstandingVnd: r.outstandingVnd,
+  }));
+}
+
+/** Các năm có đơn, giảm dần — dùng dựng chip lọc. */
+export async function listOrderYears(): Promise<number[]> {
+  const rows = await raw.all<{ y: number }>(
+    `SELECT DISTINCT
+            EXTRACT(YEAR FROM to_timestamp(created_at)
+                    AT TIME ZONE 'Asia/Ho_Chi_Minh')::int AS y
+       FROM orders
+      ORDER BY y DESC`,
+  );
+  return rows.map((r) => r.y);
+}
+
 // ---------- Tồn kho ----------
 
 export async function listInventory() {
