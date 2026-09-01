@@ -2,7 +2,7 @@
 
 Ứng dụng nội bộ (2 người dùng) quản lý dịch vụ **order hộ hàng Trung Quốc** cho shop HeyP (bán giày/dép/thời trang): chốt đơn → mua hộ → gom kho → vận chuyển về VN → giao khách → thu tiền. Kèm bán hàng tồn kho và đọc ảnh chốt đơn Zalo bằng AI.
 
-**Trạng thái:** MVP xong (Phase 0–7). **v2 xong** — giao diện "Boutique atelier" (navy + giấy ấm + camel + serif), sidebar (desktop) / bottom tab+FAB+sheet (mobile), màn Tổng quan. Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`. **v3 xong** (A + B) — bóc lớp giá theo món (¥/giá vốn/lời tách riêng từng dòng sản phẩm), luồng nhập đơn 3 mảnh (ảnh chốt đơn + thông tin khách + ảnh sản phẩm), ví ¥, sổ chi phí, sổ thu tiền, 3 báo cáo tài chính. Spec: `docs/2026-08-11-heyp-v3a-gia-va-nhap-don-design.md`, `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`. **Đã chuyển hosting sang Vercel + Supabase** (14/08) — xem mục Hosting bên dưới. **v4 xong** — trục trạng thái rút còn 4 bước theo từng loại đơn, tự động hoàn tất khi đã giao và thu đủ tiền, form tạo đơn rút còn 3 ô bắt buộc. DB Supabase đã ở Singapore (`ap-southeast-1`), khớp region `sin1` đã ghim cho Vercel — xác nhận lại qua dashboard Supabase ngày 31/08 (mục Hosting bên dưới trước đây ghi nhầm là còn ở Sydney). Spec: `docs/superpowers/specs/2026-08-20-heyp-toc-do-va-luong-don-design.md`. **v5 xong** — giao diện viết lại mobile-first cho iPhone: PWA cài ra màn hình chính, tabbar 5 ô, màn tạo đơn kiểu POS (Sheet cho từng thao tác phụ), chi tiết đơn chia 4 tab, sao lưu thủ công thay backup tự động, nhập kho chủ động. Bỏ chất "Boutique atelier" (giữ navy, bỏ nền giấy ấm/serif). Spec: `docs/superpowers/specs/2026-08-31-heyp-ui-mobile-first-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-ui-mobile-first.md`. Logo: chưa có `public/logo.png` → đang dùng wordmark fallback + icon PWA chữ trên nền navy (`src/lib/logo.ts`, `scripts/make-pwa-icons.ts` tự chuyển sang ảnh khi có file, không cần sửa code).
+**Trạng thái:** MVP xong (Phase 0–7). **v2 xong** — giao diện "Boutique atelier" (navy + giấy ấm + camel + serif), sidebar (desktop) / bottom tab+FAB+sheet (mobile), màn Tổng quan. Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`. **v3 xong** (A + B) — bóc lớp giá theo món (¥/giá vốn/lời tách riêng từng dòng sản phẩm), luồng nhập đơn 3 mảnh (ảnh chốt đơn + thông tin khách + ảnh sản phẩm), ví ¥, sổ chi phí, sổ thu tiền, 3 báo cáo tài chính. Spec: `docs/2026-08-11-heyp-v3a-gia-va-nhap-don-design.md`, `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`. **Đã chuyển hosting sang Vercel + Supabase** (14/08) — xem mục Hosting bên dưới. **v4 xong** — trục trạng thái rút còn 4 bước theo từng loại đơn, tự động hoàn tất khi đã giao và thu đủ tiền, form tạo đơn rút còn 3 ô bắt buộc. DB Supabase đã ở Singapore (`ap-southeast-1`), khớp region `sin1` đã ghim cho Vercel — xác nhận lại qua dashboard Supabase ngày 31/08 (mục Hosting bên dưới trước đây ghi nhầm là còn ở Sydney). Spec: `docs/superpowers/specs/2026-08-20-heyp-toc-do-va-luong-don-design.md`. **v5 xong** — giao diện viết lại mobile-first cho iPhone: PWA cài ra màn hình chính, tabbar 5 ô, màn tạo đơn kiểu POS (Sheet cho từng thao tác phụ), chi tiết đơn chia 4 tab, sao lưu thủ công thay backup tự động, nhập kho chủ động. Bỏ chất "Boutique atelier" (giữ navy, bỏ nền giấy ấm/serif). Spec: `docs/superpowers/specs/2026-08-31-heyp-ui-mobile-first-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-ui-mobile-first.md`. Logo: chưa có `public/logo.png` → đang dùng wordmark fallback + icon PWA chữ trên nền navy (`src/lib/logo.ts`, `scripts/make-pwa-icons.ts` tự chuyển sang ảnh khi có file, không cần sửa code). **v6 xong** — tài khoản trong DB (bảng `users`, hash scrypt, hai vai trò `admin`/`nhan_vien`), xoá đơn/khách có kiểm soát kèm nhật ký xoá, nhập đơn theo giá phải thu (¥ suy ngược) + ảnh gắn theo từng món, chọn nhiều đơn chuyển bước hàng loạt, thêm/xoá món trong đơn đã tạo. Spec: `docs/superpowers/specs/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don.md`.
 
 ## Stack
 
@@ -16,7 +16,7 @@
 - **Region:** DB Supabase đã ở Singapore (`ap-southeast-1`, xác nhận qua dashboard Supabase ngày 31/08 — Project Settings → General và Infrastructure đều ghi "Southeast Asia (Singapore), ap-southeast-1"). `vercel.json` ghim `regions: ["sin1"]` (Singapore) cho deployment Vercel — cùng vùng AWS với DB, không còn lệch region.
 - **Ảnh:** Supabase Storage, bucket `photos` (private). App luôn đi qua route đã xác thực (`/api/photo/[id]`, `src/lib/storage.ts`), không dùng signed URL public.
 - **Job nền:** không còn tiến trình `setInterval` trong app (Vercel serverless không giữ tiến trình sống). Thay bằng GitHub Actions (`.github/workflows/tracking-sweep.yml`, mỗi 4h) gọi `POST /api/cron/track` — route này vẫn nhận cả session đăng nhập lẫn `?secret=`/header `x-cron-secret` khớp `CRON_SECRET`. Cùng lịch này giữ cho Supabase free tier khỏi tự pause sau 7 ngày im lặng.
-- **Backup:** Supabase free không có backup tự động/PITR (workflow `pg_dump` hằng ngày đã **bỏ** ở v5). Sao lưu **thủ công** qua `GET /api/backup` (có xác thực, xuất toàn bộ 12 bảng ra JSON, tải được thẳng từ iPhone), nút "Tải bản sao lưu" ở màn `/backup`. Mốc lần tải gần nhất lưu ở `settings.last_backup_at`, Tổng quan cảnh báo nếu quá 14 ngày. Khôi phục: `node --experimental-strip-types scripts/restore-from-json.ts file.json --toi-chac-chan` (ghi đè toàn bộ dữ liệu). Ảnh **không** nằm trong bản sao lưu — tải riêng từ Supabase Storage dashboard.
+- **Backup:** Supabase free không có backup tự động/PITR (workflow `pg_dump` hằng ngày đã **bỏ** ở v5). Sao lưu **thủ công** qua `GET /api/backup` (có xác thực, xuất toàn bộ 14 bảng ra JSON, tải được thẳng từ iPhone), nút "Tải bản sao lưu" ở màn `/backup`. Mốc lần tải gần nhất lưu ở `settings.last_backup_at`, Tổng quan cảnh báo nếu quá 14 ngày. Khôi phục: `node --experimental-strip-types scripts/restore-from-json.ts file.json --toi-chac-chan` (ghi đè toàn bộ dữ liệu). Ảnh **không** nằm trong bản sao lưu — tải riêng từ Supabase Storage dashboard.
 - **Vercel Hobby là gói non-commercial theo ToS** — HeyP vận hành business thật, đây là rủi ro đã biết (cân nhắc Pro nếu cần chắc chân).
 
 ## Lệnh hay dùng
@@ -33,6 +33,25 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
 
 ## LƯU Ý QUAN TRỌNG (gotchas — đọc trước khi sửa)
 
+- **Đăng nhập đi qua bảng `users`, KHÔNG qua `.env`** (v6) — `APP_ACCOUNTS`
+  chỉ là hạt giống cho `ensureUsersSeeded()` lúc bảng còn rỗng. `getSession()`
+  đọc DB mỗi request (bọc `cache()` nên 1 truy vấn mỗi lần render) để cờ
+  `active` có hiệu lực ngay; trước v6 cookie không đọc DB lần nào nên khoá tài
+  khoản chẳng có tác dụng gì suốt 30 ngày. Quên mật khẩu admin duy nhất thì
+  phải sửa `password_hash` thẳng trong Supabase.
+- **Xoá đơn chỉ dành cho đơn CHƯA có dấu vết** (`src/lib/deletion.ts`) — đã
+  trừ ví ¥, đã có phiếu thu, đã có chi phí, hoặc đã cộng tồn kho
+  (`ve_kho_vn`/`hoan_tat`/`khach_bom`) thì chặn. KHÔNG dùng xoá mềm: thêm
+  điều kiện lọc vào hàng chục câu SQL đang có, sót một chỗ là báo cáo sai âm
+  thầm. Mọi lần xoá ghi vào `deletion_log` trong cùng transaction.
+- **`quoted_total_vnd` bất biến với thao tác GIÁ, không bất biến với PHẠM VI**
+  (v6) — sửa ¥ hay kéo lời thì Total giữ nguyên (luật v3-A, test khoá); thêm
+  hoặc xoá món thì Total đổi theo (`totalAfterAddLine`/`totalAfterRemoveLine`)
+  và lời các dòng cũ KHÔNG bị rải lại.
+- **Nhập đơn theo GIÁ PHẢI THU** (v6) — form gửi lời từng dòng đã tính sẵn,
+  `createOrder` đi nhánh `hasMargins` và không tự rải. Chỉ khi ghi đè Total
+  thì client mới gọi `allocateMargins` rồi gửi lời đã rải. `¥` là số máy suy
+  ngược (`cnyFromSellPrice`) nên luôn mang `cost_confirmed = false`.
 - **SQL thô đi qua lớp `Exec`** (`src/db/raw.ts`: `raw.all/get/run`, `withTx`) — SQL viết placeholder kiểu SQLite (`?`), lớp này tự đổi sang `$1,$2` của Postgres. Trong transaction (`withTx`) **PHẢI** dùng `x` được truyền vào, KHÔNG dùng `raw` toàn cục — dùng nhầm thì câu đó chạy ngoài transaction, không rollback theo.
 - **Alias camelCase trong SQL thô phải bọc nháy kép** (`AS "orderType"`, không phải `AS orderType`) — Postgres hạ chữ thường alias không nháy kép, code JS đọc `undefined`. Bug loại này không lỗi cú pháp, chỉ âm thầm trả sai dữ liệu.
 - **`SUM()`/`COUNT()` trên cột `integer` phải ép `::int`** — nếu không, kiểu trả về của Postgres qua postgres-js là `bigint`→string, JS `+` sẽ nối chuỗi thay vì cộng số. Cột `double precision` (giá ¥, tỷ giá) không cần ép.
@@ -107,3 +126,4 @@ Test bắt buộc phải xanh cho **công thức tiền** và **luật trạng t
 - Thiết kế v4 (tốc độ & luồng đơn): `docs/superpowers/specs/2026-08-20-heyp-toc-do-va-luong-don-design.md`
 - Kế hoạch v4: `docs/superpowers/plans/2026-08-21-heyp-toc-do-va-luong-don.md`
 - Thiết kế v5 (giao diện mobile-first): `docs/superpowers/specs/2026-08-31-heyp-ui-mobile-first-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-ui-mobile-first.md`
+- Thiết kế v6 (tài khoản, quyền, xoá, nhập đơn): `docs/superpowers/specs/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don.md`

@@ -22,8 +22,10 @@ if (!url) {
   process.exit(1);
 }
 
-// Thứ tự này tôn trọng khoá ngoại: cha trước, con sau.
+// Thứ tự này tôn trọng khoá ngoại: cha trước, con sau. users và deletion_log
+// (v6) không có khoá ngoại tới bảng nào khác — đặt đầu/cuối tuỳ ý.
 const ORDER = [
+  "users",
   "customers",
   "packages",
   "inventory",
@@ -36,6 +38,7 @@ const ORDER = [
   "expenses",
   "payments",
   "settings",
+  "deletion_log",
 ] as const;
 
 const dump = JSON.parse(await readFile(file, "utf8")) as {

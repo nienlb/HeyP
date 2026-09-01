@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
  * phải dữ liệu người dùng, nên nội suy thẳng vào SQL ở đây là an toàn.
  */
 const TABLES = [
+  "users",
   "customers",
   "packages",
   "inventory",
@@ -24,6 +25,7 @@ const TABLES = [
   "expenses",
   "payments",
   "settings",
+  "deletion_log",
 ] as const;
 
 export async function GET() {
