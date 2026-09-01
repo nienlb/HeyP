@@ -155,6 +155,12 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
     nên trả 307 thật, không phụ thuộc React. Nó chỉ kiểm CHỮ KÝ cookie (Web
     Crypto, không đụng DB) — `requireAuth()`/`requireAdmin()` vẫn phải giữ để
     kiểm tài khoản còn sống/còn quyền. Middleware **không** thay thế chúng.
+  - **Middleware CỐ Ý không có luật ngược ("đã đăng nhập mà mở /login thì đá
+    về /")** — nghe tiện nhưng khoá chết tài khoản bị khoá giữa chừng: cookie
+    còn chữ ký hợp lệ nên middleware cho qua `/`, trang thấy `active = false`
+    nên đá về `/login`, middleware lại đá ngược về `/`, mãi mãi. Middleware
+    không đọc DB nên không tự thoát được, mà xoá cookie lúc render trang thì
+    Next không cho.
   - **Middleware chỉ gác GET/HEAD.** 307 giữ nguyên method, nên chuyển hướng
     một POST là bắn lại cả body của server action sang `/login`.
   - **Định dạng cookie phải dùng Web Crypto, ở `src/lib/session-token.ts`** —

@@ -62,15 +62,17 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(url, 307);
   }
 
-  // Đã đăng nhập mà mở /login thì về Tổng quan. Trang /login cũng có
-  // redirect("/") riêng, nhưng nó là redirect lúc render → dính đúng cái bẫy
-  // mô tả ở trên. Chặn ở đây để nó không bao giờ phải chạy.
-  if (session && pathname === LOGIN_PATH) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url, 307);
-  }
+  // CỐ Ý KHÔNG có luật ngược lại ("đã đăng nhập mà mở /login thì đá về /").
+  // Nghe thì tiện, nhưng nó tạo một vòng lặp vô tận KHOÁ CHẾT tài khoản bị
+  // khoá giữa chừng: cookie vẫn còn chữ ký hợp lệ nên middleware cho qua "/",
+  // trang gọi requireAuth() thấy users.active = false nên đá về "/login",
+  // middleware lại thấy chữ ký hợp lệ nên đá ngược về "/", mãi mãi. Middleware
+  // không đọc DB được nên KHÔNG thể tự thoát khỏi vòng này, mà xoá cookie lúc
+  // render trang thì Next không cho.
+  //
+  // Để trang /login tự lo: getSession() của nó đọc DB, nên tài khoản bị khoá
+  // sẽ thấy đúng form đăng nhập, còn người đang đăng nhập thật thì trang có
+  // redirect("/") riêng (đường đó nay đã được RedirectRescue gánh).
 
   return NextResponse.next();
 }
