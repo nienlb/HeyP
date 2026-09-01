@@ -366,3 +366,124 @@
   opacity: 0;
   animation: heyp-appear 0.3s ease-out 8s forwards;
 }
+
+/* ---------- DataTable (v8-A) ----------
+   Điện thoại: mỗi hàng là một thẻ 2 cột, trông y hệt .list-row cũ.
+   Desktop (≥900px): cả khối thành bảng, hàng thấp lại còn 44px.
+   Xem chú thích dài trong src/app/_components/data-table.tsx. */
+.dt {
+  display: flex;
+  flex-direction: column;
+}
+.dt-head {
+  display: none;
+}
+.dt-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  width: 100%;
+  min-height: 76px;
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: var(--fs-3);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.dt-row-static {
+  cursor: default;
+}
+.dt-c {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Điện thoại chỉ giữ cột có mobile: true. */
+.dt-c:not(.dt-m) {
+  display: none;
+}
+.dt-r {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Dòng phụ trong ô tên — chỉ tồn tại trên điện thoại. */
+.dt-sub {
+  display: block;
+  margin-top: var(--sp-1);
+  font-size: var(--fs-2);
+  font-weight: 400;
+  color: var(--muted);
+}
+.dt-name {
+  display: block;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-badge {
+  display: inline-block;
+  margin-left: var(--sp-2);
+  font-size: var(--fs-2);
+  color: var(--warning);
+  white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+  .dt {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .dt-head,
+  .dt-row {
+    display: grid;
+    grid-template-columns: var(--dt-cols);
+    gap: var(--sp-3);
+    align-items: center;
+  }
+  .dt-head {
+    padding: var(--sp-2) var(--sp-4);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    font-size: var(--fs-2);
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .dt-head a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .dt-head a:hover {
+    color: var(--brand);
+  }
+  .dt-row {
+    min-height: 44px;
+    padding: var(--sp-2) var(--sp-4);
+    margin-bottom: 0;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+  }
+  .dt-row:last-child {
+    border-bottom: none;
+  }
+  .dt-row:hover {
+    background: var(--brand-tint);
+  }
+  .dt-c:not(.dt-m) {
+    display: block;
+  }
+  /* Desktop: thông tin phụ đã có cột riêng. */
+  .dt-sub {
+    display: none;
+  }
+}
