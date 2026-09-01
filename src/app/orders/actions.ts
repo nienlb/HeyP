@@ -568,3 +568,29 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
   revalidatePath("/customers");
   redirect(`/orders/${orderId}`);
 }
+
+// ---------- Sửa ghi chú và tỷ giá (v7) ----------
+
+import { updateOrderMeta } from "@/db/queries";
+
+export async function updateOrderMetaAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = parseVnd(formData.get("orderId"));
+  if (!Number.isInteger(orderId) || orderId <= 0) redirect("/orders");
+
+  const rateRaw = formData.get("exchangeRate");
+  const result = await updateOrderMeta(orderId, {
+    note: String(formData.get("note") ?? "").trim() || null,
+    // Ô tỷ giá chỉ có mặt khi đơn còn sửa được — không có thì đừng đụng tới.
+    exchangeRate: rateRaw === null ? undefined : parseVnd(rateRaw),
+  });
+
+  if (!result.ok) {
+    redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  }
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  redirect(`/orders/${orderId}`);
+}

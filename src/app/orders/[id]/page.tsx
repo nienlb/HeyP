@@ -25,6 +25,7 @@ import {
 } from "@/lib/format";
 import {
   allowedNextStatuses,
+  canEditExchangeRate,
   canEditOrderItems,
   earliestOriginFor,
   journeyTrack,
@@ -40,6 +41,7 @@ import { OrderTabs, type TabCode } from "./order-tabs";
 import { DangerZone } from "./danger-zone";
 import { AddItemButton } from "./item-editor";
 import { CustomerBlock } from "./customer-block";
+import { OrderMetaBlock } from "./order-meta-block";
 
 const TAB_CODES = ["tom_tat", "mon", "tien", "anh"] as const;
 
@@ -219,12 +221,12 @@ export default async function OrderDetailPage({
             }))}
           />
 
-          {order.note && (
-            <section className="card">
-              <h2 className="card-title">Ghi chú</h2>
-              <p style={{ margin: 0 }}>{order.note}</p>
-            </section>
-          )}
+          <OrderMetaBlock
+            orderId={order.id}
+            note={order.note}
+            exchangeRate={order.exchangeRate}
+            canEditRate={canEditExchangeRate(order.status)}
+          />
 
           <section className="card">
             <h2 className="card-title">

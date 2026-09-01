@@ -52,6 +52,7 @@ import {
   BRANCH_STATUSES,
   MAIN_CHAIN,
   STATUS_LABELS,
+  canEditExchangeRate,
   canEditOrderItems,
   initialStatus,
   isTerminal,
@@ -1184,6 +1185,92 @@ export async function updateLineCost(
       await adjustCnyLedgerForOrder(x, orderId, ledger, `Sửa giá ¥ đơn #${orderId}`);
 
       await recomputeOrderMoneyRow(x, orderId, order);
+      return { ok: true } as LineActionResult;
+    });
+  } catch (err) {
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/**
+ * Sửa ghi chú và tỷ giá của đơn (v7).
+ *
+ * Ghi chú không đụng tiền → sửa được mọi lúc.
+ *
+ * Tỷ giá chỉ sửa được khi đơn còn ở `khach_chot` (canEditExchangeRate). Đổi
+ * tỷ giá làm đổi GIÁ VỐN của mọi dòng, nên theo luật v7 thì Total GHIM và lời
+ * được rải lại — cùng cách updateLineCost xử lý khi sửa giá ¥.
+ */
+export async function updateOrderMeta(
+  orderId: number,
+  input: { note: string | null; exchangeRate?: number },
+): Promise<LineActionResult> {
+  const defaultMargin = (await getSettings()).defaultMarginVnd;
+
+  try {
+    return await withTx(async (x) => {
+      const row = await x.get<{ status: OrderStatus; exchange_rate: number }>(
+        "SELECT status, exchange_rate FROM orders WHERE id = ?",
+        [orderId],
+      );
+      if (!row) throw new Error("Không tìm thấy đơn");
+
+      await x.run("UPDATE orders SET note = ? WHERE id = ?", [
+        input.note,
+        orderId,
+      ]);
+
+      const wantsRate =
+        input.exchangeRate !== undefined &&
+        input.exchangeRate > 0 &&
+        input.exchangeRate !== row.exchange_rate;
+
+      if (wantsRate) {
+        if (!canEditExchangeRate(row.status))
+          throw new Error(
+            `Đơn ở "${STATUS_LABELS[row.status]}" không sửa được tỷ giá — tỷ giá đã dùng để chốt giá vốn và trừ ví ¥.`,
+          );
+
+        await x.run("UPDATE orders SET exchange_rate = ? WHERE id = ?", [
+          input.exchangeRate,
+          orderId,
+        ]);
+
+        // Giá vốn đổi → rải lại lời để Σ giá bán vẫn đúng bằng Total.
+        const quoted = (await x.get<{ total: number }>(
+          "SELECT quoted_total_vnd AS total FROM orders WHERE id = ?",
+          [orderId],
+        ))!;
+        const rows = await x.all<{
+          id: number;
+          quantity: number;
+          unit_price_cny: number;
+          margin_vnd: number;
+        }>(
+          "SELECT id, quantity, unit_price_cny, margin_vnd FROM order_items WHERE order_id = ? ORDER BY id",
+          [orderId],
+        );
+        const margins = allocateMargins(
+          quoted.total,
+          rows.map((r) => ({
+            quantity: r.quantity,
+            unitPriceCny: r.unit_price_cny,
+            marginVnd: r.margin_vnd,
+          })),
+          input.exchangeRate!,
+          defaultMargin,
+        );
+        for (const [i, r] of rows.entries()) {
+          await x.run("UPDATE order_items SET margin_vnd = ? WHERE id = ?", [
+            margins[i],
+            r.id,
+          ]);
+        }
+
+        const order = await readOrderMoneyRow(x, orderId);
+        await recomputeOrderMoneyRow(x, orderId, order);
+      }
+
       return { ok: true } as LineActionResult;
     });
   } catch (err) {
