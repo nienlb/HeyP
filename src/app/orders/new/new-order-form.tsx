@@ -8,7 +8,11 @@ import {
 } from "../actions";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import { formatVnd } from "@/lib/format";
-import { suggestCnyFromTotal } from "@/lib/line-pricing";
+import {
+  allocateMargins,
+  marginFromSellPrice,
+  suggestCnyFromTotal,
+} from "@/lib/line-pricing";
 import type { ShipStatus } from "@/lib/order-gaps";
 import {
   ORDER_TYPES,
@@ -40,7 +44,8 @@ export function NewOrderForm({
 
   const [orderType, setOrderType] = useState<OrderType>("order_ho");
   const [exchangeRate, setExchangeRate] = useState(String(defaultExchangeRate));
-  const [quotedTotal, setQuotedTotal] = useState("");
+  // Total giờ là Σ các dòng. Ô này chỉ để GHI ĐÈ khi khách trả số tròn.
+  const [totalOverride, setTotalOverride] = useState("");
   const [shipStatus, setShipStatus] = useState<ShipStatus>("unknown");
   const [shippingFee, setShippingFee] = useState("");
   const [deposit, setDeposit] = useState("");
@@ -78,7 +83,7 @@ export function NewOrderForm({
       setNewCustomerPhone(patch.newCustomerPhone);
     if (patch.newCustomerAddress !== undefined)
       setNewCustomerAddress(patch.newCustomerAddress);
-    if (patch.quotedTotal !== undefined) setQuotedTotal(patch.quotedTotal);
+    if (patch.quotedTotal !== undefined) setTotalOverride(patch.quotedTotal);
     if (patch.deposit !== undefined) setDeposit(patch.deposit);
     if (patch.shipStatus !== undefined) setShipStatus(patch.shipStatus);
     if (patch.shippingFee !== undefined) setShippingFee(patch.shippingFee);
@@ -87,10 +92,14 @@ export function NewOrderForm({
   /**
    * Gợi ý giá ¥ cho sản phẩm đọc được rồi gộp vào danh sách hiện có.
    *
-   * `currentTotalStr` truyền tay (KHÔNG đọc state `quotedTotal` qua closure):
-   * hàm này chạy trong vòng lặp đọc ảnh của ZaloDropzone, và React không cập
-   * nhật lại closure của một async function đang chạy dở dù đã setQuotedTotal
-   * ở ảnh trước — dùng biến cục bộ theo dõi xuyên suốt vòng lặp mới đúng.
+   * `currentTotalStr` truyền tay (KHÔNG đọc state `totalOverride` qua
+   * closure): hàm này chạy trong vòng lặp đọc ảnh của ZaloDropzone, và React
+   * không cập nhật lại closure của một async function đang chạy dở dù đã
+   * setTotalOverride ở ảnh trước — dùng biến cục bộ theo dõi xuyên suốt vòng
+   * lặp mới đúng.
+   *
+   * Ảnh chốt đơn cho biết TỔNG, không cho biết giá từng món — chia đều Total
+   * cho các món để có giá thu khởi điểm, người dùng chỉnh lại nếu lệch.
    */
   async function applyItemsFromExtract(
     order: ZaloExtract,
@@ -103,6 +112,10 @@ export function NewOrderForm({
       // Tra lịch sử hỏng thì vẫn còn cách suy ngược — không chặn.
     }
     const totalForFallback = order.totalVnd ?? num(currentTotalStr);
+    const perLineSell =
+      order.items.length > 0
+        ? Math.round(totalForFallback / order.items.length)
+        : 0;
     const fallbackCny = suggestCnyFromTotal(
       totalForFallback,
       order.items.length,
@@ -117,8 +130,10 @@ export function NewOrderForm({
         productUrl: "",
         attributes: itemAttributes(it),
         quantity: String(it.quantity || 1),
+        sellPriceVnd: perLineSell > 0 ? String(perLineSell) : "",
         unitPriceCny: cny > 0 ? String(cny) : "",
         costConfirmed: false,
+        photos: [],
       };
     });
     setItems((prev) => mergeItems(prev, newRows));
@@ -145,28 +160,71 @@ export function NewOrderForm({
 
   const parsedItems = useMemo(
     () =>
-      items.map((it) => ({
-        name: it.name.trim(),
-        productUrl: it.productUrl.trim(),
-        attributes: it.attributes.trim(),
-        quantity: num(it.quantity),
-        unitPriceCny: num(it.unitPriceCny),
-        costConfirmed: it.costConfirmed,
-      })),
-    [items],
+      items.map((it) => {
+        const quantity = num(it.quantity);
+        const unitPriceCny = num(it.unitPriceCny);
+        const sell = num(it.sellPriceVnd);
+        const line = { quantity, unitPriceCny, marginVnd: 0 };
+        return {
+          name: it.name.trim(),
+          productUrl: it.productUrl.trim(),
+          attributes: it.attributes.trim(),
+          quantity,
+          unitPriceCny,
+          costConfirmed: it.costConfirmed,
+          sellVnd: sell,
+          // Lời là PHẦN DƯ của dòng — phần lẻ do làm tròn ¥ rơi vào đây, nhờ
+          // vậy Σ giá bán khớp đúng Total.
+          marginVnd: marginFromSellPrice(sell, line, num(exchangeRate)),
+          photoIds: it.photos.map((p) => p.id),
+        };
+      }),
+    [items, exchangeRate],
   );
 
   const validItems = parsedItems.filter((it) => it.name !== "");
   const goodsTotalCny = sumLineItemsCny(validItems);
   const goodsVnd = Math.round(goodsTotalCny * num(exchangeRate));
 
-  // Total là dữ kiện. Chưa nhập thì suy từ giá vốn + lời mặc định mỗi món.
-  const totalVnd =
-    quotedTotal.trim() !== ""
-      ? num(quotedTotal)
-      : goodsVnd + defaultMarginVnd * Math.max(validItems.length, 1);
+  /** Σ giá bán các dòng — Total mặc định của đơn từ v6. */
+  const linesTotal = validItems.reduce(
+    (s, it) => s + it.sellVnd * it.quantity,
+    0,
+  );
+  const overrideVnd = num(totalOverride);
+  const totalVnd = totalOverride.trim() !== "" ? overrideVnd : linesTotal;
 
-  // Lời = phần dư. Có thể âm — đơn lỗ là chuyện có thật.
+  /**
+   * Ghi đè Total → lời từng dòng phải rải lại để Σ giá bán vẫn đúng bằng
+   * Total. Tính ngay ở client rồi gửi lời đã rải đi (createOrder đi nhánh
+   * hasMargins, không tự rải nữa).
+   */
+  const sentItems = useMemo(() => {
+    if (totalOverride.trim() === "" || validItems.length === 0)
+      return parsedItems;
+    const margins = allocateMargins(
+      overrideVnd,
+      validItems.map((it) => ({
+        quantity: it.quantity,
+        unitPriceCny: it.unitPriceCny,
+        marginVnd: it.marginVnd,
+      })),
+      num(exchangeRate),
+      defaultMarginVnd,
+    );
+    let k = 0;
+    return parsedItems.map((it) =>
+      it.name === "" ? it : { ...it, marginVnd: margins[k++] },
+    );
+  }, [
+    parsedItems,
+    validItems,
+    totalOverride,
+    overrideVnd,
+    exchangeRate,
+    defaultMarginVnd,
+  ]);
+
   const marginVnd = totalVnd - goodsVnd;
 
   const money = computeOrderMoney({
@@ -178,11 +236,10 @@ export function NewOrderForm({
   });
 
   // KHÔNG bắt buộc có khách: đơn từ ảnh chốt thường chưa có thông tin khách.
-  // Giá ¥ cũng không bắt buộc — chưa biết thì toàn bộ Total nằm ở lời,
-  // đơn mang cờ "thiếu giá vốn" để nhắc bổ sung sau.
+  // Giá phải thu MỚI là ô bắt buộc từ v6 — ¥ suy ngược, không bắt gõ tay.
   const canSubmit =
     validItems.length > 0 &&
-    validItems.every((it) => it.quantity > 0) &&
+    validItems.every((it) => it.quantity > 0 && it.sellVnd > 0) &&
     num(exchangeRate) > 0 &&
     totalVnd > 0;
 
@@ -225,7 +282,11 @@ export function NewOrderForm({
       <form action={formAction} className="order-form" id="new-order-form">
         {state.error && <div className="error">{state.error}</div>}
 
-        <input type="hidden" name="items" value={JSON.stringify(parsedItems)} />
+        <input
+          type="hidden"
+          name="items"
+          value={JSON.stringify(sentItems)}
+        />
         <input type="hidden" name="quotedTotalVnd" value={totalVnd} />
         <input type="hidden" name="shipStatus" value={shipStatus} />
         <input type="hidden" name="customerMode" value={picked?.mode ?? "new"} />
@@ -279,12 +340,16 @@ export function NewOrderForm({
               className="item-card"
               onClick={() => setItemSheet({ open: true, index: i })}
             >
+              {it.photos[0] && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={it.photos[0].url} alt="" className="ic-thumb" />
+              )}
               <span className="ic-name">{it.name || "(chưa đặt tên)"}</span>
               <span className="ic-meta">
                 {it.attributes || "—"} · ×{it.quantity || 0}
               </span>
               <span className="ic-price num">
-                {it.unitPriceCny ? `¥${it.unitPriceCny}` : "¥ —"}
+                {it.sellPriceVnd ? `${groupDigits(it.sellPriceVnd)}₫` : "—"}
               </span>
             </button>
           ))}
@@ -298,20 +363,6 @@ export function NewOrderForm({
         </button>
 
         <h2 className="sec-label">Tiền</h2>
-        <label className="field">
-          <span>Tổng chốt khách (₫)</span>
-          <input
-            inputMode="numeric"
-            value={quotedTotal}
-            onChange={(e) => setQuotedTotal(e.target.value)}
-            onFocus={(e) =>
-              setQuotedTotal(e.target.value.replace(/[.,\s]/g, ""))
-            }
-            onBlur={(e) => setQuotedTotal(groupDigits(e.target.value))}
-            placeholder={String(totalVnd)}
-            enterKeyHint="next"
-          />
-        </label>
         <label className="field">
           <span>Cọc (₫)</span>
           <input
@@ -327,6 +378,19 @@ export function NewOrderForm({
 
         <details className="more-fields">
           <summary>Tỷ giá · ship · loại đơn</summary>
+          <label className="field">
+            <span>Chốt số khác với tổng món (₫)</span>
+            <input
+              inputMode="numeric"
+              value={totalOverride}
+              onChange={(e) => setTotalOverride(e.target.value)}
+              onFocus={(e) =>
+                setTotalOverride(e.target.value.replace(/[.,\s]/g, ""))
+              }
+              onBlur={(e) => setTotalOverride(groupDigits(e.target.value))}
+              placeholder={`Bỏ trống = ${linesTotal.toLocaleString("vi-VN")}`}
+            />
+          </label>
           <label className="field">
             <span>Tỷ giá (₫/¥)</span>
             <input
@@ -411,12 +475,14 @@ export function NewOrderForm({
         onDelete={
           itemSheet.open && itemSheet.index !== null ? deleteItem : undefined
         }
+        sellRate={num(exchangeRate)}
+        defaultMarginVnd={defaultMarginVnd}
       />
 
       <QuickImportSheet
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        quotedTotal={quotedTotal}
+        quotedTotal={totalOverride}
         onExtract={onExtract}
       />
     </>

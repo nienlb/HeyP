@@ -57,7 +57,9 @@
 }
 .item-card {
   display: grid;
-  grid-template-columns: 1fr auto;
+  /* Thumbnail (v6) là cột đầu, chỉ chiếm chỗ khi món có ảnh — món chưa có
+     ảnh vẫn xếp đúng vì :not(:has(img)) đưa tên/giá về lại 2 cột như cũ. */
+  grid-template-columns: auto 1fr auto;
   gap: var(--sp-1) var(--sp-3);
   width: 100%;
   padding: var(--sp-3) var(--sp-4);
@@ -67,17 +69,34 @@
   text-align: left;
   cursor: pointer;
 }
+.item-card:not(:has(.ic-thumb)) {
+  grid-template-columns: 1fr auto;
+}
+.ic-thumb {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  align-self: center;
+}
+.item-card:not(:has(.ic-thumb)) .ic-name,
+.item-card:not(:has(.ic-thumb)) .ic-meta {
+  grid-column: 1;
+}
 .ic-name {
+  grid-column: 2;
   font-weight: 600;
 }
 .ic-meta {
-  grid-column: 1;
+  grid-column: 2;
   font-size: var(--fs-2);
   color: var(--muted);
 }
 .ic-price {
   grid-row: 1 / span 2;
-  grid-column: 2;
+  grid-column: 3;
   align-self: center;
   font-size: var(--fs-4);
   font-weight: 600;

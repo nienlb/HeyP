@@ -100,10 +100,10 @@ export type MergeableItem = {
  * liệu thật (từ lần đọc trước) → nối thêm, không xoá — cho phép đọc nhiều
  * ảnh sản phẩm/chốt đơn riêng biệt mà không mất dòng đã có.
  */
-export function mergeItems(
-  current: MergeableItem[],
-  newRows: MergeableItem[],
-): MergeableItem[] {
+export function mergeItems<T extends MergeableItem>(
+  current: T[],
+  newRows: T[],
+): T[] {
   if (newRows.length === 0) return current;
   const untouched = current.length === 1 && current[0].name.trim() === "";
   return untouched ? newRows : [...current, ...newRows];
