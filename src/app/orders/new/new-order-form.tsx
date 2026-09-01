@@ -221,12 +221,16 @@ export function NewOrderForm({
 
   const marginVnd = totalVnd - goodsVnd;
 
+  // Tách ra biến vì cột phải (v8-A) cũng cần hiện cọc — OrderMoneyResult
+  // KHÔNG có trường deposit, nó chỉ trả goodsTotalVnd/subtotalVnd/amountDue.
+  const depositVnd = parseVnd(deposit);
+
   const money = computeOrderMoney({
     goodsTotalCny,
     exchangeRate: parseVnd(exchangeRate),
     serviceFee: marginVnd,
     shippingFee: parseVnd(shippingFee),
-    deposit: parseVnd(deposit),
+    deposit: depositVnd,
   });
 
   // KHÔNG bắt buộc có khách: đơn từ ảnh chốt thường chưa có thông tin khách.
@@ -283,187 +287,219 @@ export function NewOrderForm({
         <Icon name="image" size={22} />
       </button>
 
-      <form action={formAction} className="order-form" id="new-order-form">
-        {state.error && <div className="error">{state.error}</div>}
+      <div className="with-rail">
+        <form action={formAction} className="order-form" id="new-order-form">
+          {state.error && <div className="error">{state.error}</div>}
 
-        <input
-          type="hidden"
-          name="items"
-          value={JSON.stringify(sentItems)}
-        />
-        <input type="hidden" name="quotedTotalVnd" value={totalVnd} />
-        <input type="hidden" name="shipStatus" value={shipStatus} />
-        <input type="hidden" name="customerMode" value={picked?.mode ?? "new"} />
-        {picked?.mode === "existing" && (
-          <input type="hidden" name="customerId" value={picked.id} />
-        )}
-        {picked?.mode === "new" && (
-          <input type="hidden" name="newCustomerName" value={picked.name} />
-        )}
+          <input
+            type="hidden"
+            name="items"
+            value={JSON.stringify(sentItems)}
+          />
+          <input type="hidden" name="quotedTotalVnd" value={totalVnd} />
+          <input type="hidden" name="shipStatus" value={shipStatus} />
+          <input type="hidden" name="customerMode" value={picked?.mode ?? "new"} />
+          {picked?.mode === "existing" && (
+            <input type="hidden" name="customerId" value={picked.id} />
+          )}
+          {picked?.mode === "new" && (
+            <input type="hidden" name="newCustomerName" value={picked.name} />
+          )}
 
-        <h2 className="sec-label">Khách</h2>
-        <button
-          type="button"
-          className="picker"
-          onClick={() => setCustomerSheet(true)}
-        >
-          {picked ? picked.name : "+ Chọn khách"}
-        </button>
+          <h2 className="sec-label">Khách</h2>
+          <button
+            type="button"
+            className="picker"
+            onClick={() => setCustomerSheet(true)}
+          >
+            {picked ? picked.name : "+ Chọn khách"}
+          </button>
 
-        {picked?.mode === "new" && (
+          {picked?.mode === "new" && (
+            <details className="more-fields">
+              <summary>Thêm SĐT / địa chỉ</summary>
+              <label className="field">
+                <span>SĐT / Zalo</span>
+                <input
+                  name="newCustomerPhone"
+                  type="tel"
+                  inputMode="tel"
+                  value={newCustomerPhone}
+                  onChange={(e) => setNewCustomerPhone(e.target.value)}
+                  placeholder="09..."
+                />
+              </label>
+              <label className="field">
+                <span>Địa chỉ giao</span>
+                <input
+                  name="newCustomerAddress"
+                  value={newCustomerAddress}
+                  onChange={(e) => setNewCustomerAddress(e.target.value)}
+                />
+              </label>
+            </details>
+          )}
+
+          <h2 className="sec-label">Món ({validItems.length})</h2>
+          <div className="item-cards">
+            {items.map((it, i) => (
+              <button
+                key={i}
+                type="button"
+                className="item-card"
+                onClick={() => setItemSheet({ open: true, index: i })}
+              >
+                {it.photos[0] && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={photoUrl(it.photos[0].id, "thumb")}
+                    alt=""
+                    className="ic-thumb"
+                    loading="lazy"
+                  />
+                )}
+                <span className="ic-name">{it.name || "(chưa đặt tên)"}</span>
+                <span className="ic-meta">
+                  {it.attributes || "—"} · ×{it.quantity || 0}
+                </span>
+                <span className="ic-price num">
+                  {it.sellPriceVnd ? `${groupVnd(it.sellPriceVnd)}₫` : "—"}
+                </span>
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="picker"
+            onClick={() => setItemSheet({ open: true, index: null })}
+          >
+            + Thêm món
+          </button>
+
+          <h2 className="sec-label">Tiền</h2>
+          <label className="field">
+            <span>Cọc (₫)</span>
+            <input
+              name="deposit"
+              inputMode="numeric"
+              value={deposit}
+              onChange={(e) => setDeposit(e.target.value)}
+              onFocus={(e) => setDeposit(e.target.value.replace(/[.,\s]/g, ""))}
+              onBlur={(e) => setDeposit(groupVnd(e.target.value))}
+              enterKeyHint="done"
+            />
+          </label>
+
           <details className="more-fields">
-            <summary>Thêm SĐT / địa chỉ</summary>
+            <summary>Tỷ giá · ship · loại đơn</summary>
             <label className="field">
-              <span>SĐT / Zalo</span>
+              <span>Chốt số khác với tổng món (₫)</span>
               <input
-                name="newCustomerPhone"
-                type="tel"
-                inputMode="tel"
-                value={newCustomerPhone}
-                onChange={(e) => setNewCustomerPhone(e.target.value)}
-                placeholder="09..."
+                inputMode="numeric"
+                value={totalOverride}
+                onChange={(e) => setTotalOverride(e.target.value)}
+                onFocus={(e) =>
+                  setTotalOverride(e.target.value.replace(/[.,\s]/g, ""))
+                }
+                onBlur={(e) => setTotalOverride(groupVnd(e.target.value))}
+                placeholder={`Bỏ trống = ${linesTotal.toLocaleString("vi-VN")}`}
               />
             </label>
             <label className="field">
-              <span>Địa chỉ giao</span>
+              <span>Tỷ giá (₫/¥)</span>
               <input
-                name="newCustomerAddress"
-                value={newCustomerAddress}
-                onChange={(e) => setNewCustomerAddress(e.target.value)}
+                name="exchangeRate"
+                inputMode="numeric"
+                value={exchangeRate}
+                onChange={(e) => setExchangeRate(e.target.value)}
               />
+            </label>
+            <label className="field">
+              <span>Phí ship (₫)</span>
+              <input
+                name="shippingFee"
+                inputMode="numeric"
+                value={shippingFee}
+                onChange={(e) => handleShippingFeeChange(e.target.value)}
+                onFocus={(e) =>
+                  handleShippingFeeChange(e.target.value.replace(/[.,\s]/g, ""))
+                }
+                onBlur={(e) => handleShippingFeeChange(groupVnd(e.target.value))}
+                placeholder="Chưa biết thì để trống"
+              />
+            </label>
+            <label className="field">
+              <span>Loại đơn</span>
+              <select
+                name="orderType"
+                value={orderType}
+                onChange={(e) => setOrderType(e.target.value as OrderType)}
+              >
+                {ORDER_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {ORDER_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Ghi chú</span>
+              <textarea name="note" rows={2} placeholder="Ghi chú nội bộ" />
             </label>
           </details>
-        )}
+        </form>
 
-        <h2 className="sec-label">Món ({validItems.length})</h2>
-        <div className="item-cards">
-          {items.map((it, i) => (
-            <button
-              key={i}
-              type="button"
-              className="item-card"
-              onClick={() => setItemSheet({ open: true, index: i })}
-            >
-              {it.photos[0] && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={photoUrl(it.photos[0].id, "thumb")}
-                  alt=""
-                  className="ic-thumb"
-                  loading="lazy"
-                />
-              )}
-              <span className="ic-name">{it.name || "(chưa đặt tên)"}</span>
-              <span className="ic-meta">
-                {it.attributes || "—"} · ×{it.quantity || 0}
+        {/* Khối tiền viết MỘT lần, CSS quyết định nó đứng đâu: dưới 900px
+            vẫn là .sticky-bar dính đáy như trước v8-A, từ 900px thành thẻ
+            trong cột phải (luật .with-rail .sticky-bar trong layout.css). */}
+        <div className="rail">
+          <StickyBar>
+            {/* Bốn dòng này chỉ hiện từ 900px — điện thoại vẫn chỉ thấy dòng
+                Tổng như cũ, thanh dính đáy không cao thêm. */}
+            <div className="rail-detail">
+              <div className="kv">
+                <span>Tiền hàng</span>
+                <span className="num">
+                  {goodsTotalCny.toLocaleString("vi-VN")}¥
+                </span>
+              </div>
+              <div className="kv">
+                <span>Giá vốn quy đổi</span>
+                <span className="num">{formatVnd(goodsVnd)}</span>
+              </div>
+              <div className="kv">
+                <span>Lời</span>
+                <span className={`num${marginVnd < 0 ? " neg" : ""}`}>
+                  {formatVnd(marginVnd)}
+                </span>
+              </div>
+              <div className="kv">
+                <span>Cọc</span>
+                <span className="num">{formatVnd(depositVnd)}</span>
+              </div>
+            </div>
+
+            <span className="sb-money">
+              <span className="sb-label">Tổng</span>
+              <strong className="num">{formatVnd(totalVnd)}</strong>
+              <span className="sb-label">
+                Lời{" "}
+                <span className={marginVnd < 0 ? "neg" : ""}>
+                  {formatVnd(marginVnd)}
+                </span>
               </span>
-              <span className="ic-price num">
-                {it.sellPriceVnd ? `${groupVnd(it.sellPriceVnd)}₫` : "—"}
-              </span>
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="picker"
-          onClick={() => setItemSheet({ open: true, index: null })}
-        >
-          + Thêm món
-        </button>
-
-        <h2 className="sec-label">Tiền</h2>
-        <label className="field">
-          <span>Cọc (₫)</span>
-          <input
-            name="deposit"
-            inputMode="numeric"
-            value={deposit}
-            onChange={(e) => setDeposit(e.target.value)}
-            onFocus={(e) => setDeposit(e.target.value.replace(/[.,\s]/g, ""))}
-            onBlur={(e) => setDeposit(groupVnd(e.target.value))}
-            enterKeyHint="done"
-          />
-        </label>
-
-        <details className="more-fields">
-          <summary>Tỷ giá · ship · loại đơn</summary>
-          <label className="field">
-            <span>Chốt số khác với tổng món (₫)</span>
-            <input
-              inputMode="numeric"
-              value={totalOverride}
-              onChange={(e) => setTotalOverride(e.target.value)}
-              onFocus={(e) =>
-                setTotalOverride(e.target.value.replace(/[.,\s]/g, ""))
-              }
-              onBlur={(e) => setTotalOverride(groupVnd(e.target.value))}
-              placeholder={`Bỏ trống = ${linesTotal.toLocaleString("vi-VN")}`}
-            />
-          </label>
-          <label className="field">
-            <span>Tỷ giá (₫/¥)</span>
-            <input
-              name="exchangeRate"
-              inputMode="numeric"
-              value={exchangeRate}
-              onChange={(e) => setExchangeRate(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Phí ship (₫)</span>
-            <input
-              name="shippingFee"
-              inputMode="numeric"
-              value={shippingFee}
-              onChange={(e) => handleShippingFeeChange(e.target.value)}
-              onFocus={(e) =>
-                handleShippingFeeChange(e.target.value.replace(/[.,\s]/g, ""))
-              }
-              onBlur={(e) => handleShippingFeeChange(groupVnd(e.target.value))}
-              placeholder="Chưa biết thì để trống"
-            />
-          </label>
-          <label className="field">
-            <span>Loại đơn</span>
-            <select
-              name="orderType"
-              value={orderType}
-              onChange={(e) => setOrderType(e.target.value as OrderType)}
-            >
-              {ORDER_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {ORDER_TYPE_LABELS[t]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Ghi chú</span>
-            <textarea name="note" rows={2} placeholder="Ghi chú nội bộ" />
-          </label>
-        </details>
-      </form>
-
-      <StickyBar>
-        <span className="sb-money">
-          <span className="sb-label">Tổng</span>
-          <strong className="num">{formatVnd(totalVnd)}</strong>
-          <span className="sb-label">
-            Lời{" "}
-            <span className={marginVnd < 0 ? "neg" : ""}>
-              {formatVnd(marginVnd)}
             </span>
-          </span>
-        </span>
-        <button
-          type="submit"
-          form="new-order-form"
-          className="btn"
-          disabled={!canSubmit || pending}
-        >
-          {pending ? "Đang lưu…" : "Lưu đơn"}
-        </button>
-      </StickyBar>
+            <button
+              type="submit"
+              form="new-order-form"
+              className="btn"
+              disabled={!canSubmit || pending}
+            >
+              {pending ? "Đang lưu…" : "Lưu đơn"}
+            </button>
+          </StickyBar>
+        </div>
+      </div>
 
       <CustomerSheet
         open={customerSheet}
