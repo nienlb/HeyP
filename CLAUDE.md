@@ -172,3 +172,4 @@ Test bắt buộc phải xanh cho **công thức tiền** và **luật trạng t
 - Kế hoạch v4: `docs/superpowers/plans/2026-08-21-heyp-toc-do-va-luong-don.md`
 - Thiết kế v5 (giao diện mobile-first): `docs/superpowers/specs/2026-08-31-heyp-ui-mobile-first-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-ui-mobile-first.md`
 - Thiết kế v6 (tài khoản, quyền, xoá, nhập đơn): `docs/superpowers/specs/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don.md`
+- Thiết kế v7 (điều chỉnh đơn hàng): `docs/superpowers/specs/2026-09-01-heyp-v7-dieu-chinh-don-hang-design.md`
