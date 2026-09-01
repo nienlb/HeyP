@@ -376,3 +376,28 @@ export async function deletePhotoAction(
 
   return { ok: true };
 }
+
+// ---------- Xoá đơn (v6) ----------
+
+import { deleteOrderCascade } from "@/db/deletion";
+
+/**
+ * Xoá cứng một đơn. CHỈ admin. Đơn đã có dấu vết tiền/kho bị tầng dưới chặn
+ * và trả lý do cụ thể — hiện lại trên chính màn chi tiết đơn.
+ */
+export async function deleteOrderAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  if (session.role !== "admin") redirect("/");
+
+  const orderId = Number(formData.get("orderId"));
+  if (!Number.isInteger(orderId) || orderId <= 0) redirect("/orders");
+
+  const result = await deleteOrderCascade(orderId, session.username);
+  if (!result.ok) {
+    redirect(`/orders/${orderId}?tab=anh&err=${encodeURIComponent(result.reason)}`);
+  }
+
+  revalidatePath("/orders");
+  redirect("/orders");
+}

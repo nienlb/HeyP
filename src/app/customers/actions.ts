@@ -1,0 +1,23 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
+import { deleteCustomerRow } from "@/db/deletion";
+
+export async function deleteCustomerAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  if (session.role !== "admin") redirect("/");
+
+  const customerId = Number(formData.get("customerId"));
+  if (!Number.isInteger(customerId) || customerId <= 0) redirect("/customers");
+
+  const result = await deleteCustomerRow(customerId, session.username);
+  if (!result.ok) {
+    redirect(`/customers?err=${encodeURIComponent(result.reason)}`);
+  }
+
+  revalidatePath("/customers");
+  redirect("/customers");
+}

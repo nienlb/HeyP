@@ -35,6 +35,7 @@ import { GAP_LABELS, orderGaps } from "@/lib/order-gaps";
 import { LinePricingTable } from "./line-pricing-table";
 import { OrderJourney } from "./order-journey";
 import { OrderTabs, type TabCode } from "./order-tabs";
+import { DangerZone } from "./danger-zone";
 
 const TAB_CODES = ["tom_tat", "mon", "tien", "anh"] as const;
 
@@ -435,15 +436,24 @@ export default async function OrderDetailPage({
       )}
 
       {tab === "anh" && (
-        <section className="card">
-          <h2 className="card-title">Ảnh ({photos.length})</h2>
-          <PhotoUpload orderId={order.id} defaultLabel="zalo_confirm" />
-          <div style={{ marginTop: 14 }}>
-            <PhotoGallery
-              photos={photos.map((p) => ({ id: p.id, label: p.label }))}
+        <>
+          <section className="card">
+            <h2 className="card-title">Ảnh ({photos.length})</h2>
+            <PhotoUpload orderId={order.id} defaultLabel="zalo_confirm" />
+            <div style={{ marginTop: 14 }}>
+              <PhotoGallery
+                photos={photos.map((p) => ({ id: p.id, label: p.label }))}
+              />
+            </div>
+          </section>
+
+          {session.role === "admin" && (
+            <DangerZone
+              orderId={order.id}
+              summary={`${customer?.name ?? "Chưa có khách"} · ${items.length} món · ${formatVnd(order.quotedTotalVnd)}`}
             />
-          </div>
-        </section>
+          )}
+        </>
       )}
     </AppShell>
   );
