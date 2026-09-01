@@ -4,6 +4,7 @@ import {
   MAIN_CHAIN,
   RETIRED_STATUSES,
   allowedNextStatuses,
+  canEditExchangeRate,
   canEditOrderItems,
   canTransition,
   initialStatus,
@@ -164,5 +165,16 @@ test("đơn đã chốt sổ thì không sửa danh sách món được", () => 
 test("đơn đang chạy thì sửa danh sách món được", () => {
   for (const s of ["khach_chot", "da_mua_tq", "da_giao_khach", "su_co"] as const) {
     assert.equal(canEditOrderItems(s), true, `phải mở ${s}`);
+  }
+});
+
+test("tỷ giá chỉ sửa được khi đơn chưa mua hàng", () => {
+  assert.equal(canEditExchangeRate("khach_chot"), true);
+});
+
+test("mua hàng rồi thì tỷ giá khoá — đã dùng để chốt giá vốn và trừ ví", () => {
+  for (const s of ["da_mua_tq", "da_giao_khach", "ve_kho_vn", "hoan_tat",
+                   "huy", "khach_bom", "su_co"] as const) {
+    assert.equal(canEditExchangeRate(s), false, `phải khoá ${s}`);
   }
 });

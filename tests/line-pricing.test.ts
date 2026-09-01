@@ -9,8 +9,10 @@ import {
   orderProfit,
   quotedTotalFromLines,
   redistribute,
+  sellPerUnitVnd,
   suggestCnyFromTotal,
   totalAfterAddLine,
+  totalAfterEditLine,
   totalAfterRemoveLine,
   type PricingLine,
 } from "../src/lib/line-pricing.ts";
@@ -193,4 +195,53 @@ test("thêm rồi xoá đúng món đó thì Total quay về số cũ", () => {
   };
   const after = totalAfterAddLine(2_000_000, sell, qty);
   assert.equal(totalAfterRemoveLine(after, line, rate), 2_000_000);
+});
+
+test("suy ngược giá phải thu/1 cái từ dòng đã lưu", () => {
+  // Dòng tạo từ giá thu 1.000.000, SL 2, tỷ giá 3600, lời mặc định 170.000
+  const rate = 3600;
+  const sell = 1_000_000;
+  const cny = cnyFromSellPrice(sell, rate, 170_000);
+  const base: PricingLine = { quantity: 2, unitPriceCny: cny, marginVnd: 0 };
+  const line: PricingLine = {
+    ...base,
+    marginVnd: marginFromSellPrice(sell, base, rate),
+  };
+  assert.equal(sellPerUnitVnd(line, rate), sell);
+});
+
+test("suy ngược đúng cả khi lời đã bị rải lại", () => {
+  // 60¥ × 4000 = 240.000 giá vốn + 170.000 lời = 410.000 giá bán, SL 1
+  const line: PricingLine = { quantity: 1, unitPriceCny: 60, marginVnd: 170_000 };
+  assert.equal(sellPerUnitVnd(line, 4000), 410_000);
+});
+
+test("Total sau khi đổi SỐ LƯỢNG của một dòng", () => {
+  // Đơn 2.000.000, dòng cũ giá bán 410.000 (SL 1), đổi thành SL 3 giá thu 410.000
+  const old: PricingLine = { quantity: 1, unitPriceCny: 60, marginVnd: 170_000 };
+  assert.equal(
+    totalAfterEditLine(2_000_000, old, 410_000, 3, 4000),
+    2_000_000 - 410_000 + 410_000 * 3,
+  );
+});
+
+test("Total sau khi đổi GIÁ THU của một dòng", () => {
+  const old: PricingLine = { quantity: 1, unitPriceCny: 60, marginVnd: 170_000 };
+  assert.equal(totalAfterEditLine(2_000_000, old, 500_000, 1, 4000), 2_090_000);
+});
+
+test("đổi cả số lượng lẫn giá thu", () => {
+  const old: PricingLine = { quantity: 2, unitPriceCny: 60, marginVnd: 340_000 };
+  // giá bán dòng cũ = 2×60×4000 + 340.000 = 820.000
+  assert.equal(
+    totalAfterEditLine(2_000_000, old, 300_000, 4, 4000),
+    2_000_000 - 820_000 + 300_000 * 4,
+  );
+});
+
+test("BẤT BIẾN: sửa dòng mà không đổi gì thì Total giữ nguyên", () => {
+  const rate = 4000;
+  const old: PricingLine = { quantity: 2, unitPriceCny: 60, marginVnd: 340_000 };
+  const sell = sellPerUnitVnd(old, rate);
+  assert.equal(totalAfterEditLine(2_000_000, old, sell, old.quantity, rate), 2_000_000);
 });

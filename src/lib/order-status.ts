@@ -128,6 +128,17 @@ export function canEditOrderItems(status: OrderStatus): boolean {
   return !ITEMS_LOCKED.includes(status);
 }
 
+/**
+ * Tỷ giá chỉ sửa được khi đơn CHƯA mua hàng.
+ *
+ * Từ `da_mua_tq` trở đi, tỷ giá đã dùng để chốt giá vốn thật và trừ ví ¥
+ * (xem shouldDeductCny). Đổi nó sau đó làm sai lãi đã ghi nhận, và không có
+ * cách nào sửa lại sổ ví cho khớp — sổ ví là append-only.
+ */
+export function canEditExchangeRate(status: OrderStatus): boolean {
+  return status === "khach_chot";
+}
+
 /** Trạng thái một đơn mới được tạo ra — bước đầu của trục theo loại đơn. */
 export function initialStatus(orderType: OrderType): OrderStatus {
   return TRACKS[orderType][0];

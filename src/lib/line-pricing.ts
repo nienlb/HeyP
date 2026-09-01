@@ -212,3 +212,40 @@ export function totalAfterRemoveLine(
 ): number {
   return Math.round(quotedTotal) - lineSellVnd(removed, sellRate);
 }
+
+/**
+ * Giá phải thu cho 1 CÁI, suy ngược từ dòng đã lưu (v7).
+ *
+ * `sellVnd` KHÔNG có trong DB — bảng order_items chỉ lưu `unit_price_cny` và
+ * `margin_vnd`, giá bán là số dẫn xuất. Hàm này để màn sửa món hiện lại đúng
+ * con số người dùng đã gõ.
+ *
+ * Làm tròn hai lần (trong lineSellVnd, rồi chia SL) nên có thể lệch vài đồng
+ * so với số gõ ban đầu — đó là lý do `updateOrderItemFields` KHÔNG được tính
+ * lại khối tiền khi số lượng và giá thu không đổi.
+ */
+export function sellPerUnitVnd(line: PricingLine, sellRate: number): number {
+  if (!(line.quantity > 0)) return 0;
+  return Math.round(lineSellVnd(line, sellRate) / line.quantity);
+}
+
+/**
+ * Total sau khi SỬA một dòng: bỏ giá bán cũ ra, cộng giá bán mới vào.
+ *
+ * Cùng họ với totalAfterAddLine/totalAfterRemoveLine (v6): đụng phía BÁN
+ * (số lượng, giá thu) thì Total đổi theo. Đụng phía GIÁ VỐN (¥, tỷ giá) thì
+ * Total ghim và lời rải lại — đó là việc của allocateMargins, không phải hàm này.
+ */
+export function totalAfterEditLine(
+  quotedTotal: number,
+  oldLine: PricingLine,
+  newSellVnd: number,
+  newQty: number,
+  sellRate: number,
+): number {
+  return (
+    Math.round(quotedTotal) -
+    lineSellVnd(oldLine, sellRate) +
+    Math.round(newSellVnd) * newQty
+  );
+}
