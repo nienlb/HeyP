@@ -67,6 +67,13 @@ export function NewOrderForm({
   const [importOpen, setImportOpen] = useState(false);
 
   const num = (s: string) => Number(String(s).replace(/[.,\s]/g, "")) || 0;
+  /**
+   * ¥ dùng dấu chấm làm THẬP PHÂN (vd "207.5"), không phải dấu ngăn nghìn —
+   * KHÔNG được xoá như num() ở trên. Dùng num() cho ¥ từng biến 207.5 thành
+   * 2075, làm sai giá vốn gấp ~10 lần (bug tiền thật, phát hiện lúc kiểm
+   * giáp v6: đơn giá thu 1.000.000₫ → Lời hiện -7.300.000₫ thay vì 170.000₫).
+   */
+  const numCny = (s: string) => Number(String(s).replace(/[,\s]/g, "")) || 0;
 
   /** 4520000 → "4.520.000". Chuỗi rỗng giữ nguyên rỗng. */
   function groupDigits(s: string): string {
@@ -162,7 +169,7 @@ export function NewOrderForm({
     () =>
       items.map((it) => {
         const quantity = num(it.quantity);
-        const unitPriceCny = num(it.unitPriceCny);
+        const unitPriceCny = numCny(it.unitPriceCny);
         const sell = num(it.sellPriceVnd);
         const line = { quantity, unitPriceCny, marginVnd: 0 };
         return {
