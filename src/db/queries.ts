@@ -1565,6 +1565,75 @@ export async function updateOrderItemFields(
 }
 
 /**
+ * Sửa thẳng Tổng chốt với khách (v7) — dùng khi khách thương lượng lại giá.
+ *
+ * Total là số MỚI, lời được rải lại cho các dòng để Σ giá bán khớp đúng nó —
+ * cùng cơ chế ô "Chốt số khác với tổng món" ở màn tạo đơn. Giá vốn ¥ không đổi
+ * nên ví ¥ không bị đụng tới.
+ */
+export async function setQuotedTotal(
+  orderId: number,
+  total: number,
+): Promise<LineActionResult> {
+  if (!(total > 0)) return { ok: false, reason: "Tổng chốt phải lớn hơn 0." };
+
+  const defaultMargin = (await getSettings()).defaultMarginVnd;
+
+  try {
+    return await withTx(async (x) => {
+      const status = await x.get<{ status: OrderStatus }>(
+        "SELECT status FROM orders WHERE id = ?",
+        [orderId],
+      );
+      if (!status) throw new Error("Không tìm thấy đơn");
+      if (!canEditOrderItems(status.status))
+        throw new Error(
+          `Đơn ở "${STATUS_LABELS[status.status]}" không sửa được tổng chốt.`,
+        );
+
+      const order = await readOrderMoneyRow(x, orderId);
+      const rows = await x.all<{
+        id: number;
+        quantity: number;
+        unit_price_cny: number;
+        margin_vnd: number;
+      }>(
+        "SELECT id, quantity, unit_price_cny, margin_vnd FROM order_items WHERE order_id = ? ORDER BY id",
+        [orderId],
+      );
+      if (rows.length === 0) throw new Error("Đơn chưa có món nào.");
+
+      const margins = allocateMargins(
+        Math.round(total),
+        rows.map((r) => ({
+          quantity: r.quantity,
+          unitPriceCny: r.unit_price_cny,
+          marginVnd: r.margin_vnd,
+        })),
+        order.exchange_rate,
+        defaultMargin,
+      );
+      for (const [i, r] of rows.entries()) {
+        await x.run("UPDATE order_items SET margin_vnd = ? WHERE id = ?", [
+          margins[i],
+          r.id,
+        ]);
+      }
+
+      await x.run("UPDATE orders SET quoted_total_vnd = ? WHERE id = ?", [
+        Math.round(total),
+        orderId,
+      ]);
+
+      await recomputeOrderMoneyRow(x, orderId, order);
+      return { ok: true } as LineActionResult;
+    });
+  } catch (err) {
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/**
  * Xoá một món khỏi đơn ĐÃ TẠO (v6). Total giảm đúng giá bán của dòng đó.
  * Không xoá được món cuối cùng — đơn phải còn ≥ 1 món; muốn bỏ hẳn thì Xoá
  * đơn hoặc Hủy.

@@ -625,3 +625,26 @@ export async function updateItemAction(formData: FormData): Promise<void> {
   revalidatePath("/orders");
   redirect(`/orders/${orderId}?tab=mon`);
 }
+
+// ---------- Sửa Tổng chốt (v7) ----------
+
+import { setQuotedTotal } from "@/db/queries";
+
+export async function setQuotedTotalAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = parseVnd(formData.get("orderId"));
+  if (!Number.isInteger(orderId) || orderId <= 0) redirect("/orders");
+
+  const result = await setQuotedTotal(
+    orderId,
+    parseVnd(formData.get("quotedTotalVnd")),
+  );
+  if (!result.ok) {
+    redirect(`/orders/${orderId}?tab=tien&err=${encodeURIComponent(result.reason)}`);
+  }
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  redirect(`/orders/${orderId}?tab=tien`);
+}

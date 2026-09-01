@@ -43,6 +43,7 @@ import { DangerZone } from "./danger-zone";
 import { ItemSheetButton } from "./item-editor";
 import { CustomerBlock } from "./customer-block";
 import { OrderMetaBlock } from "./order-meta-block";
+import { TotalEditor } from "./total-editor";
 
 const TAB_CODES = ["tom_tat", "mon", "tien", "anh"] as const;
 
@@ -467,6 +468,13 @@ export default async function OrderDetailPage({
                 <div className="kv kv-total">
                   <span>Còn phải thu</span>
                   <strong>{formatVnd(money.amountDue)}</strong>
+                </div>
+                <div style={{ marginTop: 14 }}>
+                  <TotalEditor
+                    orderId={order.id}
+                    quotedTotalVnd={order.quotedTotalVnd}
+                    canEdit={canEditOrderItems(order.status)}
+                  />
                 </div>
                 <div style={{ marginTop: 14 }}>
                   <CopyButton text={quote} />
