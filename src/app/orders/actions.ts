@@ -594,3 +594,34 @@ export async function updateOrderMetaAction(formData: FormData): Promise<void> {
   revalidatePath("/orders");
   redirect(`/orders/${orderId}`);
 }
+
+// ---------- Sửa chi tiết món (v7) ----------
+
+import { updateOrderItemFields } from "@/db/queries";
+
+export async function updateItemAction(formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const orderId = parseVnd(formData.get("orderId"));
+  const itemId = parseVnd(formData.get("itemId"));
+  if (!Number.isInteger(orderId) || !Number.isInteger(itemId))
+    redirect("/orders");
+
+  const result = await updateOrderItemFields(orderId, itemId, {
+    name: String(formData.get("name") ?? ""),
+    attributes: String(formData.get("attributes") ?? "").trim() || null,
+    productUrl: String(formData.get("productUrl") ?? "").trim() || null,
+    quantity: parseVnd(formData.get("quantity")),
+    sellVnd: parseVnd(formData.get("sellVnd")),
+    unitPriceCny: parseDecimal(formData.get("unitPriceCny")),
+    costConfirmed: String(formData.get("costConfirmed")) === "true",
+  });
+
+  if (!result.ok) {
+    redirect(`/orders/${orderId}?tab=mon&err=${encodeURIComponent(result.reason)}`);
+  }
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  redirect(`/orders/${orderId}?tab=mon`);
+}

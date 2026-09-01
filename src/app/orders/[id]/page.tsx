@@ -16,6 +16,7 @@ import {
 } from "@/db/queries";
 import { PaymentsBlock } from "./payments-block";
 import { computeOrderMoney } from "@/lib/money";
+import { sellPerUnitVnd } from "@/lib/line-pricing";
 import {
   ageInDays,
   buildQuoteText,
@@ -39,7 +40,7 @@ import { LinePricingTable } from "./line-pricing-table";
 import { OrderJourney } from "./order-journey";
 import { OrderTabs, type TabCode } from "./order-tabs";
 import { DangerZone } from "./danger-zone";
-import { AddItemButton } from "./item-editor";
+import { ItemSheetButton } from "./item-editor";
 import { CustomerBlock } from "./customer-block";
 import { OrderMetaBlock } from "./order-meta-block";
 
@@ -323,6 +324,35 @@ export default async function OrderDetailPage({
                   trailing={
                     <span className="lr-actions">
                       {lineActions}
+                      <ItemSheetButton
+                        orderId={order.id}
+                        sellRate={sellRate}
+                        defaultMarginVnd={settings.defaultMarginVnd}
+                        label="Sửa"
+                        initial={{
+                          id: it.id,
+                          name: it.name,
+                          attributes: it.attributes ?? "",
+                          productUrl: it.productUrl ?? "",
+                          quantity: it.quantity,
+                          // PHẢI dùng order.exchangeRate, KHÔNG dùng biến
+                          // `sellRate` (= order.exchangeRate || settings.sellRate).
+                          // updateOrderItemFields suy ngược bằng đúng
+                          // order.exchange_rate; hai bên lệch tỷ giá thì
+                          // sellVnd lệch theo và hàm tưởng nhầm là người dùng
+                          // vừa đổi giá, rồi tính lại khối tiền một cách vô cớ.
+                          sellVnd: sellPerUnitVnd(
+                            {
+                              quantity: it.quantity,
+                              unitPriceCny: it.unitPriceCny,
+                              marginVnd: it.marginVnd,
+                            },
+                            order.exchangeRate,
+                          ),
+                          unitPriceCny: it.unitPriceCny,
+                          costConfirmed: it.costConfirmed,
+                        }}
+                      />
                       {canEditOrderItems(order.status) && items.length > 1 && (
                         <form action={removeItemAction}>
                           <input type="hidden" name="orderId" value={order.id} />
@@ -345,10 +375,11 @@ export default async function OrderDetailPage({
               <p className="order-note">Ghi chú: {order.note}</p>
             )}
             {canEditOrderItems(order.status) && (
-              <AddItemButton
+              <ItemSheetButton
                 orderId={order.id}
                 sellRate={sellRate}
                 defaultMarginVnd={settings.defaultMarginVnd}
+                label="+ Thêm món"
               />
             )}
           </section>

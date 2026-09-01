@@ -25,7 +25,9 @@ import {
   allocateMargins,
   marginFromSellPrice,
   redistribute,
+  sellPerUnitVnd,
   totalAfterAddLine,
+  totalAfterEditLine,
   totalAfterRemoveLine,
 } from "@/lib/line-pricing";
 import {
@@ -1417,6 +1419,145 @@ export async function addOrderItem(
       return { ok: true, itemId } as LineActionResult & {
         itemId?: number;
       };
+    });
+  } catch (err) {
+    return { ok: false, reason: (err as Error).message };
+  }
+}
+
+/**
+ * Sửa một món của đơn đã tạo (v7).
+ *
+ * CÁI BẪY: `sellVnd` KHÔNG có trong DB, nó là số suy ngược từ ¥ và lời, phải
+ * làm tròn hai lần. Nếu cứ tính lại khối tiền mỗi lần lưu thì người dùng chỉ
+ * sửa TÊN MÓN cũng làm Total trôi vài đồng, lặp nhiều lần thì lệch thật.
+ * → Số lượng và giá thu KHÔNG đổi thì tuyệt đối không đụng tới khối tiền.
+ */
+export async function updateOrderItemFields(
+  orderId: number,
+  itemId: number,
+  input: {
+    name: string;
+    attributes: string | null;
+    productUrl: string | null;
+    quantity: number;
+    /** Giá phải thu cho 1 cái (₫). */
+    sellVnd: number;
+    unitPriceCny: number;
+    costConfirmed: boolean;
+  },
+): Promise<LineActionResult> {
+  if (input.name.trim() === "")
+    return { ok: false, reason: "Chưa nhập tên hàng." };
+
+  const ledger = await listLedger();
+
+  try {
+    return await withTx(async (x) => {
+      const status = await x.get<{ status: OrderStatus }>(
+        "SELECT status FROM orders WHERE id = ?",
+        [orderId],
+      );
+      if (!status) throw new Error("Không tìm thấy đơn");
+
+      const item = await x.get<{
+        quantity: number;
+        unit_price_cny: number;
+        margin_vnd: number;
+      }>(
+        `SELECT quantity, unit_price_cny, margin_vnd
+           FROM order_items WHERE id = ? AND order_id = ?`,
+        [itemId, orderId],
+      );
+      if (!item) throw new Error("Không tìm thấy dòng sản phẩm");
+
+      const order = await readOrderMoneyRow(x, orderId);
+      const oldLine = {
+        quantity: item.quantity,
+        unitPriceCny: item.unit_price_cny,
+        marginVnd: item.margin_vnd,
+      };
+      const oldSell = sellPerUnitVnd(oldLine, order.exchange_rate);
+
+      const moneyChanged =
+        input.quantity !== item.quantity ||
+        input.sellVnd !== oldSell ||
+        input.unitPriceCny !== item.unit_price_cny;
+
+      // Chỉ sửa chữ → ghi mấy cột chữ rồi thôi. Không đụng tiền, không trôi số.
+      if (!moneyChanged) {
+        await x.run(
+          `UPDATE order_items SET name = ?, attributes = ?, product_url = ?
+            WHERE id = ? AND order_id = ?`,
+          [input.name.trim(), input.attributes, input.productUrl, itemId, orderId],
+        );
+        return { ok: true } as LineActionResult;
+      }
+
+      if (!canEditOrderItems(status.status))
+        throw new Error(
+          `Đơn ở "${STATUS_LABELS[status.status]}" không sửa được số lượng hay giá.`,
+        );
+      if (!(input.quantity > 0))
+        throw new Error("Số lượng phải lớn hơn 0.");
+      if (!(input.sellVnd > 0))
+        throw new Error("Chưa nhập giá phải thu.");
+
+      const quoted = (await x.get<{ total: number }>(
+        "SELECT quoted_total_vnd AS total FROM orders WHERE id = ?",
+        [orderId],
+      ))!;
+
+      const newLine = {
+        quantity: input.quantity,
+        unitPriceCny: input.unitPriceCny,
+        marginVnd: 0,
+      };
+      const margin = marginFromSellPrice(
+        input.sellVnd,
+        newLine,
+        order.exchange_rate,
+      );
+
+      await x.run(
+        `UPDATE order_items
+            SET name = ?, attributes = ?, product_url = ?, quantity = ?,
+                unit_price_cny = ?, margin_vnd = ?, cost_confirmed = ?
+          WHERE id = ? AND order_id = ?`,
+        [
+          input.name.trim(),
+          input.attributes,
+          input.productUrl,
+          input.quantity,
+          input.unitPriceCny,
+          margin,
+          input.costConfirmed,
+          itemId,
+          orderId,
+        ],
+      );
+
+      await x.run("UPDATE orders SET quoted_total_vnd = ? WHERE id = ?", [
+        totalAfterEditLine(
+          quoted.total,
+          oldLine,
+          input.sellVnd,
+          input.quantity,
+          order.exchange_rate,
+        ),
+        orderId,
+      ]);
+
+      // Đơn đã tiêu ¥ mà giá vốn vừa đổi → bù bằng một dòng điều chỉnh.
+      await adjustCnyLedgerForOrder(
+        x,
+        orderId,
+        ledger,
+        `Sửa món đơn #${orderId}`,
+      );
+
+      await recomputeOrderMoneyRow(x, orderId, order);
+      return { ok: true } as LineActionResult;
     });
   } catch (err) {
     return { ok: false, reason: (err as Error).message };
