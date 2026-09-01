@@ -1032,6 +1032,42 @@ export async function recomputeOrderMoneyRow(
  * Nhập hoặc sửa giá ¥ của một dòng. Total giữ nguyên (khách đã đồng ý), lời
  * được rải lại cho toàn bộ dòng. Chạm vào ô này = xác nhận giá vốn.
  */
+/**
+ * Ghi dòng `dieu_chinh` vào ví ¥ khi giá vốn của đơn vừa đổi mà đơn ĐÃ tiêu ¥.
+ *
+ * Sổ ví là append-only: không bao giờ sửa dòng cũ. Chênh lệch giữa số ¥ theo
+ * các dòng sản phẩm hiện tại và số ¥ đã ghi sổ được bù bằng một dòng mới.
+ *
+ * Gọi BÊN TRONG transaction đang mở — dùng `x`, không dùng `raw`.
+ * `ledger` phải đọc TRƯỚC khi mở transaction (listLedger dùng `raw` toàn cục).
+ */
+async function adjustCnyLedgerForOrder(
+  x: Exec,
+  orderId: number,
+  ledger: Awaited<ReturnType<typeof listLedger>>,
+  note: string,
+): Promise<void> {
+  const spent = (await x.get<{ cny: number }>(
+    `SELECT COALESCE(SUM(-cny_delta), 0) AS cny
+       FROM cny_ledger WHERE order_id = ? AND kind IN ('chi','dieu_chinh')`,
+    [orderId],
+  ))!;
+  if (!(spent.cny > 0)) return; // đơn chưa tiêu ¥ → không có gì để bù
+
+  const agg = (await x.get<{ cny: number }>(
+    "SELECT COALESCE(SUM(quantity * unit_price_cny), 0) AS cny FROM order_items WHERE order_id = ?",
+    [orderId],
+  ))!;
+  const diff = agg.cny - spent.cny;
+  if (Math.abs(diff) <= 0.0001) return; // không lệch thì không ghi dòng thừa
+
+  await x.run(
+    `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
+     VALUES ('dieu_chinh', ?, ?, ?, ?)`,
+    [-diff, Math.round(currentRate(ledger)), orderId, note],
+  );
+}
+
 export async function updateLineCost(
   orderId: number,
   itemId: number,
@@ -1083,29 +1119,7 @@ export async function updateLineCost(
         ]);
       }
 
-      // Đơn đã mua hàng rồi mà giá ¥ mới sửa → ghi dòng điều chỉnh bằng phần
-      // chênh vào ví. Sổ ví là append-only: không bao giờ sửa quá khứ.
-      const spent = (await x.get<{ cny: number }>(
-        `SELECT COALESCE(SUM(-cny_delta), 0) AS cny
-           FROM cny_ledger WHERE order_id = ? AND kind IN ('chi','dieu_chinh')`,
-        [orderId],
-      ))!;
-
-      if (spent.cny > 0) {
-        const agg = (await x.get<{ cny: number }>(
-          "SELECT COALESCE(SUM(quantity * unit_price_cny), 0) AS cny FROM order_items WHERE order_id = ?",
-          [orderId],
-        ))!;
-        const diff = agg.cny - spent.cny;
-        if (Math.abs(diff) > 0.0001) {
-          const rate = Math.round(currentRate(ledger));
-          await x.run(
-            `INSERT INTO cny_ledger (kind, cny_delta, rate_snapshot, order_id, note)
-             VALUES ('dieu_chinh', ?, ?, ?, ?)`,
-            [-diff, rate, orderId, `Sửa giá ¥ đơn #${orderId}`],
-          );
-        }
-      }
+      await adjustCnyLedgerForOrder(x, orderId, ledger, `Sửa giá ¥ đơn #${orderId}`);
 
       await recomputeOrderMoneyRow(x, orderId, order);
       return { ok: true } as LineActionResult;
