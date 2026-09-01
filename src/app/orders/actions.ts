@@ -136,9 +136,9 @@ export async function createOrderAction(
   if (moneyErrors.length > 0)
     return { error: moneyErrors.map((e) => e.message).join("; ") };
 
-  let orderId: number;
+  let created: { orderId: number; itemIds: number[] };
   try {
-    orderId = await createOrder({
+    created = await createOrder({
       customerId,
       newCustomer,
       orderType,
@@ -154,6 +154,7 @@ export async function createOrderAction(
   } catch (err) {
     return { error: `Không tạo được đơn: ${(err as Error).message}` };
   }
+  const orderId = created.orderId;
 
   // Gắn ảnh chốt đơn Zalo (nếu tạo đơn từ ảnh) vào đơn vừa tạo.
   const zaloPhotoId = Number(formData.get("zaloPhotoId"));

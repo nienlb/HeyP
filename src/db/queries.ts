@@ -195,7 +195,9 @@ export type NewOrderInput = {
   changedBy?: string | null;
 };
 
-export async function createOrder(input: NewOrderInput): Promise<number> {
+export async function createOrder(
+  input: NewOrderInput,
+): Promise<{ orderId: number; itemIds: number[] }> {
   const goodsTotalCny = sumLineItemsCny(input.items);
   const pricingLines = input.items.map((it) => ({
     quantity: it.quantity,
@@ -280,12 +282,14 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
     );
     const orderId = o!.id;
 
+    const itemIds: number[] = [];
     for (const [i, it] of input.items.entries()) {
-      await x.run(
+      const row = await x.get<{ id: number }>(
         `INSERT INTO order_items
            (order_id, product_url, name, attributes, quantity, unit_price_cny,
             margin_vnd, cost_confirmed)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         RETURNING id`,
         [
           orderId,
           it.productUrl ?? null,
@@ -297,6 +301,7 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
           it.costConfirmed ?? false,
         ],
       );
+      itemIds.push(row!.id);
     }
 
     await x.run(
@@ -326,7 +331,7 @@ export async function createOrder(input: NewOrderInput): Promise<number> {
       );
     }
 
-    return orderId;
+    return { orderId, itemIds };
   });
 }
 
@@ -408,6 +413,25 @@ export async function linkPhotoToOrder(
   await raw.run(
     "UPDATE photos SET order_id = ? WHERE id = ? AND order_id IS NULL",
     [orderId, photoId],
+  );
+}
+
+/**
+ * Gắn một ảnh đã tải lên vào ĐÚNG dòng sản phẩm (v6).
+ *
+ * Cột photos.order_item_id có trong schema từ MVP nhưng trước v6 chưa đường
+ * nào ghi vào. Điều kiện `order_id IS NULL` giữ nguyên tinh thần của
+ * linkPhotoToOrder: chỉ gắn ảnh chưa thuộc đơn nào, không cướp ảnh của đơn khác.
+ */
+export async function linkPhotoToOrderItem(
+  photoId: number,
+  orderItemId: number,
+  orderId: number,
+): Promise<void> {
+  await raw.run(
+    `UPDATE photos SET order_id = ?, order_item_id = ?
+      WHERE id = ? AND order_id IS NULL`,
+    [orderId, orderItemId, photoId],
   );
 }
 

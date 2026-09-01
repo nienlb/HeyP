@@ -80,7 +80,7 @@ export async function stockInAction(
 
   const goodsVnd = Math.round(quantity * unitPriceCny * exchangeRate);
 
-  const orderId = await createOrder({
+  const { orderId } = await createOrder({
     orderType: "nhap_kho",
     exchangeRate,
     // Đơn nhập kho không bán cho ai: Total bằng đúng tiền hàng, lời bằng 0.
