@@ -6,12 +6,19 @@ import {
   runTrackingSweep,
 } from "@/db/queries";
 import { deletePhotoFile } from "@/lib/storage";
+import { purgeOldActivity } from "@/db/activity";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /** Trần mỗi lượt để không chạm maxDuration khi có nhiều ảnh mồ côi tồn đọng. */
 const ORPHAN_BATCH = 100;
+
+/**
+ * Giữ nhật ký hoạt động bao lâu. 180 ngày: đủ dài để truy vết một mùa hàng,
+ * đủ ngắn để bảng không phình trong 500MB của Supabase free.
+ */
+const ACTIVITY_KEEP_DAYS = 180;
 
 /**
  * Dọn ảnh đã tải lên nhưng không gắn được vào đâu (người dùng bỏ dở màn tạo
@@ -60,5 +67,14 @@ export async function POST(req: Request): Promise<Response> {
     // bỏ qua có chủ đích
   }
 
-  return Response.json({ ok: true, ...result, ...photos });
+  // Dọn nhật ký hoạt động cũ, đi nhờ cùng lịch cron 4h — không đáng dựng
+  // workflow riêng. Hỏng ở đây KHÔNG được làm hỏng kết quả tra tracking.
+  let activityPurged = 0;
+  try {
+    activityPurged = await purgeOldActivity(ACTIVITY_KEEP_DAYS);
+  } catch {
+    // bỏ qua có chủ đích
+  }
+
+  return Response.json({ ok: true, ...result, ...photos, activityPurged });
 }
