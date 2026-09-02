@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
-import { AppShell } from "@/app/_components/app-shell";
 import { Icon } from "@/app/_components/icons";
 import { getSettings } from "@/db/queries";
 import { saveSettingsAction } from "./actions";
@@ -18,7 +17,7 @@ export default async function SettingsPage({
   ]);
 
   return (
-    <AppShell username={session.username} title="Cài đặt">
+    <>
       {ok && <div className="ok-banner">✓ Đã lưu.</div>}
 
       <section className="card" style={{ maxWidth: 520 }}>
@@ -77,6 +76,6 @@ export default async function SettingsPage({
           )}
         </div>
       </section>
-    </AppShell>
+    </>
   );
 }
