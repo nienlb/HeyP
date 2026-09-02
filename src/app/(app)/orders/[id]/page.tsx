@@ -38,6 +38,7 @@ import { GAP_LABELS, orderGaps } from "@/lib/order-gaps";
 import { LinePricingTable } from "./line-pricing-table";
 import { OrderJourney } from "./order-journey";
 import { OrderTabs, type TabCode } from "./order-tabs";
+import { atLeast } from "@/lib/roles";
 import { DangerZone } from "./danger-zone";
 import { ItemSheetButton } from "./item-editor";
 import { CustomerBlock } from "./customer-block";
@@ -483,7 +484,7 @@ export default async function OrderDetailPage({
                 </div>
               </section>
 
-              {session.role === "admin" && (
+              {atLeast(session.role, "owner") && (
                 <DangerZone
                   orderId={order.id}
                   summary={`${customer?.name ?? "Chưa có khách"} · ${items.length} món · ${formatVnd(order.quotedTotalVnd)}`}

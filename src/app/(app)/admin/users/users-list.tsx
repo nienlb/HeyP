@@ -72,7 +72,7 @@ export function UsersList({
           </label>
           <label className="field">
             <span>Vai trò</span>
-            <select name="role" defaultValue="nhan_vien">
+            <select name="role" defaultValue="member">
               {USER_ROLES.map((r) => (
                 <option key={r} value={r}>
                   {ROLE_LABELS[r]}

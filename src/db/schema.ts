@@ -241,7 +241,7 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  role: text("role", { enum: USER_ROLES }).notNull().default("nhan_vien"),
+  role: text("role", { enum: USER_ROLES }).notNull().default("member"),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
 });

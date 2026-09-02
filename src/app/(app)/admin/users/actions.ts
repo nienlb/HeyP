@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { requireOwner } from "@/lib/auth";
 import {
-  countActiveAdmins,
+  countActiveOwners,
   createUser,
   deleteUser,
   getUserById,
@@ -12,7 +12,7 @@ import {
   setUserPassword,
   setUserRole,
 } from "@/db/users";
-import { guardLastAdmin, guardSelfAction, parseRole } from "@/lib/roles";
+import { guardLastOwner, guardSelfAction, parseRole } from "@/lib/roles";
 
 const PAGE = "/admin/users";
 
@@ -21,7 +21,7 @@ function back(error?: string): never {
 }
 
 export async function createUserAction(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireOwner();
 
   const role = parseRole(String(formData.get("role") ?? ""));
   if (!role) back("Vai trò không hợp lệ.");
@@ -42,7 +42,7 @@ export async function createUserAction(formData: FormData): Promise<void> {
  * mật khẩu, xoá. Gộp lại vì cả bốn dùng chung đúng một bộ luật chặn.
  */
 export async function userAdminAction(formData: FormData): Promise<void> {
-  const me = await requireAdmin();
+  const me = await requireOwner();
 
   const op = String(formData.get("op") ?? "");
   const targetId = Number(formData.get("id"));
@@ -53,7 +53,7 @@ export async function userAdminAction(formData: FormData): Promise<void> {
   if (!target) back("Không tìm thấy tài khoản.");
 
   // Đặt lại mật khẩu cho người khác là thao tác duy nhất KHÔNG cần hai luật
-  // chặn — nó không làm mất admin nào.
+  // chặn — nó không làm mất owner nào.
   if (op === "password") {
     const result = await setUserPassword(
       targetId,
@@ -67,24 +67,24 @@ export async function userAdminAction(formData: FormData): Promise<void> {
   const selfErr = guardSelfAction(targetId, me.id);
   if (selfErr) back(selfErr);
 
-  const activeAdmins = await countActiveAdmins();
-  const lastAdminErr = guardLastAdmin(target, activeAdmins);
+  const activeOwners = await countActiveOwners();
+  const lastOwnerErr = guardLastOwner(target, activeOwners);
 
   if (op === "delete") {
-    if (lastAdminErr) back(lastAdminErr);
+    if (lastOwnerErr) back(lastOwnerErr);
     const result = await deleteUser(targetId);
     if (!result.ok) back(result.reason);
   } else if (op === "active") {
     const next = String(formData.get("active")) === "true";
     // Chỉ khoá mới nguy hiểm; mở khoá thì không.
-    if (!next && lastAdminErr) back(lastAdminErr);
+    if (!next && lastOwnerErr) back(lastOwnerErr);
     const result = await setUserActive(targetId, next);
     if (!result.ok) back(result.reason);
   } else if (op === "role") {
     const role = parseRole(String(formData.get("role") ?? ""));
     if (!role) back("Vai trò không hợp lệ.");
-    // Chỉ HẠ vai trò mới nguy hiểm; nâng lên admin thì không.
-    if (role !== "admin" && lastAdminErr) back(lastAdminErr);
+    // Chỉ HẠ khỏi owner mới nguy hiểm; nâng lên owner thì không.
+    if (role !== "owner" && lastOwnerErr) back(lastOwnerErr);
     const result = await setUserRole(targetId, role);
     if (!result.ok) back(result.reason);
   } else {

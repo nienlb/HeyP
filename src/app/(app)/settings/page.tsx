@@ -4,6 +4,7 @@ import { Icon } from "@/app/_components/icons";
 import { getSettings } from "@/db/queries";
 import { saveSettingsAction } from "./actions";
 import { PasswordForm } from "./password-form";
+import { atLeast } from "@/lib/roles";
 
 export default async function SettingsPage({
   searchParams,
@@ -64,7 +65,7 @@ export default async function SettingsPage({
           <Link href="/backup" className="sheet-item">
             <Icon name="backup" size={20} /> Sao lưu
           </Link>
-          {session.role === "admin" && (
+          {atLeast(session.role, "admin") && (
             <>
               <Link href="/admin/users" className="sheet-item">
                 <Icon name="users" size={20} /> Thành viên

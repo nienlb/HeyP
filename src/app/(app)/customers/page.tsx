@@ -4,6 +4,7 @@ import { listCustomerStats, listOrderYears } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import type { SortDir } from "@/lib/table-sort";
 import { CustomersList, type CustomerItem } from "./customers-list";
+import { atLeast } from "@/lib/roles";
 
 export default async function CustomersPage({
   searchParams,
@@ -83,7 +84,7 @@ export default async function CustomersPage({
       ) : (
         <CustomersList
           customers={items}
-          canDelete={session.role === "admin"}
+          canDelete={atLeast(session.role, "admin")}
           sort={sort}
           dir={dir}
           sortBase={sortBase}

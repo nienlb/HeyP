@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { deleteCustomerRow } from "@/db/deletion";
+import { atLeast } from "@/lib/roles";
 
 export async function deleteCustomerAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.role !== "admin") redirect("/");
+  if (!atLeast(session.role, "admin")) redirect("/");
 
   const customerId = Number(formData.get("customerId"));
   if (!Number.isInteger(customerId) || customerId <= 0) redirect("/customers");

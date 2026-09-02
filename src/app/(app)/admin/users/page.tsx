@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/auth";
+import { requireOwner } from "@/lib/auth";
 import { listUsers } from "@/db/users";
 import { UsersList, type UserItem } from "./users-list";
 
@@ -8,7 +8,7 @@ export default async function AdminUsersPage({
   searchParams: Promise<{ ok?: string; err?: string }>;
 }) {
   const [session, { ok, err }, users] = await Promise.all([
-    requireAdmin(),
+    requireOwner(),
     searchParams,
     listUsers(),
   ]);

@@ -54,7 +54,9 @@ export async function ensureUsersSeeded(): Promise<void> {
       [
         acc.username,
         hashPassword(acc.password),
-        i === 0 ? "admin" : "nhan_vien",
+        // Tài khoản đầu trong APP_ACCOUNTS thành Owner — nếu gieo ra 0 owner
+        // thì không ai vào được màn Thành viên (nó là Owner-only).
+        i === 0 ? "owner" : "member",
       ],
     );
   }
@@ -75,9 +77,9 @@ export async function listUsers(): Promise<UserRow[]> {
   return rows.map(toRow);
 }
 
-export async function countActiveAdmins(): Promise<number> {
+export async function countActiveOwners(): Promise<number> {
   const r = await raw.get<{ n: number }>(
-    "SELECT COUNT(*)::int AS n FROM users WHERE role = 'admin' AND active = true",
+    "SELECT COUNT(*)::int AS n FROM users WHERE role = 'owner' AND active = true",
   );
   return r?.n ?? 0;
 }

@@ -3,7 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserById } from "@/db/users";
-import type { UserRole } from "@/lib/roles";
+import { atLeast, type UserRole } from "@/lib/roles";
 import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SECONDS,
@@ -91,8 +91,20 @@ export async function requireAuth(): Promise<Session> {
  * Dùng ở đầu MỌI trang và MỌI server action của khu quản trị. Không dựa vào
  * việc giấu nút ở UI — nhân viên gõ thẳng URL vẫn phải bị chặn.
  */
-export async function requireAdmin(): Promise<Session> {
+/**
+ * Chặn theo THANG BẬC, không so bằng: `requireRole("admin")` cho Owner qua.
+ * Xem chú thích RANK trong src/lib/roles.ts.
+ */
+export async function requireRole(min: UserRole): Promise<Session> {
   const session = await requireAuth();
-  if (session.role !== "admin") redirect("/");
+  if (!atLeast(session.role, min)) redirect("/");
   return session;
+}
+
+export async function requireAdmin(): Promise<Session> {
+  return requireRole("admin");
+}
+
+export async function requireOwner(): Promise<Session> {
+  return requireRole("owner");
 }

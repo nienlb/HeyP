@@ -32,6 +32,7 @@ import {
 } from "@/lib/order-status";
 import type { ShipStatus } from "@/lib/order-gaps";
 import { parseDecimal, parseVnd } from "@/lib/parse-number";
+import { atLeast } from "@/lib/roles";
 
 export type CreateOrderState = { error?: string };
 
@@ -391,7 +392,9 @@ import { deleteOrderCascade } from "@/db/deletion";
 export async function deleteOrderAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.role !== "admin") redirect("/");
+  // Xoá đơn là Owner-only (v8-C). Ẩn nút ở page.tsx KHÔNG đủ — ai biết
+  // đường gọi action vẫn gọi được.
+  if (!atLeast(session.role, "owner")) redirect("/");
 
   const orderId = Number(formData.get("orderId"));
   if (!Number.isInteger(orderId) || orderId <= 0) redirect("/orders");
