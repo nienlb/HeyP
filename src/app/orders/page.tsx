@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
-import { AppShell } from "../_components/app-shell";
-import { ChipBar, Chip } from "../_components/chip";
+import { AppShell } from "@/app/_components/app-shell";
+import { ChipBar, Chip } from "@/app/_components/chip";
 import { listOrdersWithGaps, type OrderListRow } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import { GAP_CODES, GAP_LABELS, type GapCode } from "@/lib/order-gaps";

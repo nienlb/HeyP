@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sheet } from "../_components/sheet";
+import { Sheet } from "@/app/_components/sheet";
 import { stockInAction, type StockInState } from "./actions";
 
 export function StockInSheet({ defaultRate }: { defaultRate: number }) {

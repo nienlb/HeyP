@@ -8,7 +8,7 @@ import {
   RecoveryPanel,
   Spinner,
   type Diagnosis,
-} from "../_components/recovery";
+} from "@/app/_components/recovery";
 
 /**
  * Nút đăng nhập biết mình đang chờ.

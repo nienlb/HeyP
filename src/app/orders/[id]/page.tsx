@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
-import { AppShell } from "../../_components/app-shell";
-import { CopyButton } from "../../_components/copy-button";
-import { ListRow } from "../../_components/list-row";
-import { PhotoUpload } from "../../_components/photo-upload";
-import { PhotoGallery } from "../../_components/photo-gallery";
-import { lineExceptionAction, removeItemAction } from "../actions";
+import { AppShell } from "@/app/_components/app-shell";
+import { CopyButton } from "@/app/_components/copy-button";
+import { ListRow } from "@/app/_components/list-row";
+import { PhotoUpload } from "@/app/_components/photo-upload";
+import { PhotoGallery } from "@/app/_components/photo-gallery";
+import { lineExceptionAction, removeItemAction } from "@/app/orders/actions";
 import {
   getOrderDetail,
   getPackagesForOrder,

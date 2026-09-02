@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sheet } from "../_components/sheet";
+import { Sheet } from "@/app/_components/sheet";
 import { addTopupAction } from "./actions";
 
 export function AddTopupSheet() {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth";
-import { AppShell } from "../_components/app-shell";
-import { Icon } from "../_components/icons";
+import { AppShell } from "@/app/_components/app-shell";
+import { Icon } from "@/app/_components/icons";
 import { getSettings } from "@/db/queries";
 import { saveSettingsAction } from "./actions";
 import { PasswordForm } from "./password-form";

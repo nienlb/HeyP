@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth";
-import { AppShell } from "../_components/app-shell";
+import { AppShell } from "@/app/_components/app-shell";
 import { getSettings, listInventory, listPhotosForInventory } from "@/db/queries";
 import {
   INVENTORY_SOURCES,

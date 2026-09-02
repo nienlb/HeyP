@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
 import { listUsers } from "@/db/users";
-import { AppShell } from "../../_components/app-shell";
+import { AppShell } from "@/app/_components/app-shell";
 import { UsersList, type UserItem } from "./users-list";
 
 export default async function AdminUsersPage({

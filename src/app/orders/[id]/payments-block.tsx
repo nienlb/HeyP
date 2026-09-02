@@ -4,9 +4,9 @@ import { useState } from "react";
 import { formatVnd } from "@/lib/format";
 import { amountDue } from "@/lib/payments";
 import { PAYMENT_KIND_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/expenses";
-import { addPaymentAction, deletePaymentAction } from "../actions";
-import { ListRow } from "../../_components/list-row";
-import { Sheet } from "../../_components/sheet";
+import { addPaymentAction, deletePaymentAction } from "@/app/orders/actions";
+import { ListRow } from "@/app/_components/list-row";
+import { Sheet } from "@/app/_components/sheet";
 
 export type PaymentRow = {
   id: number;

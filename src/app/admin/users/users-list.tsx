@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Sheet } from "../../_components/sheet";
-import { ListRow } from "../../_components/list-row";
+import { Sheet } from "@/app/_components/sheet";
+import { ListRow } from "@/app/_components/list-row";
 import { ROLE_LABELS, USER_ROLES, type UserRole } from "@/lib/roles";
 import { createUserAction, userAdminAction } from "./actions";
 

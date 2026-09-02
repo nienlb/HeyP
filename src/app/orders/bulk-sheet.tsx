@@ -1,6 +1,6 @@
 "use client";
 
-import { Sheet } from "../_components/sheet";
+import { Sheet } from "@/app/_components/sheet";
 import { STATUS_LABELS } from "@/lib/order-status";
 import { formatCny } from "@/lib/format";
 import type { BulkPlan } from "@/lib/bulk-status";

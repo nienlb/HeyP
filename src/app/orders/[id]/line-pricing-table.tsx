@@ -6,7 +6,7 @@ import {
   type PricingLine,
 } from "@/lib/line-pricing";
 import type { ShipStatus } from "@/lib/order-gaps";
-import { setShipFeeAction, updateLineCostAction, updateLineMarginAction } from "../actions";
+import { setShipFeeAction, updateLineCostAction, updateLineMarginAction } from "@/app/orders/actions";
 
 export type PricingRow = PricingLine & {
   id: number;

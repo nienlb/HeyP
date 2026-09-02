@@ -2,7 +2,7 @@ import type { ImageKind } from "@/lib/zalo-extract";
 
 // ItemPhotos giờ dùng chung cho cả màn tạo đơn lẫn màn thêm món vào đơn đã
 // tạo, nên kiểu ở cạnh component. Nhập lại và xuất tiếp để chỗ cũ khỏi sửa.
-import type { ItemPhoto } from "../../_components/item-photos";
+import type { ItemPhoto } from "@/app/_components/item-photos";
 export type { ItemPhoto };
 
 export type ItemRow = {

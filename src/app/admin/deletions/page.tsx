@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
 import { listDeletionLog } from "@/db/deletion";
-import { AppShell } from "../../_components/app-shell";
+import { AppShell } from "@/app/_components/app-shell";
 import { formatDateTime } from "@/lib/format";
 
 const ENTITY_LABELS: Record<"order" | "customer", string> = {

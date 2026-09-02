@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Sheet } from "../../_components/sheet";
-import { deleteOrderAction } from "../actions";
+import { Sheet } from "@/app/_components/sheet";
+import { deleteOrderAction } from "@/app/orders/actions";
 
 export function DangerZone({
   orderId,

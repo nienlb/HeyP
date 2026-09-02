@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth";
-import { AppShell } from "../_components/app-shell";
+import { AppShell } from "@/app/_components/app-shell";
 import { getAssetSnapshot, getCashFlow, getPnlData } from "@/db/queries";
 import { computePnl } from "@/lib/pnl";
 import { formatVnd } from "@/lib/format";

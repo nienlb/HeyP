@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth";
-import { AppShell } from "../_components/app-shell";
+import { AppShell } from "@/app/_components/app-shell";
 import { listPackages } from "@/db/queries";
 import { knownCarriers } from "@/lib/tracking";
 import { CreatePackageSheet } from "./create-package-sheet";

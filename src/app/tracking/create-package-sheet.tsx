@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { Sheet } from "../_components/sheet";
+import { Sheet } from "@/app/_components/sheet";
 import { createPackageAction, type CreatePackageState } from "./actions";
 
 export function CreatePackageSheet({

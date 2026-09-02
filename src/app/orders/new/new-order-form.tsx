@@ -6,7 +6,7 @@ import {
   deletePhotoAction,
   suggestCnyAction,
   type CreateOrderState,
-} from "../actions";
+} from "@/app/orders/actions";
 import { computeOrderMoney, sumLineItemsCny } from "@/lib/money";
 import { formatVnd } from "@/lib/format";
 import {
@@ -22,8 +22,8 @@ import {
 } from "@/lib/order-status";
 import { itemAttributes, type ZaloExtract } from "@/lib/zalo-extract";
 import { mergeItems, mergeMoneyFields } from "@/lib/zalo-merge";
-import { StickyBar } from "../../_components/sticky-bar";
-import { Icon } from "../../_components/icons";
+import { StickyBar } from "@/app/_components/sticky-bar";
+import { Icon } from "@/app/_components/icons";
 import { CustomerSheet, type CustomerPick } from "./customer-sheet";
 import { ItemSheet } from "./item-sheet";
 import { QuickImportSheet } from "./quick-import-sheet";

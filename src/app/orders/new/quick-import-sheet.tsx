@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { deletePhotoAction } from "../actions";
+import { deletePhotoAction } from "@/app/orders/actions";
 import { photoUrl } from "@/lib/photos";
 import {
   IMAGE_KINDS,
@@ -10,7 +10,7 @@ import {
   type ZaloExtract,
 } from "@/lib/zalo-extract";
 import { mergeMoneyFields } from "@/lib/zalo-merge";
-import { Sheet } from "../../_components/sheet";
+import { Sheet } from "@/app/_components/sheet";
 import type { DroppedPhoto, PendingPhoto } from "./types";
 
 /**

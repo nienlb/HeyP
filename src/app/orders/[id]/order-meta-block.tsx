@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Sheet } from "../../_components/sheet";
+import { Sheet } from "@/app/_components/sheet";
 import { groupVnd } from "@/lib/parse-number";
-import { updateOrderMetaAction } from "../actions";
+import { updateOrderMetaAction } from "@/app/orders/actions";
 
 export function OrderMetaBlock({
   orderId,

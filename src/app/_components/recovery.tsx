@@ -1,7 +1,7 @@
 "use client";
 
 import { PROBE_TIMEOUT_MS } from "@/lib/ui-timeouts";
-import type { HealthReport } from "../api/health/route";
+import type { HealthReport } from "@/app/api/health/route";
 
 /** Kết luận đủ để quyết định NÓI GÌ với người dùng. */
 export type Diagnosis = "expired" | "db-down" | "server-slow" | "offline";

@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Sheet } from "../../_components/sheet";
-import { CopyButton } from "../../_components/copy-button";
+import { Sheet } from "@/app/_components/sheet";
+import { CopyButton } from "@/app/_components/copy-button";
 import {
   CustomerSheet,
   type CustomerPick,
-} from "../new/customer-sheet";
-import type { CustomerOption } from "../new/types";
-import { setOrderCustomerAction, updateCustomerAction } from "../actions";
+} from "@/app/orders/new/customer-sheet";
+import type { CustomerOption } from "@/app/orders/new/types";
+import { setOrderCustomerAction, updateCustomerAction } from "@/app/orders/actions";
 
 export type OrderCustomer = {
   id: number;

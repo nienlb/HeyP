@@ -8,8 +8,8 @@ import {
   type OrderStatus,
   type OrderType,
 } from "@/lib/order-status";
-import { StatusIcon } from "../../_components/status-icon";
-import { changeStatusAction } from "../actions";
+import { StatusIcon } from "@/app/_components/status-icon";
+import { changeStatusAction } from "@/app/orders/actions";
 
 const DANGER_STATUSES = new Set<OrderStatus>(["su_co", "khach_bom", "huy"]);
 

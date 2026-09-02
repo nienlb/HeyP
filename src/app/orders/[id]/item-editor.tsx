@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Sheet } from "../../_components/sheet";
-import { ItemPhotos, type ItemPhoto } from "../../_components/item-photos";
+import { Sheet } from "@/app/_components/sheet";
+import { ItemPhotos, type ItemPhoto } from "@/app/_components/item-photos";
 import { cnyFromSellPrice } from "@/lib/line-pricing";
 import { groupVnd, parseVnd } from "@/lib/parse-number";
-import { addItemAction, deletePhotoAction, updateItemAction } from "../actions";
+import { addItemAction, deletePhotoAction, updateItemAction } from "@/app/orders/actions";
 
 /** Món đang sửa. `sellVnd` là số suy ngược (sellPerUnitVnd), không có trong DB. */
 export type EditableItem = {

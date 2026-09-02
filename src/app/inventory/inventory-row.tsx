@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ListRow } from "../_components/list-row";
-import { Sheet } from "../_components/sheet";
-import { PhotoUpload } from "../_components/photo-upload";
-import { PhotoGallery } from "../_components/photo-gallery";
+import { ListRow } from "@/app/_components/list-row";
+import { Sheet } from "@/app/_components/sheet";
+import { PhotoUpload } from "@/app/_components/photo-upload";
+import { PhotoGallery } from "@/app/_components/photo-gallery";
 import { formatVnd } from "@/lib/format";
 import type { PhotoLabel } from "@/lib/photos";
 import { SellForm } from "./sell-form";

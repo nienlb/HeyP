@@ -106,26 +106,62 @@ Ghi lại con số. Kỳ vọng khoảng 60–80 dòng trên ~38 file.
 
 - [ ] **Step 2: Đổi hàng loạt**
 
-Chạy:
+**KHÔNG thay chuỗi bằng regex mù.** `"../actions"` có hai đích khác nhau tuỳ vị trí file: từ `src/app/customers/page.tsx` nó là `src/app/actions.ts`, nhưng từ `src/app/orders/[id]/page.tsx` nó là `src/app/orders/actions.ts`. Gộp cả hai thành `@/app/actions` sinh ra 21 lỗi `TS2305 has no exported member` — đã dính thật khi chạy kế hoạch này.
+
+Phải **giải đường dẫn thật** từ vị trí từng file:
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
-grep -rl '"\.\./' src/app --include="*.tsx" --include="*.ts" | while read -r f; do
-  perl -pi -e 's{"(?:\.\./)+_components/}{"\@/app/_components/}g; s{"(?:\.\./)+actions"}{"\@/app/actions"}g' "$f"
-done
+python3 - <<'PY'
+import pathlib, re
+
+root = pathlib.Path("src/app").resolve()
+src = pathlib.Path("src").resolve()
+pat = re.compile(r'(["\'])((?:\.\./)+)([^"\']+)\1')
+
+changed = 0
+for f in sorted(root.rglob("*")):
+    if f.suffix not in (".ts", ".tsx"):
+        continue
+    text = f.read_text()
+
+    def sub(m):
+        quote, ups, rest = m.group(1), m.group(2), m.group(3)
+        target = (f.parent / (ups + rest)).resolve()
+        try:
+            rel = target.relative_to(src)
+        except ValueError:
+            return m.group(0)  # trỏ ra ngoài src/ — để nguyên
+        return f'{quote}@/{rel.as_posix()}{quote}'
+
+    new = pat.sub(sub, text)
+    if new != text:
+        f.write_text(new)
+        changed += 1
+
+print(f"đã sửa {changed} file")
+PY
 ```
 
-Lưu ý: `_components/mobile-nav.tsx` và `_components/sidebar.tsx` import `"../actions"` — chúng ở trong `_components/` nên `../actions` = `src/app/actions.ts`, và `@/app/actions` cũng trỏ đúng đó. Đổi được, không sai.
+Kỳ vọng: `đã sửa 40 file`.
 
 - [ ] **Step 3: Kiểm không sót và không đổi nhầm**
 
 Chạy:
 
 ```bash
-grep -rn '"\.\./_components/\|"\.\./\.\./_components/\|"\.\./actions"\|"\.\./\.\./actions"' src/app --include="*.tsx" --include="*.ts"
+grep -rn '"\.\./' src/app --include="*.tsx" --include="*.ts"
 ```
 
 Kỳ vọng: **không dòng nào**.
+
+Rồi kiểm rằng script KHÔNG gộp nhầm hai `actions` khác nhau:
+
+```bash
+grep -rho '"@/app/[^"]*actions"' src/app --include="*.tsx" --include="*.ts" | sort | uniq -c
+```
+
+Kỳ vọng: thấy CẢ HAI đích — `@/app/orders/actions` (12 lượt) và `@/app/actions` (2 lượt, chỉ `sidebar.tsx` và `mobile-nav.tsx` dùng `logoutAction`). Chỉ thấy một đích là script đã gộp sai.
 
 Rồi:
 

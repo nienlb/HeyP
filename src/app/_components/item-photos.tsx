@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { deletePhotoAction } from "../orders/actions";
+import { deletePhotoAction } from "@/app/orders/actions";
 import { photoUrl } from "@/lib/photos";
 
 /**

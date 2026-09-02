@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sheet } from "../../_components/sheet";
+import { Sheet } from "@/app/_components/sheet";
 import { cnyFromSellPrice } from "@/lib/line-pricing";
 import { parseVnd } from "@/lib/parse-number";
 import { emptyItem, type ItemPhoto, type ItemRow } from "./types";
-import { ItemPhotos } from "../../_components/item-photos";
+import { ItemPhotos } from "@/app/_components/item-photos";
 
 export function ItemSheet({
   open,

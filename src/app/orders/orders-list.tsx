@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DataTable, type Column } from "../_components/data-table";
-import { StickyBar } from "../_components/sticky-bar";
+import { DataTable, type Column } from "@/app/_components/data-table";
+import { StickyBar } from "@/app/_components/sticky-bar";
 import { BULK_LIMIT, planBulkAdvance, type BulkOrder } from "@/lib/bulk-status";
 import type { SortDir } from "@/lib/table-sort";
 import { bulkAdvanceAction } from "./actions";

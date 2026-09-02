@@ -1,6 +1,6 @@
 import { requireAuth } from "@/lib/auth";
-import { AppShell } from "../_components/app-shell";
-import { ChipBar, Chip } from "../_components/chip";
+import { AppShell } from "@/app/_components/app-shell";
+import { ChipBar, Chip } from "@/app/_components/chip";
 import { listCustomerStats, listOrderYears } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import type { SortDir } from "@/lib/table-sort";

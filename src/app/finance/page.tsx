@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth";
-import { AppShell } from "../_components/app-shell";
+import { AppShell } from "@/app/_components/app-shell";
 import { getWallet, listExpenses, listLedger } from "@/db/queries";
 import { formatVnd } from "@/lib/format";
 import {

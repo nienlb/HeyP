@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Sheet } from "../../_components/sheet";
+import { Sheet } from "@/app/_components/sheet";
 import type { CustomerOption } from "./types";
 
 export type CustomerPick =

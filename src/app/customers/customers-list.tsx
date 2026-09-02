@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { DataTable, type Column } from "../_components/data-table";
-import { Sheet } from "../_components/sheet";
+import { DataTable, type Column } from "@/app/_components/data-table";
+import { Sheet } from "@/app/_components/sheet";
 import type { SortDir } from "@/lib/table-sort";
 import { deleteCustomerAction } from "./actions";
 
