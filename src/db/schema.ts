@@ -10,6 +10,7 @@ import {
   boolean,
   customType,
   doublePrecision,
+  index,
   integer,
   pgTable,
   primaryKey,
@@ -259,3 +260,28 @@ export const deletionLog = pgTable("deletion_log", {
   /** JSON: bản chụp dữ liệu trước khi xoá. */
   snapshot: text("snapshot").notNull(),
 });
+
+// 14) Nhật ký hoạt động (v8-C)
+export const activityLog = pgTable(
+  "activity_log",
+  {
+    id: serial("id").primaryKey(),
+    /**
+     * username, KHÔNG phải khoá ngoại tới users.id — có chủ ý: xoá một thành
+     * viên thì nhật ký vẫn đọc được tên người thực hiện. Nhật ký truy vết mà
+     * mất tên người làm thì vô dụng.
+     */
+    actor: text("actor").notNull(),
+    /** Mã `<entity>.<verb>`, xem src/lib/activity-codes.ts. */
+    action: text("action").notNull(),
+    entity: text("entity").notNull(),
+    entityId: integer("entity_id"),
+    /** JSON nhỏ. TUYỆT ĐỐI không chứa mật khẩu, kể cả đã băm. */
+    detail: text("detail"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("activity_log_created_idx").on(t.createdAt),
+    index("activity_log_entity_idx").on(t.entity, t.entityId),
+  ],
+);
