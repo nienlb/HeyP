@@ -2,7 +2,7 @@
 
 Ứng dụng nội bộ (2 người dùng) quản lý dịch vụ **order hộ hàng Trung Quốc** cho shop HeyP (bán giày/dép/thời trang): chốt đơn → mua hộ → gom kho → vận chuyển về VN → giao khách → thu tiền. Kèm bán hàng tồn kho và đọc ảnh chốt đơn Zalo bằng AI.
 
-**Trạng thái:** MVP xong (Phase 0–7). **v2 xong** — giao diện "Boutique atelier" (navy + giấy ấm + camel + serif), sidebar (desktop) / bottom tab+FAB+sheet (mobile), màn Tổng quan. Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`. **v3 xong** (A + B) — bóc lớp giá theo món (¥/giá vốn/lời tách riêng từng dòng sản phẩm), luồng nhập đơn 3 mảnh (ảnh chốt đơn + thông tin khách + ảnh sản phẩm), ví ¥, sổ chi phí, sổ thu tiền, 3 báo cáo tài chính. Spec: `docs/2026-08-11-heyp-v3a-gia-va-nhap-don-design.md`, `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`. **Đã chuyển hosting sang Vercel + Supabase** (14/08) — xem mục Hosting bên dưới. **v4 xong** — trục trạng thái rút còn 4 bước theo từng loại đơn, tự động hoàn tất khi đã giao và thu đủ tiền, form tạo đơn rút còn 3 ô bắt buộc. DB Supabase đã ở Singapore (`ap-southeast-1`), khớp region `sin1` đã ghim cho Vercel — xác nhận lại qua dashboard Supabase ngày 31/08 (mục Hosting bên dưới trước đây ghi nhầm là còn ở Sydney). Spec: `docs/superpowers/specs/2026-08-20-heyp-toc-do-va-luong-don-design.md`. **v5 xong** — giao diện viết lại mobile-first cho iPhone: PWA cài ra màn hình chính, tabbar 5 ô, màn tạo đơn kiểu POS (Sheet cho từng thao tác phụ), chi tiết đơn chia 4 tab, sao lưu thủ công thay backup tự động, nhập kho chủ động. Bỏ chất "Boutique atelier" (giữ navy, bỏ nền giấy ấm/serif). Spec: `docs/superpowers/specs/2026-08-31-heyp-ui-mobile-first-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-ui-mobile-first.md`. Logo: chưa có `public/logo.png` → đang dùng wordmark fallback + icon PWA chữ trên nền navy (`src/lib/logo.ts`, `scripts/make-pwa-icons.ts` tự chuyển sang ảnh khi có file, không cần sửa code). **v6 xong** — tài khoản trong DB (bảng `users`, hash scrypt, hai vai trò `admin`/`nhan_vien`), xoá đơn/khách có kiểm soát kèm nhật ký xoá, nhập đơn theo giá phải thu (¥ suy ngược) + ảnh gắn theo từng món, chọn nhiều đơn chuyển bước hàng loạt, thêm/xoá món trong đơn đã tạo. Spec: `docs/superpowers/specs/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don.md`. **v7 xong** — điều chỉnh đơn hàng: gắn/đổi khách và sửa thông tin khách, sửa chi tiết món (tên, size, số lượng, giá phải thu), sửa tổng chốt, sửa ghi chú và tỷ giá. Spec: `docs/superpowers/specs/2026-09-01-heyp-v7-dieu-chinh-don-hang-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-01-heyp-v7-dieu-chinh-don-hang.md`. **v8-A xong** — giao diện desktop: màn Tổng quan có hàng KPI (doanh thu, lãi tháng, công nợ, ví ¥) rồi tới lưới việc; màn Đơn và Khách hàng thành bảng 6 cột từ 900px (`DataTable`, dựng bằng CSS Grid chứ không phải `<table>`); màn Khách hàng lọc theo năm tạo đơn; Tạo đơn và Chi tiết đơn có cột phải dính chứa khối tiền; ẩn Tracking khỏi nav; thêm trang 404. Dưới 900px không đổi một pixel. Spec: `docs/superpowers/specs/2026-09-01-heyp-v8a-giao-dien-desktop-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-01-heyp-v8a-giao-dien-desktop.md`.
+**Trạng thái:** MVP xong (Phase 0–7). **v2 xong** — giao diện "Boutique atelier" (navy + giấy ấm + camel + serif), sidebar (desktop) / bottom tab+FAB+sheet (mobile), màn Tổng quan. Spec: `docs/2026-08-11-heyp-v2-ui-redesign-design.md`. **v3 xong** (A + B) — bóc lớp giá theo món (¥/giá vốn/lời tách riêng từng dòng sản phẩm), luồng nhập đơn 3 mảnh (ảnh chốt đơn + thông tin khách + ảnh sản phẩm), ví ¥, sổ chi phí, sổ thu tiền, 3 báo cáo tài chính. Spec: `docs/2026-08-11-heyp-v3a-gia-va-nhap-don-design.md`, `docs/2026-08-11-heyp-v3b-tai-chinh-design.md`. **Đã chuyển hosting sang Vercel + Supabase** (14/08) — xem mục Hosting bên dưới. **v4 xong** — trục trạng thái rút còn 4 bước theo từng loại đơn, tự động hoàn tất khi đã giao và thu đủ tiền, form tạo đơn rút còn 3 ô bắt buộc. DB Supabase đã ở Singapore (`ap-southeast-1`), khớp region `sin1` đã ghim cho Vercel — xác nhận lại qua dashboard Supabase ngày 31/08 (mục Hosting bên dưới trước đây ghi nhầm là còn ở Sydney). Spec: `docs/superpowers/specs/2026-08-20-heyp-toc-do-va-luong-don-design.md`. **v5 xong** — giao diện viết lại mobile-first cho iPhone: PWA cài ra màn hình chính, tabbar 5 ô, màn tạo đơn kiểu POS (Sheet cho từng thao tác phụ), chi tiết đơn chia 4 tab, sao lưu thủ công thay backup tự động, nhập kho chủ động. Bỏ chất "Boutique atelier" (giữ navy, bỏ nền giấy ấm/serif). Spec: `docs/superpowers/specs/2026-08-31-heyp-ui-mobile-first-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-ui-mobile-first.md`. Logo: chưa có `public/logo.png` → đang dùng wordmark fallback + icon PWA chữ trên nền navy (`src/lib/logo.ts`, `scripts/make-pwa-icons.ts` tự chuyển sang ảnh khi có file, không cần sửa code). **v6 xong** — tài khoản trong DB (bảng `users`, hash scrypt, hai vai trò `admin`/`nhan_vien`), xoá đơn/khách có kiểm soát kèm nhật ký xoá, nhập đơn theo giá phải thu (¥ suy ngược) + ảnh gắn theo từng món, chọn nhiều đơn chuyển bước hàng loạt, thêm/xoá món trong đơn đã tạo. Spec: `docs/superpowers/specs/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don.md`. **v7 xong** — điều chỉnh đơn hàng: gắn/đổi khách và sửa thông tin khách, sửa chi tiết món (tên, size, số lượng, giá phải thu), sửa tổng chốt, sửa ghi chú và tỷ giá. Spec: `docs/superpowers/specs/2026-09-01-heyp-v7-dieu-chinh-don-hang-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-01-heyp-v7-dieu-chinh-don-hang.md`. **v8-A xong** — giao diện desktop: màn Tổng quan có hàng KPI (doanh thu, lãi tháng, công nợ, ví ¥) rồi tới lưới việc; màn Đơn và Khách hàng thành bảng 6 cột từ 900px (`DataTable`, dựng bằng CSS Grid chứ không phải `<table>`); màn Khách hàng lọc theo năm tạo đơn; Tạo đơn và Chi tiết đơn có cột phải dính chứa khối tiền; ẩn Tracking khỏi nav; thêm trang 404. Dưới 900px không đổi một pixel. Spec: `docs/superpowers/specs/2026-09-01-heyp-v8a-giao-dien-desktop-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-01-heyp-v8a-giao-dien-desktop.md`. **v8-B xong** — khung bền vững: sidebar/header/tabbar chuyển vào `src/app/(app)/layout.tsx` nên không bị tháo-dựng lại mỗi lần chuyển màn; tiêu đề và nút quay lại suy từ đường dẫn (`src/lib/screen-meta.ts`); vùng nội dung hiện khung xương ngay thay cho spinner phủ toàn màn; bỏ `loading.tsx` ở gốc và `AppShell`. Spec: `docs/superpowers/specs/2026-09-02-heyp-v8b-toc-do-dieu-huong-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-02-heyp-v8b-toc-do-dieu-huong.md`.
 
 ## Stack
 
@@ -139,7 +139,7 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
 - **Boolean là `boolean` thật** (SQLite cũ giả lập bằng 0/1) — so sánh trong SQL thô dùng `= true`/`= false`, JS so `=== true`.
 - **`src/db/schema.ts` dùng alias `@/`** → chỉ Next/tsc nạp được. Script chạy bằng `node` KHÔNG import được schema → viết SQL thô hoặc import trực tiếp `drizzle-orm/pg-core` (xem `scripts/migrate-to-postgres.ts`).
 - **Test import module bằng đuôi `.ts` tường minh** (vd `../src/lib/money.ts`); `tsconfig` đã bật `allowImportingTsExtensions`. Module thuần dùng cho test không được import file khác có alias `@/`.
-- **Điều hướng (v5):** mọi trang có đăng nhập bọc bằng `<AppShell username title backHref? action? bottomBar?>` (`src/app/_components/app-shell.tsx`). `title` bắt buộc — tsc tự bắt trang nào quên. `backHref` là URL tường minh, không dựa vào `history.back()` (chế độ standalone/PWA có thể mở thẳng URL sâu, không có gì để lùi). Có `bottomBar` thì tabbar tự ẩn — một màn không bao giờ có cả hai. Ô `[+]` giữa tabbar **luôn luôn** là "tạo đơn" (`/orders/new`), không đổi nghĩa theo màn đang mở; nút hành động khác (nhập kho, nhập nhanh từ ảnh) là nút riêng ở header, class `.header-action-float`. Sidebar/bottom-tab đọc mục điều hướng từ `nav-config.ts` — thêm màn mới thì sửa 1 chỗ đó, không sửa từng component. Từ 900px trở lên: sidebar quay lại, tabbar ẩn (luật trong `@media (min-width: 900px)` ở `src/styles/layout.css`). Tracking đã bỏ khỏi `nav-config.ts` từ v8-A nhưng route `/tracking` vẫn sống — thêm lại một dòng là nó quay về menu.
+- **Điều hướng (v5):** mọi trang có đăng nhập bọc bằng `<AppShell username title backHref? action? bottomBar?>` (`src/app/_components/app-shell.tsx`). `title` bắt buộc — tsc tự bắt trang nào quên. `backHref` là URL tường minh, không dựa vào `history.back()` (chế độ standalone/PWA có thể mở thẳng URL sâu, không có gì để lùi). Có `bottomBar` thì tabbar tự ẩn — một màn không bao giờ có cả hai. Ô `[+]` giữa tabbar **luôn luôn** là "tạo đơn" (`/orders/new`), không đổi nghĩa theo màn đang mở; nút hành động khác (nhập kho, nhập nhanh từ ảnh) là nút riêng ở header, class `.header-action-float`. Sidebar/bottom-tab đọc mục điều hướng từ `nav-config.ts` — thêm màn mới thì sửa 1 chỗ đó, không sửa từng component. Từ 900px trở lên: sidebar quay lại, tabbar ẩn (luật trong `@media (min-width: 900px)` ở `src/styles/layout.css`). Tracking đã bỏ khỏi `nav-config.ts` từ v8-A nhưng route `/tracking` vẫn sống — thêm lại một dòng là nó quay về menu. Từ v8-B, khung không còn dựng trong từng trang: trang chỉ render nội dung, `src/app/(app)/layout.tsx` lo phần còn lại; `login/`, `not-found.tsx` và `api/` nằm NGOÀI group nên không có khung.
 - **`redirect()` lúc render KHÔNG trả 307 được nữa từ khi có `src/app/loading.tsx`
   — và đó là cái đã khoá cửa đăng nhập ngày 01/09.** Boundary Suspense ở gốc
   làm Next đẩy vỏ trang xuống trình duyệt NGAY, header đã gửi đi rồi; lát sau
@@ -197,6 +197,47 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
     — `getSession()` đọc bảng `users`, nên DB chết cũng trả `null` y hệt hết
     phiên. Dùng nó để chẩn đoán thì lúc DB sập sẽ báo nhầm "hết phiên" và
     người dùng đăng nhập lại trong vô vọng.
+- **Khung app nằm ở `src/app/(app)/layout.tsx`, KHÔNG ở từng trang** (v8-B) —
+  layout nằm TRÊN ranh giới Suspense của `(app)/loading.tsx` nên React không
+  tháo sidebar/header/tabbar khi chuyển màn. Đã đo bằng dấu vân tay đặt trên
+  chính DOM node: qua 5 lần chuyển màn liên tiếp, node vẫn là node cũ. Đưa
+  khung ngược vào trang là "chớp tắt" quay lại ngay. `AppShell` đã bị xoá.
+- **GIỮ `(app)/layout.tsx` NHẸ — chỉ một truy vấn** (`getSession()` trong
+  `requireAuth()`, đo được ~20ms). Mọi thứ nặng phải ở page, tức DƯỚI
+  boundary, để khung xương che được. Thêm truy vấn vào layout là kéo dài đúng
+  cửa sổ màn hình trắng mà v8-B thu hẹp — vì bỏ `loading.tsx` gốc rồi thì
+  layout treo là trắng màn, không còn spinner nào của mình.
+- **Tiêu đề màn lấy từ `src/lib/screen-meta.ts`, không phải prop** (v8-B) —
+  layout không nhận được prop từ page. Hệ quả: `tsc` KHÔNG còn bắt được
+  "quên khai báo tiêu đề"; lưới thay thế là test khoá trong
+  `tests/screen-meta.test.ts` (mọi href trong `nav-config.ts` phải có mục
+  trong `screen-meta.ts`). Thêm màn mới là sửa CẢ HAI file đó.
+- **Regex tiêu đề động phải là `\d+`, không phải `[^/]+`** — viết lỏng thì
+  `/orders/new` cũng khớp và màn tạo đơn hiện tiêu đề "#new". Có test khoá.
+- **Đừng đặt lại độ trễ cho trạng thái chờ** (v8-B) — `SPINNER_DELAY_MS` cũ
+  là 250ms, đặt để spinner không nháy khi điều hướng nhanh. Nhưng TTFB
+  production đo được là 260–300ms, tức rơi ngay SAU ngưỡng, nên spinner bật
+  rồi tắt gần như mỗi lần bấm. Đó chính là "chớp tắt". Khung xương hiện NGAY
+  và không có vấn đề đó vì nó nằm đúng chỗ nội dung thật sắp hiện ra.
+- **`redirect()` ngoài ranh giới Suspense trả 307 THẬT trở lại** (v8-B) vì
+  `loading.tsx` gốc đã bị xoá. NHƯNG middleware vẫn là cửa chính và không
+  được bỏ, và `RedirectRescue` vẫn cần cho redirect nằm DƯỚI boundary
+  (`requireAdmin` ở màn admin, tài khoản bị khoá giữa chừng) — nó nằm trong
+  `(app)/loading.tsx`. Sau mỗi lần đụng vùng này PHẢI kiểm:
+  `curl -s -o /dev/null -w '%{http_code}' --max-redirs 0 <URL>/` khi chưa
+  đăng nhập phải trả **307**, không phải 200.
+- **Alias `@/app/…` cũng gãy khi thư mục di chuyển** (v8-B) — nó nhúng cấu
+  trúc thư mục y như import tương đối. Chuyển `orders/` vào `(app)/` làm hỏng
+  12 file trỏ `@/app/orders/actions`, phải sửa thành `@/app/(app)/orders/…`.
+  Và cẩn thận: `"../actions"` có HAI đích khác nhau tuỳ vị trí file
+  (`src/app/actions.ts` với `src/app/(app)/orders/actions.ts`) — đừng thay
+  chuỗi bằng regex mù, phải giải đường dẫn thật.
+- **Số đo production ngày 02/09 để đối chiếu về sau** — từ Việt Nam, edge
+  `hkg1` → function `sin1`: nền TLS 0,113s; `/` (307, chỉ middleware) 0,225s;
+  `/api/health` (Node + một câu `SELECT 1`) 0,233s; `/login` (render RSC,
+  không DB) 0,285–0,320s; **cold start +640ms**. Một câu DB chỉ ~10–30ms, nên
+  tối ưu số truy vấn mỗi màn gần như không đáng — nút thắt là cold start và
+  cách trình bày trạng thái chờ.
 - **Bố cục desktop dùng MỘT DOM, không render hai lần rồi ẩn một** (v8-A) —
   `DataTable` (`src/app/_components/data-table.tsx`) đổi hình bằng CSS: điện
   thoại là grid 2 cột và cột nào không có `mobile: true` bị ẩn, desktop là
@@ -298,3 +339,4 @@ Test bắt buộc phải xanh cho **công thức tiền** và **luật trạng t
 - Thiết kế v6 (tài khoản, quyền, xoá, nhập đơn): `docs/superpowers/specs/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don-design.md`, kế hoạch: `docs/superpowers/plans/2026-08-31-heyp-v6-tai-khoan-quyen-va-nhap-don.md`
 - Thiết kế v7 (điều chỉnh đơn hàng): `docs/superpowers/specs/2026-09-01-heyp-v7-dieu-chinh-don-hang-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-01-heyp-v7-dieu-chinh-don-hang.md`
 - Thiết kế v8-A (giao diện desktop): `docs/superpowers/specs/2026-09-01-heyp-v8a-giao-dien-desktop-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-01-heyp-v8a-giao-dien-desktop.md`
+- Thiết kế v8-B (tốc độ điều hướng): `docs/superpowers/specs/2026-09-02-heyp-v8b-toc-do-dieu-huong-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-02-heyp-v8b-toc-do-dieu-huong.md`
