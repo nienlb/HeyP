@@ -67,11 +67,16 @@ export default async function SettingsPage({
           <Link href="/backup" className="sheet-item">
             <Icon name="backup" size={20} /> Sao lưu
           </Link>
+          {/* Quản lý thành viên là Owner-only — gác RIÊNG, không gộp vào khối
+              Admin bên dưới. Gộp thì Admin thấy link rồi bấm vào bị đá ngược
+              về, một cái bẫy vô nghĩa. */}
+          {atLeast(session.role, "owner") && (
+            <Link href="/admin/users" className="sheet-item">
+              <Icon name="users" size={20} /> Thành viên
+            </Link>
+          )}
           {atLeast(session.role, "admin") && (
             <>
-              <Link href="/admin/users" className="sheet-item">
-                <Icon name="users" size={20} /> Thành viên
-              </Link>
               <Link href="/admin/deletions" className="sheet-item">
                 <Icon name="trash" size={20} /> Nhật ký xoá
               </Link>
