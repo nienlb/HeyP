@@ -9,7 +9,7 @@ export type ActivityRow = {
   entity: string;
   entityId: number | null;
   detail: string | null;
-  createdAt: number;
+  createdAt: Date;
 };
 
 /**
@@ -67,7 +67,9 @@ export async function listActivity(opts: {
   }
   params.push(opts.limit);
 
-  return raw.all<ActivityRow>(
+  const rows = await raw.all<Omit<ActivityRow, "createdAt"> & {
+    createdAt: string | number;
+  }>(
     `SELECT id, actor, action, entity,
             entity_id  AS "entityId",
             detail,
@@ -78,6 +80,10 @@ export async function listActivity(opts: {
       LIMIT ?`,
     params,
   );
+  // `created_at` là bigint → postgres-js trả về CHUỖI, không phải số. Không
+  // ép thì formatDateTime nhận chuỗi, không nhân 1000, và mọi mốc thời gian
+  // hiện ra năm 1970. Cùng khuôn với listDeletionLog trong src/db/deletion.ts.
+  return rows.map((r) => ({ ...r, createdAt: new Date(Number(r.createdAt) * 1000) }));
 }
 
 /** Danh sách người từng có hoạt động — dùng dựng chip lọc. */

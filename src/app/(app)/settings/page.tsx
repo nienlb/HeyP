@@ -75,6 +75,9 @@ export default async function SettingsPage({
               <Link href="/admin/deletions" className="sheet-item">
                 <Icon name="trash" size={20} /> Nhật ký xoá
               </Link>
+              <Link href="/admin/activity" className="sheet-item">
+                <Icon name="reports" size={20} /> Nhật ký hoạt động
+              </Link>
             </>
           )}
         </div>

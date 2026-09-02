@@ -30,6 +30,7 @@ const EXACT: Record<string, ScreenMeta> = {
   "/tracking": { title: "Tracking" },
   "/admin/users": { title: "Thành viên", backHref: "/" },
   "/admin/deletions": { title: "Nhật ký xoá", backHref: "/" },
+  "/admin/activity": { title: "Nhật ký hoạt động", backHref: "/" },
 };
 
 export const KNOWN_PATHS: readonly string[] = Object.keys(EXACT);
