@@ -16,6 +16,7 @@ import {
   type PaymentMethod,
 } from "@/lib/expenses";
 import { parseDecimal, parseVnd } from "@/lib/parse-number";
+import { atLeast } from "@/lib/roles";
 
 function parseDate(v: FormDataEntryValue | null): Date {
   const s = String(v ?? "").trim();
@@ -27,6 +28,7 @@ function parseDate(v: FormDataEntryValue | null): Date {
 export async function addTopupAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!atLeast(session.role, "owner")) redirect("/finance");
 
   const result = await addTopup({
     cny: parseDecimal(formData.get("cny")),
@@ -43,6 +45,7 @@ export async function addTopupAction(formData: FormData): Promise<void> {
 export async function deleteLedgerAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!atLeast(session.role, "owner")) redirect("/finance");
 
   const result = await deleteLedgerEntry(Number(formData.get("id")));
   if (!result.ok)
@@ -85,6 +88,7 @@ export async function addExpenseAction(formData: FormData): Promise<void> {
 export async function deleteExpenseAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!atLeast(session.role, "owner")) redirect("/finance");
 
   await deleteExpense(Number(formData.get("id")));
   revalidatePath("/finance");

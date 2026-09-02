@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth";
+import { atLeast } from "@/lib/roles";
 import { raw } from "@/db/raw";
 import { touchBackupAt } from "@/db/queries";
 
@@ -32,6 +33,11 @@ export async function GET() {
   const session = await getSession();
   if (!session) {
     return new Response("Chưa đăng nhập", { status: 401 });
+  }
+  // Bản sao lưu chứa cả 13 bảng, gồm thông tin khách và toàn bộ số liệu tiền.
+  // Owner-only (v8-C) — trước đó ai đăng nhập cũng tải được.
+  if (!atLeast(session.role, "owner")) {
+    return new Response("Chỉ Owner mới tải được bản sao lưu", { status: 403 });
   }
 
   const tables: Record<string, unknown[]> = {};

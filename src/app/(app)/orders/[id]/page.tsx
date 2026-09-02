@@ -465,6 +465,7 @@ export default async function OrderDetailPage({
               <PaymentsBlock
                 orderId={order.id}
                 rows={payments}
+                canDelete={atLeast(session.role, "owner")}
                 quotedTotalVnd={order.quotedTotalVnd}
                 shippingFee={order.shippingFee}
                 suggestedFinal={suggestedFinal}

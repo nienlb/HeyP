@@ -26,12 +26,18 @@ export function PaymentsBlock({
   orderId,
   rows,
   quotedTotalVnd,
+  canDelete,
   shippingFee,
   suggestedFinal,
 }: {
   orderId: number;
   rows: PaymentRow[];
   quotedTotalVnd: number;
+  /**
+   * Xoá phiếu thu là Owner-only (v8-C). Đây CHỈ là phần ẩn nút — chặn thật
+   * nằm trong deletePaymentAction.
+   */
+  canDelete: boolean;
   shippingFee: number;
   suggestedFinal: number;
 }) {
@@ -73,13 +79,15 @@ export function PaymentsBlock({
             meta={`${formatDate(r.paidAt)} · ${PAYMENT_METHOD_LABELS[r.method]}`}
             amount={formatVnd(r.amountVnd)}
             trailing={
-              <form action={deletePaymentAction}>
-                <input type="hidden" name="orderId" value={orderId} />
-                <input type="hidden" name="paymentId" value={r.id} />
-                <button type="submit" className="btn btn-sm btn-outline">
-                  Xoá
-                </button>
-              </form>
+              canDelete ? (
+                <form action={deletePaymentAction}>
+                  <input type="hidden" name="orderId" value={orderId} />
+                  <input type="hidden" name="paymentId" value={r.id} />
+                  <button type="submit" className="btn btn-sm btn-outline">
+                    Xoá
+                  </button>
+                </form>
+              ) : undefined
             }
           />
         ))

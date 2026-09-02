@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth";
 import { getSettings } from "@/db/queries";
 import { formatDateTime } from "@/lib/format";
+import { atLeast } from "@/lib/roles";
 
 export default async function BackupPage() {
   const [session, settings] = await Promise.all([requireAuth(), getSettings()]);
@@ -18,9 +19,15 @@ export default async function BackupPage() {
             ? formatDateTime(settings.lastBackupAt)
             : "chưa bao giờ"}
         </p>
-        <a href="/api/backup" className="btn" download>
-          Tải bản sao lưu
-        </a>
+        {atLeast(session.role, "owner") ? (
+          <a href="/api/backup" className="btn" download>
+            Tải bản sao lưu
+          </a>
+        ) : (
+          <p className="muted small">
+            Chỉ Owner mới tải được bản sao lưu.
+          </p>
+        )}
       </div>
 
       <div className="card">

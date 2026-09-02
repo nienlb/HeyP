@@ -346,6 +346,7 @@ export async function addPaymentAction(formData: FormData): Promise<void> {
 export async function deletePaymentAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!atLeast(session.role, "owner")) redirect("/orders");
 
   const orderId = Number(formData.get("orderId"));
   const paymentId = Number(formData.get("paymentId"));

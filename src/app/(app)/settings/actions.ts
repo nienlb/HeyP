@@ -7,12 +7,14 @@ import { saveSettings } from "@/db/queries";
 import { changeOwnPassword } from "@/db/users";
 import { SETTING_DEFAULTS } from "@/lib/settings";
 import { parseVnd } from "@/lib/parse-number";
+import { atLeast } from "@/lib/roles";
 
 /** Bỏ dấu ngăn nghìn kiểu Việt ("170.000" → 170000). */
 
 export async function saveSettingsAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!atLeast(session.role, "owner")) redirect("/settings");
 
   const sellRate = parseVnd(formData.get("sellRate"));
   const defaultMarginVnd = parseVnd(formData.get("defaultMarginVnd"));

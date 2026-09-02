@@ -9,6 +9,7 @@ import {
 import { deleteExpenseAction, deleteLedgerAction } from "./actions";
 import { AddExpenseSheet } from "./add-expense-sheet";
 import { AddTopupSheet } from "./add-topup-sheet";
+import { atLeast } from "@/lib/roles";
 
 function formatDate(d: Date): string {
   return new Date(d).toLocaleDateString("vi-VN");
@@ -26,6 +27,10 @@ export default async function FinancePage({
     listLedger(),
     listExpenses(),
   ]);
+
+  // Sáu thao tác tiền là Owner-only (v8-C). Đây CHỈ là phần ẩn nút cho gọn
+  // mắt — chặn thật nằm trong từng server action.
+  const laOwner = atLeast(session.role, "owner");
 
   return (
     <>
@@ -67,12 +72,14 @@ export default async function FinancePage({
                     <td>{e.orderId ? `#${e.orderId}` : "chung"}</td>
                     <td>{PAYMENT_METHOD_LABELS[e.method]}</td>
                     <td>
-                      <form action={deleteExpenseAction}>
-                        <input type="hidden" name="id" value={e.id} />
-                        <button type="submit" className="btn btn-sm btn-outline">
-                          Xoá
-                        </button>
-                      </form>
+                      {laOwner && (
+                        <form action={deleteExpenseAction}>
+                          <input type="hidden" name="id" value={e.id} />
+                          <button type="submit" className="btn btn-sm btn-outline">
+                            Xoá
+                          </button>
+                        </form>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -99,9 +106,11 @@ export default async function FinancePage({
           </p>
         )}
 
-        <div style={{ marginBottom: 12 }}>
-          <AddTopupSheet />
-        </div>
+        {laOwner && (
+          <div style={{ marginBottom: 12 }}>
+            <AddTopupSheet />
+          </div>
+        )}
 
         <details>
           <summary className="btn btn-outline btn-sm" style={{ display: "inline-block" }}>
@@ -147,7 +156,7 @@ export default async function FinancePage({
                       </td>
                       <td>{l.orderId ? `#${l.orderId}` : "—"}</td>
                       <td>
-                        {l.kind === "nap" && (
+                        {laOwner && l.kind === "nap" && (
                           <form action={deleteLedgerAction}>
                             <input type="hidden" name="id" value={l.id} />
                             <button type="submit" className="btn btn-sm btn-outline">
