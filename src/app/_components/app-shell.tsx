@@ -4,21 +4,25 @@ import { navItemsFor } from "./nav-config";
 import { Sidebar } from "./sidebar";
 import { MobileNav } from "./mobile-nav";
 import { ScreenHeader } from "./screen-header";
+import { ScreenTitle } from "./screen-title";
 import { getLogoUrl } from "@/lib/logo";
 
 export async function AppShell({
   username,
-  title,
-  backHref,
-  action,
   bottomBar,
   children,
 }: {
   username: string;
-  title: string;
+  /**
+   * @deprecated v8-B: tiêu đề lấy từ src/lib/screen-meta.ts. Prop này bị bỏ
+   * qua; xoá khỏi các trang ở task chuyển route group.
+   */
+  title?: string;
+  /** @deprecated v8-B: xem `title`. */
   backHref?: string;
+  /** @deprecated v8-B: xem `title`. Màn Tracking chuyển nút này vào thân trang. */
   action?: ReactNode;
-  /** Có thanh dính đáy thì tabbar ẩn — hai thứ chồng lên nhau. */
+  /** Có thanh dính đáy thì tabbar tự ẩn — hai thứ chồng lên nhau. */
   bottomBar?: ReactNode;
   children: ReactNode;
 }) {
@@ -31,9 +35,9 @@ export async function AppShell({
   return (
     <div className={`app-shell${bottomBar ? " has-bottom-bar" : ""}`}>
       <Sidebar username={username} logoUrl={logoUrl} nav={nav} />
-      <ScreenHeader title={title} backHref={backHref} action={action} />
+      <ScreenHeader />
       <main className="app-main">
-        <h1 className="screen-title">{title}</h1>
+        <ScreenTitle />
         {children}
       </main>
       {bottomBar ?? <MobileNav username={username} nav={nav} />}
