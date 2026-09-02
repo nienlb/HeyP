@@ -508,7 +508,30 @@ ALTER TABLE users ALTER COLUMN role SET DEFAULT 'member';
 UPDATE users SET role = 'owner' WHERE username = 'nien';
 ```
 
-- [ ] **Step 2: Xem trước sẽ đụng những dòng nào**
+- [ ] **Step 2: ĐĂNG KÝ migration vào journal — thiếu bước này nó sẽ bị BỎ QUA**
+
+drizzle-kit chỉ chạy những file có mục trong `drizzle/meta/_journal.json`.
+File viết tay không tự được thêm vào — `0004` va `0005` đều có mục riêng do
+người viết thêm bằng tay. Quên bước này thì `npm run db:migrate` báo
+**"migrations applied successfully"** mà thực ra không chạy gì cả, và DB vẫn
+y nguyên. Đã dính thật khi chạy kế hoạch này.
+
+Thêm một mục vào mảng `entries` của `drizzle/meta/_journal.json`:
+
+```json
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788330000000,
+      "tag": "0006_roles",
+      "breakpoints": true
+    }
+```
+
+`when` phải LỚN HƠN mục cuối đang có (`0005` = `1788246900000`), `idx` là số
+kế tiếp, `tag` phải khớp ĐÚNG tên file không kể đuôi `.sql`.
+
+- [ ] **Step 3: Xem trước sẽ đụng những dòng nào**
 
 Trước khi chạy, đọc hiện trạng:
 
@@ -527,7 +550,7 @@ node ./_r.mjs; rm -f ./_r.mjs
 
 Ghi lại bảng này vào phần mô tả commit. Kỳ vọng ngày 02/09: `nien`, `phuong`, `han`, cả ba `admin`, không ai `nhan_vien`.
 
-- [ ] **Step 3: Chạy migration**
+- [ ] **Step 4: Chạy migration**
 
 ```bash
 npm run db:migrate
@@ -535,18 +558,18 @@ npm run db:migrate
 
 Kỳ vọng: chạy xong không lỗi.
 
-- [ ] **Step 4: Kiểm kết quả trên DB thật**
+- [ ] **Step 5: Kiểm kết quả trên DB thật**
 
-Chạy lại đúng script ở Step 2.
+Chạy lại đúng script ở Step 3.
 
 Kỳ vọng: `nien` = `owner`; `phuong` và `han` = `admin`; **không ai** còn `nhan_vien`.
 
 Nếu `nien` vẫn là `admin` thì username trong DB khác với chuỗi trong migration — **dừng lại**, sửa migration cho khớp rồi chạy lại, đừng đi tiếp.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add drizzle/0006_roles.sql
+git add drizzle/0006_roles.sql drizzle/meta/_journal.json
 git commit -m "$(cat <<'EOF'
 quyền: migration đổi nhan_vien thành member, nâng nien lên owner
 

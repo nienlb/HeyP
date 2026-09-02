@@ -43,6 +43,13 @@
       "when": 1788246900000,
       "tag": "0005_transaction_timeout",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788330000000,
+      "tag": "0006_roles",
+      "breakpoints": true
     }
   ]
 }
