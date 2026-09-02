@@ -13,6 +13,7 @@ import {
   setUserRole,
 } from "@/db/users";
 import { guardLastOwner, guardSelfAction, parseRole } from "@/lib/roles";
+import { logActivity } from "@/db/activity";
 
 const PAGE = "/admin/users";
 
@@ -21,7 +22,7 @@ function back(error?: string): never {
 }
 
 export async function createUserAction(formData: FormData): Promise<void> {
-  await requireOwner();
+  const me = await requireOwner();
 
   const role = parseRole(String(formData.get("role") ?? ""));
   if (!role) back("Vai trò không hợp lệ.");
@@ -33,6 +34,11 @@ export async function createUserAction(formData: FormData): Promise<void> {
   });
   if (!result.ok) back(result.reason);
 
+  await logActivity({
+    actor: me.username,
+    action: "user.create",
+    detail: { username: String(formData.get("username") ?? ""), role },
+  });
   revalidatePath(PAGE);
   back();
 }
@@ -60,6 +66,14 @@ export async function userAdminAction(formData: FormData): Promise<void> {
       String(formData.get("password") ?? ""),
     );
     if (!result.ok) back(result.reason);
+    // Nhánh này thoát sớm — phải ghi riêng, nếu không nó lọt lưới.
+    // Chỉ ghi op, TUYỆT ĐỐI không ghi mật khẩu.
+    await logActivity({
+      actor: me.username,
+      action: "user.update",
+      entityId: targetId,
+      detail: { op: "password" },
+    });
     revalidatePath(PAGE);
     back();
   }
@@ -91,6 +105,12 @@ export async function userAdminAction(formData: FormData): Promise<void> {
     back("Thao tác không hợp lệ.");
   }
 
+  await logActivity({
+    actor: me.username,
+    action: "user.update",
+    entityId: targetId,
+    detail: { op },
+  });
   revalidatePath(PAGE);
   back();
 }

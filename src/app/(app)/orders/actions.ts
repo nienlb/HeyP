@@ -33,6 +33,7 @@ import {
 import type { ShipStatus } from "@/lib/order-gaps";
 import { parseDecimal, parseVnd } from "@/lib/parse-number";
 import { atLeast } from "@/lib/roles";
+import { logActivity } from "@/db/activity";
 
 export type CreateOrderState = { error?: string };
 
@@ -168,6 +169,11 @@ export async function createOrderAction(
   // Mọi ảnh (cấp đơn lẫn cấp món) đã được gắn BÊN TRONG transaction của
   // createOrder — xem NewOrderInput.orderPhotoIds và NewOrderItemInput.photoIds.
 
+  await logActivity({
+    actor: session.username,
+    action: "order.create",
+    entityId: orderId,
+  });
   revalidatePath("/orders");
   redirect(`/orders/${orderId}`);
 }
@@ -193,6 +199,12 @@ export async function changeStatusAction(
   const result = await changeOrderStatus(orderId, to, session.username);
   if (!result.ok) return { ok: false, reason: result.reason };
 
+  await logActivity({
+    actor: session.username,
+    action: "order.status",
+    entityId: orderId,
+    detail: { den: to },
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   return { ok: true };
@@ -219,6 +231,12 @@ export async function lineExceptionAction(formData: FormData): Promise<void> {
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
   }
 
+  await logActivity({
+    actor: session.username,
+    action: "order.update",
+    entityId: orderId,
+    detail: { truong: "ngoai_le_dong", itemId },
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/inventory");
   redirect(`/orders/${orderId}`);
@@ -239,6 +257,12 @@ export async function updateLineCostAction(formData: FormData): Promise<void> {
 
   if (!result.ok)
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  await logActivity({
+    actor: session.username,
+    action: "order.update",
+    entityId: orderId,
+    detail: { truong: "gia_von", itemId },
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}`);
@@ -259,6 +283,12 @@ export async function updateLineMarginAction(formData: FormData): Promise<void> 
 
   if (!result.ok)
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  await logActivity({
+    actor: session.username,
+    action: "order.update",
+    entityId: orderId,
+    detail: { truong: "loi", itemId },
+  });
   revalidatePath(`/orders/${orderId}`);
   redirect(`/orders/${orderId}`);
 }
@@ -284,6 +314,12 @@ export async function setShipFeeAction(formData: FormData): Promise<void> {
 
   if (!result.ok)
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  await logActivity({
+    actor: session.username,
+    action: "order.update",
+    entityId: orderId,
+    detail: { truong: "phi_ship" },
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}`);
@@ -338,6 +374,11 @@ export async function addPaymentAction(formData: FormData): Promise<void> {
 
   if (!result.ok)
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  await logActivity({
+    actor: session.username,
+    action: "payment.add",
+    entityId: orderId,
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}`);
@@ -354,6 +395,12 @@ export async function deletePaymentAction(formData: FormData): Promise<void> {
 
   if (!result.ok)
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  await logActivity({
+    actor: session.username,
+    action: "payment.delete",
+    entityId: orderId,
+    detail: { paymentId },
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}`);
@@ -372,6 +419,15 @@ export async function deletePhotoAction(
 
   const removed = await deletePhoto(photoId);
   if (!removed) return { ok: false };
+
+  await logActivity({
+    actor: session.username,
+    action: "order.photo_delete",
+    // deletePhoto chỉ trả filePath, không trả orderId — để null, dòng nhật
+    // ký vẫn tra được theo photoId trong detail.
+    entityId: null,
+    detail: { photoId },
+  });
 
   try {
     await deletePhotoFile(basename(removed.filePath));
@@ -405,6 +461,11 @@ export async function deleteOrderAction(formData: FormData): Promise<void> {
     redirect(`/orders/${orderId}?tab=anh&err=${encodeURIComponent(result.reason)}`);
   }
 
+  await logActivity({
+    actor: session.username,
+    action: "order.delete",
+    entityId: orderId,
+  });
   revalidatePath("/orders");
   redirect("/orders");
 }
@@ -463,8 +524,17 @@ export async function bulkAdvanceAction(ids: number[]): Promise<BulkResult> {
     }
 
     const result = await changeOrderStatus(id, to, session.username);
-    if (result.ok) ok += 1;
-    else failed.push({ id, reason: result.reason });
+    if (result.ok) {
+      ok += 1;
+      // Một dòng cho MỖI đơn: truy vết phải trả lời được "đơn này ai đụng",
+      // mà một dòng gộp cho cả lô thì không tra ngược theo entity_id được.
+      await logActivity({
+        actor: session.username,
+        action: "order.status",
+        entityId: id,
+        detail: { hangLoat: true, den: to },
+      });
+    } else failed.push({ id, reason: result.reason });
   }
 
   revalidatePath("/orders");
@@ -499,6 +569,11 @@ export async function addItemAction(formData: FormData): Promise<void> {
   if (!result.ok) {
     redirect(`/orders/${orderId}?tab=mon&err=${encodeURIComponent(result.reason)}`);
   }
+  await logActivity({
+    actor: session.username,
+    action: "order.item_add",
+    entityId: orderId,
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}?tab=mon`);
@@ -516,6 +591,12 @@ export async function removeItemAction(formData: FormData): Promise<void> {
   if (!result.ok) {
     redirect(`/orders/${orderId}?tab=mon&err=${encodeURIComponent(result.reason)}`);
   }
+  await logActivity({
+    actor: session.username,
+    action: "order.item_remove",
+    entityId: orderId,
+    detail: { itemId },
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}?tab=mon`);
@@ -545,6 +626,12 @@ export async function setOrderCustomerAction(
   if (!result.ok) {
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
   }
+  await logActivity({
+    actor: session.username,
+    action: "order.update",
+    entityId: orderId,
+    detail: { truong: "khach", customerId },
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   revalidatePath("/customers");
@@ -568,6 +655,12 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
   if (!result.ok) {
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
   }
+  await logActivity({
+    actor: session.username,
+    action: "order.update",
+    entityId: orderId,
+    detail: { truong: "thong_tin_khach", customerId },
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/customers");
   redirect(`/orders/${orderId}`);
@@ -594,6 +687,12 @@ export async function updateOrderMetaAction(formData: FormData): Promise<void> {
   if (!result.ok) {
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
   }
+  await logActivity({
+    actor: session.username,
+    action: "order.update",
+    entityId: orderId,
+    detail: { truong: "ghi_chu_ty_gia" },
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}`);
@@ -625,6 +724,12 @@ export async function updateItemAction(formData: FormData): Promise<void> {
   if (!result.ok) {
     redirect(`/orders/${orderId}?tab=mon&err=${encodeURIComponent(result.reason)}`);
   }
+  await logActivity({
+    actor: session.username,
+    action: "order.update",
+    entityId: orderId,
+    detail: { truong: "mon", itemId },
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}?tab=mon`);
@@ -648,6 +753,12 @@ export async function setQuotedTotalAction(formData: FormData): Promise<void> {
   if (!result.ok) {
     redirect(`/orders/${orderId}?tab=tien&err=${encodeURIComponent(result.reason)}`);
   }
+  await logActivity({
+    actor: session.username,
+    action: "order.update",
+    entityId: orderId,
+    detail: { truong: "tong_chot" },
+  });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   redirect(`/orders/${orderId}?tab=tien`);

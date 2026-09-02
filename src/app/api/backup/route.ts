@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { atLeast } from "@/lib/roles";
+import { logActivity } from "@/db/activity";
 import { raw } from "@/db/raw";
 import { touchBackupAt } from "@/db/queries";
 
@@ -46,6 +47,11 @@ export async function GET() {
   }
 
   await touchBackupAt();
+  await logActivity({
+    actor: session.username,
+    action: "backup.download",
+    detail: { soBang: Object.keys(tables).length },
+  });
 
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");

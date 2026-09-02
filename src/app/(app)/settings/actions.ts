@@ -8,6 +8,7 @@ import { changeOwnPassword } from "@/db/users";
 import { SETTING_DEFAULTS } from "@/lib/settings";
 import { parseVnd } from "@/lib/parse-number";
 import { atLeast } from "@/lib/roles";
+import { logActivity } from "@/db/activity";
 
 /** Bỏ dấu ngăn nghìn kiểu Việt ("170.000" → 170000). */
 
@@ -27,6 +28,11 @@ export async function saveSettingsAction(formData: FormData): Promise<void> {
         : SETTING_DEFAULTS.defaultMarginVnd,
   });
 
+  await logActivity({
+    actor: session.username,
+    action: "settings.save",
+    detail: { sellRate, defaultMarginVnd },
+  });
   revalidatePath("/settings");
   redirect("/settings?ok=1");
 }

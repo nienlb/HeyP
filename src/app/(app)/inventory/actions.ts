@@ -10,6 +10,7 @@ import {
   sellFromStock,
 } from "@/db/queries";
 import { parseDecimal, parseVnd } from "@/lib/parse-number";
+import { logActivity } from "@/db/activity";
 
 export type SellState = { error?: string };
 
@@ -41,6 +42,12 @@ export async function sellFromStockAction(
 
   if (!result.ok) return { error: result.reason };
 
+  await logActivity({
+    actor: session.username,
+    action: "inventory.sell",
+    entityId: result.orderId,
+    detail: { soLuong: quantity, giaBan: salePriceVnd },
+  });
   revalidatePath("/inventory");
   revalidatePath("/orders");
   redirect(`/orders/${result.orderId}`);
@@ -97,6 +104,12 @@ export async function stockInAction(
   );
   if (!moved.ok) return { error: moved.reason };
 
+  await logActivity({
+    actor: session.username,
+    action: "inventory.stock_in",
+    entityId: orderId,
+    detail: { ten: name, soLuong: quantity },
+  });
   revalidatePath("/inventory");
   revalidatePath("/orders");
   return {};

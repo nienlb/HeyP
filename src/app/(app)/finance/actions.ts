@@ -17,6 +17,7 @@ import {
 } from "@/lib/expenses";
 import { parseDecimal, parseVnd } from "@/lib/parse-number";
 import { atLeast } from "@/lib/roles";
+import { logActivity } from "@/db/activity";
 
 function parseDate(v: FormDataEntryValue | null): Date {
   const s = String(v ?? "").trim();
@@ -38,6 +39,11 @@ export async function addTopupAction(formData: FormData): Promise<void> {
 
   if (!result.ok)
     redirect(`/finance?err=${encodeURIComponent(result.reason)}`);
+  await logActivity({
+    actor: session.username,
+    action: "cny.topup",
+    detail: { cny: parseDecimal(formData.get("cny")), vndPaid: parseVnd(formData.get("vndPaid")) },
+  });
   revalidatePath("/finance");
   redirect("/finance");
 }
@@ -47,9 +53,15 @@ export async function deleteLedgerAction(formData: FormData): Promise<void> {
   if (!session) redirect("/login");
   if (!atLeast(session.role, "owner")) redirect("/finance");
 
-  const result = await deleteLedgerEntry(Number(formData.get("id")));
+  const ledgerId = Number(formData.get("id"));
+  const result = await deleteLedgerEntry(ledgerId);
   if (!result.ok)
     redirect(`/finance?err=${encodeURIComponent(result.reason)}`);
+  await logActivity({
+    actor: session.username,
+    action: "cny.delete",
+    entityId: ledgerId,
+  });
   revalidatePath("/finance");
   redirect("/finance");
 }
@@ -81,6 +93,11 @@ export async function addExpenseAction(formData: FormData): Promise<void> {
 
   if (!result.ok)
     redirect(`/finance?err=${encodeURIComponent(result.reason)}`);
+  await logActivity({
+    actor: session.username,
+    action: "expense.add",
+    detail: { soTien: parseVnd(formData.get("amountVnd")), nhom: category },
+  });
   revalidatePath("/finance");
   redirect("/finance");
 }
@@ -90,7 +107,13 @@ export async function deleteExpenseAction(formData: FormData): Promise<void> {
   if (!session) redirect("/login");
   if (!atLeast(session.role, "owner")) redirect("/finance");
 
-  await deleteExpense(Number(formData.get("id")));
+  const expenseId = Number(formData.get("id"));
+  await deleteExpense(expenseId);
+  await logActivity({
+    actor: session.username,
+    action: "expense.delete",
+    entityId: expenseId,
+  });
   revalidatePath("/finance");
   redirect("/finance");
 }

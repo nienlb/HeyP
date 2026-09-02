@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { deleteCustomerRow } from "@/db/deletion";
 import { atLeast } from "@/lib/roles";
+import { logActivity } from "@/db/activity";
 
 export async function deleteCustomerAction(formData: FormData): Promise<void> {
   const session = await getSession();
@@ -19,6 +20,11 @@ export async function deleteCustomerAction(formData: FormData): Promise<void> {
     redirect(`/customers?err=${encodeURIComponent(result.reason)}`);
   }
 
+  await logActivity({
+    actor: session.username,
+    action: "customer.delete",
+    entityId: customerId,
+  });
   revalidatePath("/customers");
   redirect("/customers");
 }
