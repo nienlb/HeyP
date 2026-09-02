@@ -15,7 +15,7 @@
  * Script này chạy NGAY lúc trình duyệt đọc tới nó — trước khi React kịp vào
  * cuộc — nên nó thắng cuộc đua. Phải là <script> thô nhúng thẳng, KHÔNG dùng
  * useEffect: React không hydrate nội dung fallback của Suspense, mọi hook đặt
- * ở đây đều câm (chính LoadingScreen đã phải học điều này bằng khối
+ * ở đây đều câm (chính ContentSkeleton phải học điều này bằng khối
  * .recovery-static).
  *
  * MutationObserver là cho trường hợp trang render chậm: lúc đó fallback đẩy

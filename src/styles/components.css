@@ -232,41 +232,6 @@
   border-top-color: var(--on-brand);
 }
 
-/* Màn chờ phủ toàn khung. `position: fixed` chứ không phải khối trong luồng:
-   nó thay thế cả màn hình cũ, kể cả tabbar, nên không được để nội dung cũ
-   thò ra dưới nó và làm người dùng tưởng còn bấm được. */
-.loading-screen {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: grid;
-  place-items: center;
-  padding: var(--sp-5);
-  padding-top: calc(var(--sp-5) + var(--sat));
-  padding-bottom: calc(var(--sp-5) + var(--sab));
-  background: var(--bg);
-  /* Hiện trễ: điều hướng bình thường xong trong ~0,3s, component đã tháo
-     trước khi animation kịp chạy nên người dùng KHÔNG thấy spinner nháy.
-     Chỉ lần tải thật sự chậm mới lộ ra. */
-  opacity: 0;
-  animation: heyp-appear 0.2s ease-out 0.25s forwards;
-}
-
-.loading-screen-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-4);
-  max-width: 380px;
-  width: 100%;
-}
-
-.loading-text {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--fs-3);
-}
-
 .error-screen {
   min-height: 100dvh;
   display: grid;
@@ -352,14 +317,10 @@
     animation: heyp-appear 1s ease-in-out infinite alternate;
     opacity: 0.35;
   }
-  .loading-screen {
-    opacity: 1;
-    animation: none;
-  }
 }
 
 /* Cảnh báo cho lần mở app đầu tiên, khi React chưa hydrate nên watchdog bằng
-   JS không chạy được (xem chú thích trong loading-screen.tsx).
+   JS không chạy được (xem chú thích trong content-skeleton.tsx).
    ĐỘ TRỄ 8s PHẢI KHỚP SLOW_AFTER_MS trong src/lib/ui-timeouts.ts — CSS không
    đọc được hằng số TS, nên hai chỗ này buộc phải sửa cùng nhau. */
 .recovery-static {
@@ -524,5 +485,57 @@
 @media (min-width: 900px) {
   .kpi-value {
     font-size: var(--fs-6);
+  }
+}
+
+/* ---------- Khung xương vùng nội dung (v8-B) ----------
+   Hiện NGAY, không có độ trễ. Xem chú thích trong content-skeleton.tsx. */
+@keyframes heyp-skel {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+.skel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.skel-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.skel-line {
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  animation: heyp-skel 1.4s ease-in-out infinite;
+}
+.skel-w45 {
+  width: 45%;
+}
+.skel-w60 {
+  width: 60%;
+}
+.skel-w75 {
+  width: 75%;
+}
+.skel-w90 {
+  width: 90%;
+}
+/* Ai tắt hiệu ứng chuyển động thì không nhấp nháy, nhưng vẫn phải THẤY đây
+   là chỗ trống đang chờ. */
+@media (prefers-reduced-motion: reduce) {
+  .skel-line {
+    animation: none;
+    opacity: 0.7;
   }
 }

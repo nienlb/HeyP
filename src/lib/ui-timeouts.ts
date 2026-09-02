@@ -20,6 +20,3 @@ export const SLOW_AFTER_MS = 8000;
  * không được kẹt theo cái mà nó đang chẩn đoán.
  */
 export const PROBE_TIMEOUT_MS = 5000;
-
-/** Spinner chỉ hiện sau ngưỡng này, để điều hướng nhanh không bị nháy. */
-export const SPINNER_DELAY_MS = 250;

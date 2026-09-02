@@ -121,7 +121,10 @@
   /* Chừa chỗ cho tabbar; màn có thanh dính đáy ghi đè bên dưới. */
   padding-bottom: calc(var(--tabbar-h) + var(--sab) + var(--sp-5));
 }
-.app-shell.has-bottom-bar .app-main {
+/* Prop `bottomBar` biến mất cùng AppShell ở v8-B — nhận diện thanh dính đáy
+   bằng :has() thay cho class. Lợi thêm: ở chế độ chọn hàng loạt của /orders,
+   thanh xuất hiện động và phần đệm đáy tự cập nhật theo. */
+.app-shell:has(.sticky-bar) .app-main {
   padding-bottom: calc(84px + var(--sab) + var(--sp-4));
 }
 .screen-title {
@@ -357,7 +360,7 @@
     padding: var(--sp-5);
     padding-bottom: var(--sp-7);
   }
-  .app-shell.has-bottom-bar .app-main {
+  .app-shell:has(.sticky-bar) .app-main {
     /* Desktop không có thanh dính đáy nữa — khối tiền thành cột phải
        (xem .with-rail bên dưới), nên không cần chừa 96px ở đáy. */
     padding-bottom: var(--sp-7);
