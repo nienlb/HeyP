@@ -4,6 +4,7 @@ import {
   applyStockIn,
   applyStockOut,
   bomCostBasis,
+  stockKey,
   saleProfit,
   unitGoodsCostVnd,
   weightedAvgCost,
@@ -75,4 +76,62 @@ test("luồng khách bom: giá vốn lô = tiền hàng + ship − cọc", () =>
   const after = applyStockIn({ quantity: 0, avgCost: 0 }, 2, perUnit);
   assert.equal(after.quantity, 2);
   assert.equal(after.avgCost, 270000);
+});
+
+// ---------- stockKey (v9-A) ----------
+
+test("stockKey: mẫu trong danh mục dùng nhánh p:", () => {
+  assert.equal(
+    stockKey({ productId: 7, size: "38", color: "đen" }),
+    "p:7|38|đen",
+  );
+});
+
+test("stockKey: cùng mẫu cùng size cùng màu luôn ra cùng khoá", () => {
+  const a = stockKey({ productId: 7, size: "38", color: "Đen" });
+  const b = stockKey({ productId: 7, size: " 38 ", color: "đen" });
+  assert.equal(a, b);
+});
+
+test("stockKey: khác size ra khoá khác — đây là điểm chính của v9-A", () => {
+  assert.notEqual(
+    stockKey({ productId: 7, size: "38", color: "đen" }),
+    stockKey({ productId: 7, size: "42", color: "đen" }),
+  );
+});
+
+test("stockKey: khác màu ra khoá khác", () => {
+  assert.notEqual(
+    stockKey({ productId: 7, size: "38", color: "đen" }),
+    stockKey({ productId: 7, size: "38", color: "trắng" }),
+  );
+});
+
+test("stockKey: size/màu trống vẫn hợp lệ", () => {
+  assert.equal(stockKey({ productId: 7 }), "p:7||");
+});
+
+test("stockKey: chưa gắn danh mục thì dùng nhánh n: theo tên", () => {
+  assert.equal(stockKey({ name: "Giày ABC" }), "n:giày abc");
+});
+
+test("stockKey: nhánh n: bỏ qua khoảng trắng thừa và hoa thường", () => {
+  assert.equal(
+    stockKey({ name: "  Giày   ABC " }),
+    stockKey({ name: "giày abc" }),
+  );
+});
+
+test("stockKey: productId = 0 hoặc null đều rơi về nhánh n:", () => {
+  assert.equal(stockKey({ productId: null, name: "Dép" }), "n:dép");
+  assert.equal(stockKey({ productId: 0, name: "Dép" }), "n:dép");
+});
+
+test("stockKey: nhánh n: KHÔNG tách theo size — giữ đúng cách gom cũ", () => {
+  // Dòng tồn cũ không biết size. Nếu nhánh n: cũng tách size thì migration
+  // backfill sẽ sinh khoá khác với khoá lúc chạy, và tồn kho nhân đôi.
+  assert.equal(
+    stockKey({ name: "Giày ABC", size: "38" }),
+    stockKey({ name: "Giày ABC", size: "42" }),
+  );
 });

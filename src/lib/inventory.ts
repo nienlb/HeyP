@@ -118,3 +118,30 @@ export function applyStockOut(
     avgCost: current.avgCost,
   };
 }
+
+/**
+ * Khoá gom tồn kho (v9-A).
+ *
+ * VÌ SAO LÀ MỘT CỘT CHUỖI, không phải khoá ghép (product_id, size, color):
+ * dòng tồn cũ có product_id = NULL, mà trong SQL `NULL = NULL` là SAI. Khoá
+ * ghép buộc mọi chỗ tra phải viết `IS NOT DISTINCT FROM`; chỉ cần một chỗ
+ * viết `=` là dòng cũ không bao giờ được tìm thấy, _addStock đẻ ra dòng mới
+ * thay vì cộng dồn, và tồn kho nhân đôi âm thầm — không lỗi nào nổ.
+ *
+ * Nhánh `n:` CỐ Ý không tách theo size: nó phải khớp đúng cách gom trước
+ * v9-A để migration backfill không làm số tồn nhúc nhích.
+ */
+export function stockKey(input: {
+  productId?: number | null;
+  name?: string | null;
+  size?: string | null;
+  color?: string | null;
+}): string {
+  const norm = (s: string | null | undefined) =>
+    (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
+  if (input.productId != null && input.productId > 0)
+    return `p:${input.productId}|${norm(input.size)}|${norm(input.color)}`;
+
+  return `n:${norm(input.name)}`;
+}
