@@ -497,15 +497,17 @@ export async function addPhoto(input: {
   label: PhotoLabel;
   orderId?: number | null;
   inventoryId?: number | null;
+  productId?: number | null;
 }): Promise<number> {
   const row = await raw.get<{ id: number }>(
-    `INSERT INTO photos(file_path, label, order_id, inventory_id)
-     VALUES(?, ?, ?, ?) RETURNING id`,
+    `INSERT INTO photos(file_path, label, order_id, inventory_id, product_id)
+     VALUES(?, ?, ?, ?, ?) RETURNING id`,
     [
       input.filePath,
       input.label,
       input.orderId ?? null,
       input.inventoryId ?? null,
+      input.productId ?? null,
     ],
   );
   return row!.id;
@@ -527,6 +529,13 @@ export async function getPhoto(
  *
  * Chỉ xoá bản ghi DB, theo đúng khuôn của addPhoto (không đụng file vật lý)
  * — nơi gọi có quyền I/O (route/action) tự xoá file bằng filePath trả về.
+ */
+/**
+ * Xoá một ảnh CHƯA thuộc đơn nào. Điều kiện `order_id IS NULL` là hàng rào:
+ * ảnh đã gắn đơn chỉ được xoá qua luồng xoá đơn.
+ *
+ * v9-A: ảnh danh mục sản phẩm (`product_id` có giá trị, `order_id` NULL) CỐ Ý
+ * đi lọt qua đây — đó là đường người dùng gỡ ảnh khỏi một mẫu.
  */
 export async function deletePhoto(
   id: number,
@@ -2463,6 +2472,10 @@ export async function getAssetSnapshot() {
  *
  * `olderThanHours` là khoảng ân hạn: ảnh vừa tải lên của một form ĐANG mở
  * cũng chưa gắn đơn, xoá ngay là cướp ảnh khỏi tay người đang nhập liệu.
+ *
+ * TỪ v9-A: `product_id IS NULL` là điều kiện BẮT BUỘC. Ảnh của danh mục sản
+ * phẩm không thuộc đơn nào, không thuộc món nào, không thuộc kho nào — thiếu
+ * dòng đó thì job này xoá sạch ảnh danh mục sau đúng 24h, âm thầm, không lỗi.
  */
 export async function listOrphanPhotos(
   olderThanHours = 24,
@@ -2472,6 +2485,7 @@ export async function listOrphanPhotos(
       WHERE order_id IS NULL
         AND order_item_id IS NULL
         AND inventory_id IS NULL
+        AND product_id IS NULL
         AND uploaded_at < ${NOW_EPOCH_SQL} - ?`,
     [Math.round(olderThanHours * 3600)],
   );
