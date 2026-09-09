@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { Sheet } from "@/app/_components/sheet";
 import { ItemPhotos, type ItemPhoto } from "@/app/_components/item-photos";
 import { groupVnd } from "@/lib/parse-number";
+import { parseList } from "@/lib/product-catalog";
 import {
   deleteProductAction,
   saveProductAction,
@@ -27,12 +28,18 @@ function ChipInput({
   const [draft, setDraft] = useState("");
 
   function add() {
-    const v = draft.trim().replace(/\s+/g, " ");
-    if (v === "") return;
+    // Đi qua parseList — cùng hàm mà DB dùng lúc đọc lại. Dán "36,38,42" thì
+    // ra BA chip; nếu đẩy nguyên văn thành một chip chứa dấu phẩy thì lúc đọc
+    // lại parseList sẽ tách nó ra và dãy size âm thầm đổi khác lúc nhập.
+    const added = parseList(draft);
+    if (added.length === 0) return;
     // So không phân biệt hoa thường, giống parseList — nếu không thì "Đen" và
     // "đen" cùng tồn tại rồi lưới chip hiện hai cái y hệt nhau.
-    if (!value.some((x) => x.toLowerCase() === v.toLowerCase()))
-      onChange([...value, v]);
+    const next = [...value];
+    for (const v of added) {
+      if (!next.some((x) => x.toLowerCase() === v.toLowerCase())) next.push(v);
+    }
+    onChange(next);
     setDraft("");
   }
 
