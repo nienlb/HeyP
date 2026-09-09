@@ -102,6 +102,27 @@ export const orders = pgTable("orders", {
     .default("unknown"),
 });
 
+// 2b) Danh mục sản phẩm (v9-A) — sổ tay tra nhanh lúc tạo đơn.
+// `sizes`/`colors` là chuỗi phân cách phẩy, đọc/ghi qua src/lib/product-catalog.ts.
+export const products = pgTable(
+  "products",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    sizes: text("sizes").notNull().default(""),
+    colors: text("colors").notNull().default(""),
+    defaultSellVnd: integer("default_sell_vnd").notNull().default(0),
+    defaultUnitPriceCny: doublePrecision("default_unit_price_cny")
+      .notNull()
+      .default(0),
+    productUrl: text("product_url"),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: epochSeconds("updated_at").notNull().default(NOW_EPOCH),
+  },
+  (t) => [index("products_active_idx").on(t.active)],
+);
+
 // 3) Sản phẩm trong đơn
 export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
@@ -111,6 +132,13 @@ export const orderItems = pgTable("order_items", {
   productUrl: text("product_url"),
   name: text("name").notNull(),
   attributes: text("attributes"),
+  // v9-A. `attributes` GIỮ NGUYÊN bên trên — không backfill, không xoá: đơn cũ
+  // vẫn phải đọc được đúng chữ người dùng đã gõ. Xem displayVariant().
+  productId: integer("product_id").references(() => products.id, {
+    onDelete: "set null",
+  }),
+  size: text("size").notNull().default(""),
+  color: text("color").notNull().default(""),
   quantity: integer("quantity").notNull().default(1),
   unitPriceCny: doublePrecision("unit_price_cny").notNull().default(0),
   cnOrderCode: text("cn_order_code"),
@@ -172,6 +200,9 @@ export const photos = pgTable("photos", {
     onDelete: "cascade",
   }),
   inventoryId: integer("inventory_id").references(() => inventory.id, {
+    onDelete: "cascade",
+  }),
+  productId: integer("product_id").references(() => products.id, {
     onDelete: "cascade",
   }),
   uploadedAt: epochSeconds("uploaded_at").notNull().default(NOW_EPOCH),
