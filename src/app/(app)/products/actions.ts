@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { getSession, requireAdmin } from "@/lib/auth";
 import {
-  copyProductPhotos,
   createProduct,
   deleteProduct,
   findProductsByName,
@@ -11,6 +10,7 @@ import {
   updateProduct,
   type ProductInput,
 } from "@/db/products";
+import { copyProductPhotos } from "@/db/product-photos";
 import { parseList } from "@/lib/product-catalog";
 import { parseDecimal, parseVnd } from "@/lib/parse-number";
 import { logActivity } from "@/db/activity";
