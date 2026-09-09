@@ -3065,12 +3065,16 @@ WITH thu AS (
     ('p:7|38|đen', 'active', 3, 300000)
   ) AS t(stock_key, source, qty, cost)
 )
-SELECT count(*)::int AS so_dong,
+SELECT stock_key,
        sum(qty)::int AS tong_sl,
        round(sum(qty::numeric * cost) / sum(qty))::int AS binh_quan
   FROM thu GROUP BY stock_key, source;
--- Kỳ vọng: so_dong = 1, tong_sl = 4, binh_quan = 350000
+-- Kỳ vọng: trả về ĐÚNG MỘT DÒNG, tong_sl = 4, binh_quan = 350000
 --   (1×500000 + 3×300000) / 4 = 350000 — khớp weightedAvgCost().
+--
+-- ĐỪNG dùng count(*) để đếm số dòng tồn ở đây: sau GROUP BY, count(*) đếm số
+-- dòng NHẬP trong một nhóm (= 2), không phải số nhóm. Số dòng tồn là số DÒNG
+-- KẾT QUẢ mà câu này trả về.
 ```
 
 Ghi kết quả hai phép kiểm này vào phần mô tả commit. Sửa `_addStock` lần sau thì chạy lại đúng hai câu này.

@@ -5,6 +5,7 @@ import { getSession, requireAdmin } from "@/lib/auth";
 import {
   copyProductPhotos,
   createProduct,
+  deleteProduct,
   findProductsByName,
   getProduct,
   updateProduct,
@@ -89,11 +90,9 @@ export async function saveProductAction(
  * Xoá một mẫu. Admin trở lên — `requireAdmin()` chứ không so `role === ...`.
  * Ẩn nút ở giao diện KHÔNG phải là chặn quyền; chặn thật nằm ở đây.
  *
- * Chữ ký hợp với `useActionState` ngay từ chặng 1 để chặng 2 chỉ phải đổi
- * THÂN hàm, không đổi kiểu — đổi kiểu giữa chừng thì mọi nơi gọi phải sửa theo.
- *
- * CHẶNG 1 CỐ Ý CHƯA GỌI `deleteProduct`: hàm đó truy vấn `inventory.product_id`,
- * cột chỉ có từ chặng 2. Tạm ẩn mẫu thay vì xoá cứng.
+ * Guard "còn tồn > 0" nằm trong `deleteProduct`, TRONG transaction sau
+ * `SELECT … FOR UPDATE` — kiểm ngoài transaction có kẽ hở: giữa lúc kiểm và
+ * lúc xoá, người kia có thể vừa nhập kho cho đúng mẫu đó.
  */
 export async function deleteProductAction(
   _prev: DeleteProductState,
@@ -103,21 +102,16 @@ export async function deleteProductAction(
   const id = parseVnd(formData.get("id"));
   if (!id) return { error: "Thiếu mã sản phẩm." };
 
-  await deactivateProduct(id);
+  const res = await deleteProduct(id);
+  if (!res.ok) return { error: res.reason };
+
   await logActivity({
     actor: session.username,
     action: "product.delete",
     entityId: id,
-    detail: { op: "deactivate" },
   });
   revalidatePath("/products");
   return { ok: true };
-}
-
-/** Tạm ẩn thay cho xoá cứng ở chặng 1. Chặng 2 thay bằng deleteProduct(). */
-async function deactivateProduct(id: number): Promise<void> {
-  const { raw } = await import("@/db/raw");
-  await raw.run("UPDATE products SET active = false WHERE id = ?", [id]);
 }
 
 /**

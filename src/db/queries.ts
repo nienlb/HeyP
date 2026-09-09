@@ -70,6 +70,7 @@ import {
   bomCostBasis,
   unitGoodsCostVnd,
   type InventorySource,
+  stockKey,
 } from "@/lib/inventory";
 import { config } from "@/lib/config";
 import { ageInDays } from "@/lib/format";
@@ -741,19 +742,39 @@ type OrderItemRow = {
   quantity: number;
   unit_price_cny: number;
   line_status: string;
+  product_id: number | null;
+  size: string;
+  color: string;
 };
 
-/** Cộng hàng vào kho, gộp theo (tên, nguồn) với giá vốn bình quân. */
+/**
+ * Cộng hàng vào kho, gộp theo (stock_key, nguồn) với giá vốn bình quân.
+ *
+ * v9-A: khoá đổi từ `product_name` sang `stock_key` để phân biệt size/màu.
+ * Công thức bình quân gia quyền (applyStockIn) KHÔNG đổi một chữ.
+ */
 async function _addStock(
   x: Exec,
-  name: string,
+  item: {
+    name: string;
+    productId: number | null;
+    size: string;
+    color: string;
+  },
   source: InventorySource,
   qty: number,
   unitCost: number,
 ): Promise<void> {
+  const key = stockKey({
+    productId: item.productId,
+    name: item.name,
+    size: item.size,
+    color: item.color,
+  });
+
   const row = await x.get<{ id: number; quantity: number; avg_cost: number }>(
-    "SELECT id, quantity, avg_cost FROM inventory WHERE product_name = ? AND source = ?",
-    [name, source],
+    "SELECT id, quantity, avg_cost FROM inventory WHERE stock_key = ? AND source = ?",
+    [key, source],
   );
   if (row) {
     const after = applyStockIn(
@@ -768,9 +789,20 @@ async function _addStock(
     );
   } else {
     await x.run(
-      `INSERT INTO inventory(product_name, quantity, avg_cost, source, last_imported_at)
-       VALUES (?, ?, ?, ?, ${NOW_EPOCH_SQL})`,
-      [name, qty, unitCost, source],
+      `INSERT INTO inventory
+         (product_name, quantity, avg_cost, source, last_imported_at,
+          product_id, size, color, stock_key)
+       VALUES (?, ?, ?, ?, ${NOW_EPOCH_SQL}, ?, ?, ?, ?)`,
+      [
+        item.name,
+        qty,
+        unitCost,
+        source,
+        item.productId,
+        item.size,
+        item.color,
+        key,
+      ],
     );
   }
 }
@@ -965,7 +997,10 @@ export async function changeOrderStatus(
     );
 
     const normalItems = await x.all<OrderItemRow>(
-      "SELECT id, name, quantity, unit_price_cny, line_status FROM order_items WHERE order_id = ? AND line_status = 'normal'",
+      `SELECT id, name, quantity, unit_price_cny, line_status,
+              product_id, size, color
+         FROM order_items
+        WHERE order_id = ? AND line_status = 'normal'`,
       [id],
     );
 
@@ -974,7 +1009,12 @@ export async function changeOrderStatus(
       for (const it of normalItems) {
         await _addStock(
           x,
-          it.name,
+          {
+            name: it.name,
+            productId: it.product_id,
+            size: it.size,
+            color: it.color,
+          },
           "active",
           it.quantity,
           unitGoodsCostVnd(it.unit_price_cny, order.exchange_rate),
@@ -989,7 +1029,18 @@ export async function changeOrderStatus(
       const totalQty = normalItems.reduce((s, it) => s + it.quantity, 0);
       const perUnit = totalQty > 0 ? Math.round(basis / totalQty) : basis;
       for (const it of normalItems) {
-        await _addStock(x, it.name, "bom", it.quantity, perUnit);
+        await _addStock(
+          x,
+          {
+            name: it.name,
+            productId: it.product_id,
+            size: it.size,
+            color: it.color,
+          },
+          "bom",
+          it.quantity,
+          perUnit,
+        );
       }
       await x.run(
         `UPDATE customers
@@ -1904,7 +1955,9 @@ async function _returnLineToStock(
   source: Extract<InventorySource, "supplier_defect" | "exchange_return">,
 ): Promise<LineActionResult> {
   const item = await raw.get<OrderItemRow>(
-    "SELECT id, name, quantity, unit_price_cny, line_status FROM order_items WHERE id = ? AND order_id = ?",
+    `SELECT id, name, quantity, unit_price_cny, line_status,
+            product_id, size, color
+       FROM order_items WHERE id = ? AND order_id = ?`,
     [itemId, orderId],
   );
   if (!item) return { ok: false, reason: "Không tìm thấy dòng sản phẩm" };
@@ -1926,7 +1979,12 @@ async function _returnLineToStock(
     ]);
     await _addStock(
       x,
-      item.name,
+      {
+        name: item.name,
+        productId: item.product_id,
+        size: item.size,
+        color: item.color,
+      },
       source,
       item.quantity,
       unitGoodsCostVnd(item.unit_price_cny, order.exchange_rate),
