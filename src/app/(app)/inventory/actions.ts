@@ -72,6 +72,10 @@ export async function stockInAction(
   if (!session) return { error: "Phiên đăng nhập đã hết hạn." };
 
   const name = String(formData.get("productName") ?? "").trim();
+  const productIdRaw = parseVnd(formData.get("productId"));
+  const productId = productIdRaw > 0 ? productIdRaw : null;
+  const size = String(formData.get("size") ?? "").trim();
+  const color = String(formData.get("color") ?? "").trim();
   const quantity = parseVnd(formData.get("quantity"));
   const unitPriceCny = parseDecimal(formData.get("unitPriceCny"));
   const rateRaw = parseVnd(formData.get("exchangeRate"));
@@ -92,7 +96,9 @@ export async function stockInAction(
     shipStatus: "unknown",
     deposit: 0,
     note: "Nhập kho chủ động",
-    items: [{ name, quantity, unitPriceCny, marginVnd: 0 }],
+    items: [
+      { name, quantity, unitPriceCny, marginVnd: 0, productId, size, color },
+    ],
     changedBy: session.username,
   });
 
@@ -108,7 +114,7 @@ export async function stockInAction(
     actor: session.username,
     action: "inventory.stock_in",
     entityId: orderId,
-    detail: { ten: name, soLuong: quantity },
+    detail: { ten: name, soLuong: quantity, size, mau: color },
   });
   revalidatePath("/inventory");
   revalidatePath("/orders");
