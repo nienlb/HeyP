@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { Sheet } from "@/app/_components/sheet";
 import { cnyFromSellPrice } from "@/lib/line-pricing";
-import { parseVnd } from "@/lib/parse-number";
+import { parseDecimal, parseVnd } from "@/lib/parse-number";
+import { splitLegacyAttributes } from "@/lib/product-catalog";
+import { quickSaveProductAction } from "@/app/(app)/products/actions";
 import { emptyItem, type ItemPhoto, type ItemRow } from "./types";
 import { ItemPhotos } from "@/app/_components/item-photos";
 
@@ -25,11 +27,16 @@ export function ItemSheet({
   defaultMarginVnd: number;
 }) {
   const [row, setRow] = useState<ItemRow>(initial ?? { ...emptyItem });
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   // Mở lại sheet phải nạp đúng món đang sửa — không có dòng này thì lần mở
   // thứ hai vẫn hiện dữ liệu của lần trước.
   useEffect(() => {
-    if (open) setRow(initial ?? { ...emptyItem });
+    if (open) {
+      setRow(initial ?? { ...emptyItem });
+      setSavedMsg(null);
+    }
   }, [open, initial]);
 
   const set = (patch: Partial<ItemRow>) => setRow((r) => ({ ...r, ...patch }));
@@ -109,15 +116,71 @@ export function ItemSheet({
         />
       </label>
 
+      {/* v9-A: một ô chữ tự do tách thành hai. Món đến từ danh mục có chip
+          gợi ý; món gõ tay thì hai ô trống, vẫn gõ tự do như cũ. */}
       <label className="field">
-        <span>Size / màu</span>
+        <span>Size</span>
+        {row.sizeOptions.length > 0 && (
+          <div className="chip-row">
+            {row.sizeOptions.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`chip${row.size === s ? " chip-on" : ""}`}
+                onClick={() => set({ size: row.size === s ? "" : s })}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
         <input
-          value={row.attributes}
-          onChange={(e) => set({ attributes: e.target.value })}
-          placeholder="VD: 42 · trắng"
+          value={row.size}
+          onChange={(e) => set({ size: e.target.value })}
+          placeholder="VD: 42"
           enterKeyHint="next"
         />
       </label>
+
+      <label className="field">
+        <span>Màu</span>
+        {row.colorOptions.length > 0 && (
+          <div className="chip-row">
+            {row.colorOptions.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={`chip${row.color === c ? " chip-on" : ""}`}
+                onClick={() => set({ color: row.color === c ? "" : c })}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
+        <input
+          value={row.color}
+          onChange={(e) => set({ color: e.target.value })}
+          placeholder="VD: trắng"
+          enterKeyHint="next"
+        />
+      </label>
+
+      {/* Món cũ có chữ trong `attributes` mà chưa có size/màu: GỢI Ý tách,
+          chờ bấm xác nhận. Không tự ghi — máy đoán sai thì người sửa, chứ
+          máy không lặng lẽ đổi dữ liệu thật. */}
+      {row.attributes.trim() !== "" && row.size === "" && row.color === "" && (
+        <div className="notice">
+          <p>Món này đang ghi “{row.attributes}”. Tách thành size và màu?</p>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => set(splitLegacyAttributes(row.attributes))}
+          >
+            Tách thử
+          </button>
+        </div>
+      )}
 
       <label className="field">
         <span>Số lượng *</span>
@@ -144,6 +207,39 @@ export function ItemSheet({
         value={row.photos}
         onChange={(photos: ItemPhoto[]) => set({ photos })}
       />
+
+      {/* Đường "ghim": món chủ lực lên danh mục bằng một lần chạm; hàng lẻ
+          không làm bẩn gì vì phải bấm mới lưu. */}
+      {row.productId === null && (
+        <div className="field">
+          <button
+            type="button"
+            className="btn btn-outline"
+            disabled={saving || !valid}
+            onClick={async () => {
+              setSaving(true);
+              setSavedMsg(null);
+              const res = await quickSaveProductAction({
+                name: row.name.trim(),
+                size: row.size,
+                color: row.color,
+                sellPriceVnd: parseVnd(row.sellPriceVnd),
+                unitPriceCny: parseDecimal(row.unitPriceCny),
+                productUrl: row.productUrl.trim() || null,
+              });
+              setSaving(false);
+              if ("error" in res) setSavedMsg(res.error);
+              else {
+                set({ productId: res.productId });
+                setSavedMsg("Đã lưu vào danh mục.");
+              }
+            }}
+          >
+            {saving ? "Đang lưu…" : "★ Lưu vào danh mục"}
+          </button>
+          {savedMsg && <div className="muted small">{savedMsg}</div>}
+        </div>
+      )}
 
       <details className="more-fields">
         <summary>Giá vốn &amp; link</summary>

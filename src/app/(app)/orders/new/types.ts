@@ -8,7 +8,15 @@ export type { ItemPhoto };
 export type ItemRow = {
   name: string;
   productUrl: string;
+  /** v9-A: giữ lại để đọc đơn cũ. Món tạo mới dùng size/color bên dưới. */
   attributes: string;
+  size: string;
+  color: string;
+  /** Mẫu trong danh mục mà món này lấy ra, nếu có. */
+  productId: number | null;
+  /** Dãy size/màu của mẫu — chỉ để hiện chip gợi ý, KHÔNG gửi lên server. */
+  sizeOptions: string[];
+  colorOptions: string[];
   quantity: string;
   /** Giá phải thu của khách cho 1 CÁI (₫) — ô nhập chính từ v6. */
   sellPriceVnd: string;
@@ -23,6 +31,11 @@ export const emptyItem: ItemRow = {
   name: "",
   productUrl: "",
   attributes: "",
+  size: "",
+  color: "",
+  productId: null,
+  sizeOptions: [],
+  colorOptions: [],
   quantity: "1",
   sellPriceVnd: "",
   unitPriceCny: "",

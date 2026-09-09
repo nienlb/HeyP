@@ -251,6 +251,10 @@ export type NewOrderItemInput = {
   name: string;
   productUrl?: string | null;
   attributes?: string | null;
+  /** v9-A — mẫu trong danh mục, nếu món lấy ra từ đó. */
+  productId?: number | null;
+  size?: string | null;
+  color?: string | null;
   quantity: number;
   unitPriceCny: number;
   /** Lời của món. Bỏ trống → app tự rải theo mức mặc định để khớp Total. */
@@ -380,8 +384,8 @@ export async function createOrder(
       const row = await x.get<{ id: number }>(
         `INSERT INTO order_items
            (order_id, product_url, name, attributes, quantity, unit_price_cny,
-            margin_vnd, cost_confirmed)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            margin_vnd, cost_confirmed, product_id, size, color)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id`,
         [
           orderId,
@@ -392,6 +396,10 @@ export async function createOrder(
           it.unitPriceCny,
           margins[i],
           it.costConfirmed ?? false,
+          it.productId ?? null,
+          // Cột NOT NULL DEFAULT '' — truyền '' chứ không phải null.
+          (it.size ?? "").trim(),
+          (it.color ?? "").trim(),
         ],
       );
       const itemId = row!.id;

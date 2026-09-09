@@ -298,3 +298,60 @@
     margin-top: 0;
   }
 }
+
+/* ---------- Danh mục sản phẩm (v9-A) ---------- */
+
+/* MỘT lưới cho cả hai kích cỡ màn — đổi số cột, không đổi DOM (luật v8-A). */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.product-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-align: left;
+  cursor: pointer;
+  /* Vùng chạm tối thiểu theo Apple HIG. */
+  min-height: var(--tap);
+}
+
+.product-cell img,
+.product-cell-noimg {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.product-cell-name {
+  font-size: var(--fs-3);
+  color: var(--text);
+}
+
+.product-cell-price {
+  font-size: var(--fs-2);
+  color: var(--muted);
+  text-align: left;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+
+@media (min-width: 900px) {
+  .product-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}

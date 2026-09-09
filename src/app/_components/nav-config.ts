@@ -22,6 +22,7 @@ const MAIN: NavItem[] = [
  * { href: "/tracking", label: "Tracking", icon: "tracking" } vào mảng dưới.
  */
 const MORE: NavItem[] = [
+  { href: "/products", label: "Sản phẩm", icon: "inventory" },
   { href: "/customers", label: "Khách hàng", icon: "customers" },
   { href: "/finance", label: "Tài chính", icon: "finance" },
   { href: "/reports", label: "Báo cáo", icon: "reports" },

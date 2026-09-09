@@ -93,6 +93,11 @@ export async function createOrderAction(
           name: String(it.name ?? "").trim(),
           productUrl: String(it.productUrl ?? "").trim() || null,
           attributes: String(it.attributes ?? "").trim() || null,
+          // v9-A. size/color là cột NOT NULL DEFAULT '' — gửi chuỗi rỗng,
+          // KHÔNG gửi null.
+          productId: Number(it.productId) || null,
+          size: String(it.size ?? "").trim(),
+          color: String(it.color ?? "").trim(),
           quantity: Number(it.quantity) || 0,
           unitPriceCny: Number(it.unitPriceCny) || 0,
           // Người gõ tay = đã xác nhận; số máy suy ngược thì form gửi false.

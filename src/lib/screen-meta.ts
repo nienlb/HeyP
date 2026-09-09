@@ -21,6 +21,7 @@ const EXACT: Record<string, ScreenMeta> = {
   "/orders/new": { title: "Đơn mới", backHref: "/orders" },
   "/customers": { title: "Khách hàng" },
   "/inventory": { title: "Tồn kho" },
+  "/products": { title: "Sản phẩm" },
   "/finance": { title: "Tài chính" },
   "/reports": { title: "Báo cáo" },
   "/settings": { title: "Cài đặt" },

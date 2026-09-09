@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { displayVariant } from "@/lib/product-catalog";
 import { notFound } from "next/navigation";
 import { requireAuth } from "@/lib/auth";
 import { CopyButton } from "@/app/_components/copy-button";
@@ -136,7 +137,9 @@ export default async function OrderDetailPage({
     customerName: customer?.name ?? "",
     items: items.map((it) => ({
       name: it.name,
-      attributes: it.attributes,
+      // v9-A: chuỗi báo giá gửi khách phải hiện size/màu mới, nếu không đơn
+      // tạo sau v9-A copy ra Zalo sẽ thiếu size — khách đọc không biết đặt gì.
+      attributes: displayVariant(it),
       quantity: it.quantity,
       unitPriceCny: it.unitPriceCny,
     })),
@@ -299,7 +302,7 @@ export default async function OrderDetailPage({
                           it.name
                         )
                       }
-                      meta={`${it.attributes ?? "—"} · ×${it.quantity}`}
+                      meta={`${displayVariant(it) || "—"} · ×${it.quantity}`}
                       amount={money2(it.quantity * it.unitPriceCny)}
                       trailing={
                         <span className="lr-actions">
@@ -374,7 +377,7 @@ export default async function OrderDetailPage({
                   rows={items.map((it) => ({
                     id: it.id,
                     name: it.name,
-                    attributes: it.attributes,
+                    attributes: displayVariant(it),
                     quantity: it.quantity,
                     unitPriceCny: it.unitPriceCny,
                     marginVnd: it.marginVnd,

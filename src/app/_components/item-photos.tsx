@@ -21,9 +21,12 @@ export type ItemPhoto = { id: number };
 export function ItemPhotos({
   value,
   onChange,
+  label = "Ảnh sản phẩm",
 }: {
   value: ItemPhoto[];
   onChange: (next: ItemPhoto[]) => void;
+  /** Tiêu đề khối. Mặc định hợp cho món trong đơn; màn danh mục đổi chữ. */
+  label?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -66,7 +69,7 @@ export function ItemPhotos({
 
   return (
     <div className="field">
-      <span>Ảnh sản phẩm</span>
+      <span>{label}</span>
       <div className="item-photos">
         {value.map((p) => (
           <span key={p.id} className="item-photo">

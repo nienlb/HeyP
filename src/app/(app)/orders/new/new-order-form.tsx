@@ -26,17 +26,22 @@ import { StickyBar } from "@/app/_components/sticky-bar";
 import { Icon } from "@/app/_components/icons";
 import { CustomerSheet, type CustomerPick } from "./customer-sheet";
 import { ItemSheet } from "./item-sheet";
+import { ProductPickerSheet } from "./product-picker-sheet";
+import type { ProductPick } from "@/app/(app)/products/product-grid";
 import { QuickImportSheet } from "./quick-import-sheet";
 import { photoUrl } from "@/lib/photos";
+import { displayVariant } from "@/lib/product-catalog";
 import { groupVnd, parseDecimal, parseVnd } from "@/lib/parse-number";
 import { emptyItem, type CustomerOption, type ItemRow } from "./types";
 
 export function NewOrderForm({
   customers,
+  products,
   defaultExchangeRate,
   defaultMarginVnd,
 }: {
   customers: CustomerOption[];
+  products: ProductPick[];
   defaultExchangeRate: number;
   defaultMarginVnd: number;
 }) {
@@ -68,6 +73,7 @@ export function NewOrderForm({
     { open: false } | { open: true; index: number | null }
   >({ open: false });
   const [importOpen, setImportOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   /** Áp một patch (từ mergeMoneyFields) vào state form — chỉ set trường có mặt. */
   function applyMoneyPatch(patch: ReturnType<typeof mergeMoneyFields>["patch"]) {
@@ -122,7 +128,15 @@ export function NewOrderForm({
       return {
         name: it.name,
         productUrl: "",
+        // Giữ cả attributes (chuỗi gộp, để đọc lại nguyên văn AI đọc được) lẫn
+        // hai cột mới. AI đã tách sẵn size/màu nên không phải đoán lại bằng
+        // splitLegacyAttributes — dùng thẳng số liệu gốc.
         attributes: itemAttributes(it),
+        size: it.size ?? "",
+        color: it.color ?? "",
+        productId: null,
+        sizeOptions: [],
+        colorOptions: [],
         quantity: String(it.quantity || 1),
         sellPriceVnd: perLineSell > 0 ? String(perLineSell) : "",
         unitPriceCny: cny > 0 ? String(cny) : "",
@@ -163,6 +177,11 @@ export function NewOrderForm({
           name: it.name.trim(),
           productUrl: it.productUrl.trim(),
           attributes: it.attributes.trim(),
+          // v9-A. sizeOptions/colorOptions CỐ Ý không có ở đây: chúng chỉ
+          // phục vụ chip trên máy khách, server không có chỗ dùng.
+          productId: it.productId,
+          size: it.size.trim(),
+          color: it.color.trim(),
           quantity,
           unitPriceCny,
           costConfirmed: it.costConfirmed,
@@ -360,7 +379,7 @@ export function NewOrderForm({
                 )}
                 <span className="ic-name">{it.name || "(chưa đặt tên)"}</span>
                 <span className="ic-meta">
-                  {it.attributes || "—"} · ×{it.quantity || 0}
+                  {displayVariant(it) || "—"} · ×{it.quantity || 0}
                 </span>
                 <span className="ic-price num">
                   {it.sellPriceVnd ? `${groupVnd(it.sellPriceVnd)}₫` : "—"}
@@ -368,6 +387,15 @@ export function NewOrderForm({
               </button>
             ))}
           </div>
+          {products.length > 0 && (
+            <button
+              type="button"
+              className="picker"
+              onClick={() => setPickerOpen(true)}
+            >
+              ★ Chọn từ danh mục
+            </button>
+          )}
           <button
             type="button"
             className="picker"
@@ -522,6 +550,13 @@ export function NewOrderForm({
         }
         sellRate={parseVnd(exchangeRate)}
         defaultMarginVnd={defaultMarginVnd}
+      />
+
+      <ProductPickerSheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        products={products}
+        onAdd={(item) => setItems((prev) => [...prev, item])}
       />
 
       <QuickImportSheet
