@@ -184,6 +184,15 @@ export const inventory = pgTable("inventory", {
   quantity: integer("quantity").notNull().default(0),
   avgCost: integer("avg_cost").notNull().default(0), // giá vốn bình quân (VND)
   source: text("source", { enum: INVENTORY_SOURCES }).notNull(),
+  // v9-A. `product_name` GIỮ NGUYÊN bên trên: dòng tồn cũ không biết mẫu nào,
+  // và tên vẫn là thứ hiển thị cho chúng.
+  productId: integer("product_id").references(() => products.id, {
+    onDelete: "set null",
+  }),
+  size: text("size").notNull().default(""),
+  color: text("color").notNull().default(""),
+  /** Khoá gom — sinh bởi stockKey() trong src/lib/inventory.ts. */
+  stockKey: text("stock_key").notNull().default(""),
   lastImportedAt: epochSeconds("last_imported_at"),
   createdAt: createdAt(),
 });
