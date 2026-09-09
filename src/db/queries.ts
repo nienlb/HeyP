@@ -16,6 +16,7 @@ import {
   settings,
 } from "./schema";
 import type { PhotoLabel } from "@/lib/photos";
+import { suggestFromCatalog } from "./products";
 import {
   SETTING_KEYS,
   parseSettings,
@@ -148,6 +149,12 @@ export async function suggestCnyFromHistory(
 ): Promise<number | null> {
   const key = productName.trim().replace(/\s+/g, " ").toLowerCase();
   if (key === "") return null;
+
+  // v9-A: DANH MỤC TRƯỚC — một mẫu đã được ghim có giá do người dùng chốt,
+  // đáng tin hơn giá của một dòng đơn ngẫu nhiên trong lịch sử.
+  const fromCatalog = await suggestFromCatalog(productName);
+  if (fromCatalog) return fromCatalog.unitPriceCny;
+
   const row = await raw.get<{ cny: number }>(
     `SELECT unit_price_cny AS cny
        FROM order_items

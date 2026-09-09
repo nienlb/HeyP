@@ -44,3 +44,34 @@ export async function downloadPhotoFile(
 export async function deletePhotoFile(fileName: string): Promise<void> {
   await bucket().remove([fileName, thumbFileName(fileName)]);
 }
+
+/**
+ * Chép một ảnh sang tên file mới, CẢ bản chính lẫn bản nhỏ `_t`.
+ *
+ * Dùng `.copy()` của Supabase — chép thẳng trên server lưu trữ, không tải về
+ * app rồi đẩy lên lại. Với ảnh vài trăm KB thì đó là khác biệt giữa vài chục
+ * ms và vài giây, mà `maxDuration` của Hobby thì có hạn.
+ *
+ * Vì sao phải CHÉP chứ không dùng chung dòng photos: `photos` gắn khoá ngoại
+ * ON DELETE CASCADE tới `order_items` — dùng chung thì xoá một đơn sẽ cướp
+ * mất ảnh của danh mục.
+ *
+ * Bản nhỏ hỏng thì KHÔNG chặn: route ảnh tự lùi về bản chính khi thiếu. Mất
+ * bản nhỏ chỉ tốn băng thông, mất bản chính mới là mất dữ liệu.
+ */
+export async function copyPhotoFile(
+  fromFileName: string,
+  toFileName: string,
+): Promise<void> {
+  const { error } = await bucket().copy(fromFileName, toFileName);
+  if (error) throw new Error(`Không chép được ảnh: ${error.message}`);
+  try {
+    const thumb = await bucket().copy(
+      thumbFileName(fromFileName),
+      thumbFileName(toFileName),
+    );
+    void thumb;
+  } catch {
+    // bỏ qua có chủ đích
+  }
+}
