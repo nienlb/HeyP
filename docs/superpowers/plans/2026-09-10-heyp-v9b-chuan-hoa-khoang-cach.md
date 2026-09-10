@@ -41,7 +41,11 @@
 | **Tổng phải sửa** | **152** |
 | Class không nơi nào dùng | 35 |
 
-`legacy.css` chia sẵn thành 19 mục có tiêu đề, cộng phần đầu file không tiêu đề — tổng **20 khối**. Năm đợt dưới đây phủ hết cả 20.
+`legacy.css` chia sẵn thành 19 mục có tiêu đề, cộng phần đầu file không tiêu đề
+— tổng 20 khối lúc đo. Task 1 xoá CSS chết làm **ba mục biến mất hoàn toàn**
+(`Order list`, `Khách hàng / cờ`, `Dòng đã tách` — toàn bộ nội dung của chúng
+đều chết), còn lại **17 khối**. `CHUA_CHUAN_HOA` ở Task 2 liệt kê đúng 17 khối
+còn tồn tại sau Task 1, không phải 20.
 
 ## Cấu trúc file
 
@@ -301,14 +305,11 @@ const FILES = [
 const CHUA_CHUAN_HOA: string[] = [
   "(đầu file)",
   "Badges",
-  "Order list",
   "Cards & detail",
   "Timeline",
   "Table",
   "Forms",
-  "Khách hàng / cờ",
   "Lãi/lỗ",
-  "Dòng đã tách",
   "Tồn kho",
   "Ảnh: upload + gallery",
   "Tracking / Kiện",
@@ -587,7 +588,7 @@ EOF
 ### Task 4: Đợt 2 — màn Đơn và Chi tiết đơn
 
 **Files:**
-- Modify: `src/styles/legacy.css` (mục `Order list`, `Cards & detail`, `Timeline`, `v3-A: bóc lớp giá theo món & cờ cần bổ sung`, `Hành trình đơn hàng (order detail)`)
+- Modify: `src/styles/legacy.css` (mục `Cards & detail`, `Timeline`, `v3-A: bóc lớp giá theo món & cờ cần bổ sung`, `Hành trình đơn hàng (order detail)` — `Order list` đã bị Task 1 xoá sạch, không còn mục này)
 - Modify: `tests/spacing-grid.test.ts`
 
 **Interfaces:**
@@ -599,7 +600,7 @@ EOF
 - [ ] **Step 1: Liệt kê**
 
 ```bash
-for m in "Order list" "Cards & detail" "Timeline" \
+for m in "Cards & detail" "Timeline" \
          "v3-A: bóc lớp giá theo món & cờ cần bổ sung" \
          "Hành trình đơn hàng (order detail)"; do
   node scripts/spacing-audit.mjs "$m"
@@ -636,9 +637,9 @@ Các luật còn lại của hai mục `v3-A` và `Hành trình đơn hàng` kh�
 - **Padding trong một khối có nền/viền** → `var(--sp-3) var(--sp-4)`
 - Khoảng cách **giữa các mục lớn có tiêu đề riêng** → `--sp-5`
 
-- [ ] **Step 3: Gỡ năm mục khỏi `CHUA_CHUAN_HOA`**
+- [ ] **Step 3: Gỡ bốn mục khỏi `CHUA_CHUAN_HOA`**
 
-Xoá: `"Order list"`, `"Cards & detail"`, `"Timeline"`, `"v3-A: bóc lớp giá theo món & cờ cần bổ sung"`, `"Hành trình đơn hàng (order detail)"`.
+Xoá: `"Cards & detail"`, `"Timeline"`, `"v3-A: bóc lớp giá theo món & cờ cần bổ sung"`, `"Hành trình đơn hàng (order detail)"`.
 
 - [ ] **Step 4: Chạy test**
 
@@ -806,7 +807,7 @@ EOF
 node scripts/spacing-audit.mjs
 ```
 
-Còn lại các mục: `Khách hàng / cờ`, `Dòng đã tách`, `Đọc ảnh Zalo (AI)`, `Đăng nhập`, `Responsive`, cộng 3 giá trị trong `layout.css`/`screens.css`.
+Còn lại các mục: `Đọc ảnh Zalo (AI)`, `Đăng nhập`, `Responsive` (`Khách hàng / cờ` và `Dòng đã tách` đã bị Task 1 xoá sạch, không còn mục này), cộng 3 giá trị trong `layout.css`/`screens.css`.
 
 - [ ] **Step 2: Xác nhận `layout.css` và `screens.css` đã sạch từ Task 2**
 
