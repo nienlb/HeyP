@@ -329,25 +329,25 @@
    từ v5, không còn dùng <details class="inv-item">. */
 .sell-form {
   border-top: 1px solid var(--border);
-  padding: 14px;
+  padding: var(--sp-3);
 }
 .sell-grid {
   display: grid;
   grid-template-columns: 80px 1fr 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
 }
 .sell-grid label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sp-1);
   font-size: 13px;
   color: var(--muted);
 }
 .sell-grid input {
   border: 1px solid var(--border);
   border-radius: 7px;
-  padding: 8px 10px;
+  padding: var(--sp-3);
   font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
   background: #fff;
   color: var(--text);
@@ -357,7 +357,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 .sell-profit {
   font-size: 14px;
@@ -365,12 +365,12 @@
 
 /* ---------- Ảnh: upload + gallery ---------- */
 .photo-upload .upload-row {
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-2);
 }
 .photo-upload select {
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: var(--sp-3);
   font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
   background: #fff;
   color: var(--text);
@@ -378,7 +378,7 @@
 .dropzone {
   border: 2px dashed var(--border);
   border-radius: 10px;
-  padding: 22px 16px;
+  padding: var(--sp-5) var(--sp-4);
   text-align: center;
   color: var(--muted);
   font-size: 14px;
@@ -397,18 +397,18 @@
 .gallery {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--sp-4);
 }
 .gallery-label {
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-2);
 }
 .thumbs {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 .thumb {
   margin: 0;
@@ -426,8 +426,8 @@
 }
 .thumb figcaption {
   display: flex;
-  gap: 6px;
-  padding: 8px;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
   flex-wrap: wrap;
 }
 /* ---------- Tracking / Kiện ---------- */
@@ -438,7 +438,7 @@
    (src/app/(app)/orders/[id]/page.tsx). */
 .pkg-list-mini {
   margin: 0;
-  padding-left: 18px;
+  padding-left: var(--sp-4);
   font-size: 14px;
   line-height: 1.7;
 }

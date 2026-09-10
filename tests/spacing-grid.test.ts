@@ -31,9 +31,6 @@ const FILES = [
  * đúng 17 mục còn lại trong file, không phải 20 như lúc mới đo.
  */
 const CHUA_CHUAN_HOA: string[] = [
-  "Tồn kho",
-  "Ảnh: upload + gallery",
-  "Tracking / Kiện",
   "Đọc ảnh Zalo (AI)",
   "Đăng nhập",
   "Responsive",
