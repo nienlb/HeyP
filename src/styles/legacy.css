@@ -501,8 +501,8 @@
 .dash-debtors li {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
   border-bottom: 1px dashed var(--border);
   font-size: 14px;
 }
@@ -521,7 +521,7 @@
 .dash-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 
 /* ---------- Responsive ---------- */
@@ -870,13 +870,13 @@ input.cny-suggested {
 .status-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
-  gap: 10px;
+  gap: var(--sp-3);
 }
 .status-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
   border-radius: 12px;
   background: var(--brand-tint);
   border: 1px solid var(--brand-tint-2);
@@ -917,6 +917,7 @@ input.cny-suggested {
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.55);
   overflow: hidden;
+  /* spacing-exempt: thanh tiến độ mảnh 3px, cố ý sát nhãn phía trên nó */
   margin-top: 2px;
 }
 .status-card-progress span {

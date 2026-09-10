@@ -31,15 +31,12 @@ const FILES = [
  * đúng 17 mục còn lại trong file, không phải 20 như lúc mới đo.
  */
 const CHUA_CHUAN_HOA: string[] = [
-  "Lãi/lỗ",
   "Tồn kho",
   "Ảnh: upload + gallery",
   "Tracking / Kiện",
   "Đọc ảnh Zalo (AI)",
   "Đăng nhập",
-  "Tổng quan (dashboard)",
   "Responsive",
-  "Thẻ trạng thái đơn (Tổng quan)",
 ];
 
 /** Biến KHÔNG thuộc thang --sp-* nhưng hợp lệ trong khoảng cách. */
