@@ -267,6 +267,12 @@
     overflow-x: visible;
     flex-wrap: wrap;
   }
+  /* Tắt lớp phủ dính mép phải của components.css: ở đây chip-bar hết cuộn
+     (wrap nhiều dòng), lớp phủ theo chiều ngang sẽ đè nhầm lên chip nằm
+     gần rìa phải mỗi dòng dù chúng không hề bị cắt. */
+  .chip-bar::after {
+    content: none;
+  }
 }
 
 /* Ba dòng cuối của "Cần chú ý" chỉ hiện từ 900px — desktop có chỗ cho 8 đơn,

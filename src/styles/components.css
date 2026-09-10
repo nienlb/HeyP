@@ -7,9 +7,47 @@
   overflow-x: auto;
   padding: var(--sp-3) var(--sp-4);
   scrollbar-width: none;
+  /* Gợi ý còn chip để cuộn tới cạnh phải — trước đây thanh cuộn ẩn hoàn
+     toàn (dòng ngay dưới) và chip cuối bị cắt ngang giữa chữ mà không có
+     dấu hiệu gì, trông như app lỗi (phát hiện 10/09/2026 qua ảnh người
+     dùng gửi, xem CLAUDE.md). `position: relative` để neo pseudo-element
+     bên dưới. */
+  position: relative;
 }
 .chip-bar::-webkit-scrollbar {
   display: none;
+}
+/*
+ * Lớp phủ dính mép phải, VẼ TRÊN các .chip — thử `mask-image` (làm mờ
+ * alpha của chính .chip-bar) trước, loại: trên nền --bg gần-trắng của app,
+ * "trắng đặc mờ dần thành be gần-trắng trong suốt" gần như không có tương
+ * phản, mắt không nhận ra khác gì so với bị cắt cứng (kiểm bằng cách đổi
+ * nền thử sang màu tương phản mạnh — mask CÓ chạy đúng, chỉ là không thấy
+ * được trên bảng màu thật). Thử `box-shadow: inset` trên .chip-bar tiếp
+ * theo, cũng loại: painting order vẽ box-shadow của cha TRƯỚC content con,
+ * nên bị nền trắng đặc của từng .chip che kín, không thấy gì.
+ *
+ * Cách này dùng pseudo-element thật (không phải mask/shadow của chính
+ * .chip-bar) nên nó vẽ TRÊN các .chip đứng trước nó trong DOM.
+ * `position: sticky` (không phải `absolute`) để nó bám mép phải KHUNG
+ * NHÌN khi cuộn ngang, không trôi theo nội dung. Chỉ mờ cạnh PHẢI: cạnh
+ * trái luôn bắt đầu bằng chip "Cần chú ý" còn nguyên vẹn, không cần gợi ý
+ * cuộn ngược lại. Nhược điểm chấp nhận: lớp phủ vẫn hiện dù đã cuộn hết —
+ * đổi lại không cần JS theo dõi vị trí cuộn cho một gợi ý thị giác nhỏ.
+ * PHẢI tắt ở breakpoint desktop (screens.css) vì chip-bar hết cuộn ở đó —
+ * quên tắt thì nó đè nhầm lên chip nằm gần rìa phải mỗi dòng đã wrap.
+ */
+.chip-bar::after {
+  content: "";
+  position: sticky;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  flex: none;
+  width: var(--sp-6);
+  margin-left: calc(-1 * var(--sp-6));
+  background: linear-gradient(to right, transparent, rgba(16, 32, 43, 0.35));
+  pointer-events: none;
 }
 .chip {
   flex: none;
