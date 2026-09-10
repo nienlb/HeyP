@@ -186,13 +186,13 @@
 .card-title {
   font-size: 16px;
   font-weight: 600;
-  margin: 0 0 14px;
+  margin: 0 0 var(--sp-3);
   /* Nút Sửa (v7) nằm cùng hàng với tiêu đề — .card-title-action đặt ngay
      đây, cạnh luật gốc, vì file này import CUỐI nên thắng components.css. */
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 .card-title-action {
   font-weight: 400;
@@ -200,17 +200,17 @@
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
 }
 .card {
-  margin-bottom: 16px;
+  margin-bottom: var(--sp-3);
 }
 .kv {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
   font-size: 14px;
   border-bottom: 1px dashed #eef0f2;
 }
@@ -222,8 +222,8 @@
 }
 .kv-total {
   border-top: 2px solid var(--border);
-  margin-top: 4px;
-  padding-top: 10px;
+  margin-top: var(--sp-1);
+  padding-top: var(--sp-2);
   font-size: 16px;
 }
 .kv-total strong {
@@ -234,9 +234,9 @@
   border: 1px solid var(--warning-border);
   color: var(--warning);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: var(--sp-3);
   font-size: 14px;
-  margin-bottom: 14px;
+  margin-bottom: var(--sp-3);
 }
 
 /* ---------- Timeline ---------- */
@@ -246,11 +246,11 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 .timeline li {
   border-left: 2px solid var(--border);
-  padding-left: 12px;
+  padding-left: var(--sp-3);
 }
 .tl-main {
   font-weight: 600;
@@ -259,6 +259,7 @@
 .tl-meta {
   color: var(--muted);
   font-size: 12px;
+  /* spacing-exempt: chú thích cố ý sát dòng trên nó */
   margin-top: 2px;
 }
 
@@ -550,24 +551,27 @@ input.cny-suggested {
 
 .cell-form {
   display: flex;
-  gap: 6px;
+  gap: var(--sp-2);
   align-items: center;
   justify-content: flex-end;
 }
 .cell-form input[type="number"] {
   width: 108px;
-  padding: 6px 8px;
+  /* biến thể nhỏ của ô nhập — hẹp lại để vừa bảng giá theo món dày đặc,
+     cùng tinh thần .btn-sm nhỏ hơn .btn */
+  padding: var(--sp-1) var(--sp-2);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   font: inherit;
   text-align: right;
 }
 
-.btn-sm {
-  padding: 6px 10px;
-  font-size: 0.85rem;
-  min-height: 32px;
-}
+/* v9-B: đây từng là luật .btn-sm THỨ HAI, đè luật gốc ở đầu file (cùng độ
+   đặc hiệu, khai báo sau nên thắng) — padding var(--sp-2) var(--sp-3) đã sửa
+   ở đợt 1 chưa từng có hiệu lực trên trình duyệt thật vì luật này ghi đè nó.
+   Gộp lại: giữ MỘT luật .btn-sm duy nhất ở đầu file. font-size 0.85rem
+   (13.6px) và 13px của luật gốc lệch không đáng kể, min-height 32px giống
+   hệt, border-radius chỉ luật gốc có — không mất gì khi gộp. */
 
 .profit-negative {
   color: var(--danger);
@@ -576,7 +580,7 @@ input.cny-suggested {
 
 .ship-row {
   display: flex;
-  gap: 12px;
+  gap: var(--sp-3);
   align-items: center;
   flex-wrap: wrap;
 }
@@ -585,12 +589,12 @@ input.cny-suggested {
   background: var(--warning-tint);
   border: 1px solid var(--border-strong);
   border-radius: 10px;
-  padding: 12px 14px;
-  margin-bottom: 16px;
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-3);
 }
 .gap-chips {
   display: flex;
-  gap: 8px;
+  gap: var(--sp-2);
   flex-wrap: wrap;
 }
 .gap-chip {
@@ -598,6 +602,7 @@ input.cny-suggested {
   border: 1px solid var(--warning);
   color: var(--warning);
   border-radius: 999px;
+  /* spacing-exempt: viên chip cố ý chật, cùng loại badge */
   padding: 3px 10px;
   font-size: 0.85rem;
   font-weight: 600;
@@ -610,7 +615,7 @@ input.cny-suggested {
   height: 8px;
   border-radius: 50%;
   background: var(--warning);
-  margin-left: 6px;
+  margin-left: var(--sp-2);
   vertical-align: middle;
 }
 
@@ -630,9 +635,9 @@ input.cny-suggested {
 
 .filter-bar {
   display: flex;
-  gap: 10px;
+  gap: var(--sp-3);
   align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: var(--sp-3);
 }
 
 .ok-banner {
@@ -640,8 +645,8 @@ input.cny-suggested {
   border: 1px solid var(--brand-tint-2);
   color: var(--brand-strong);
   border-radius: 10px;
-  padding: 10px 14px;
-  margin-bottom: 16px;
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-3);
   font-weight: 600;
 }
 
@@ -649,13 +654,13 @@ input.cny-suggested {
 .photo-kinds {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 12px;
-  margin-top: 12px;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
 }
 .photo-kind {
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 8px;
+  padding: var(--sp-2);
   background: var(--surface);
 }
 .photo-kind img {
@@ -664,12 +669,13 @@ input.cny-suggested {
   object-fit: cover;
   border-radius: 6px;
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: var(--sp-2);
   background: var(--surface-2);
 }
 .photo-kind select {
   width: 100%;
-  padding: 5px 6px;
+  /* biến thể nhỏ trong ô ảnh mini 120px, cùng tinh thần .btn-sm */
+  padding: var(--sp-1) var(--sp-2);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
@@ -677,7 +683,7 @@ input.cny-suggested {
 }
 .photo-kind .btn {
   width: 100%;
-  margin-top: 6px;
+  margin-top: var(--sp-2);
 }
 /* Ảnh mới thả, chưa đọc — viền đứt để phân biệt với ảnh đã đọc/lưu. */
 .photo-kind-pending {
@@ -692,7 +698,7 @@ input.cny-suggested {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 6px;
+  margin-bottom: var(--sp-2);
 }
 
 .warn-banner {
@@ -700,25 +706,26 @@ input.cny-suggested {
   border: 1px solid var(--warning);
   color: var(--warning);
   border-radius: 8px;
-  padding: 10px 14px;
+  padding: var(--sp-3);
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: var(--sp-3);
 }
 
 /* ===== Hành trình đơn hàng (order detail) ===== */
 .journey-alert {
   display: flex;
-  gap: 10px;
+  gap: var(--sp-3);
   align-items: flex-start;
-  padding: 12px 14px;
+  padding: var(--sp-3);
   border-radius: 10px;
-  margin-bottom: 16px;
+  margin-bottom: var(--sp-3);
 }
 .journey-alert strong {
   display: block;
   font-size: 14px;
 }
 .journey-alert p {
+  /* spacing-exempt: chú thích cố ý sát dòng trên nó, cùng .tl-meta */
   margin: 2px 0 0;
   font-size: 13px;
   line-height: 1.4;
@@ -742,7 +749,8 @@ input.cny-suggested {
 .journey-track {
   display: flex;
   list-style: none;
-  margin: 4px 0 0;
+  margin: var(--sp-1) 0 0;
+  /* spacing-exempt: đệm biên cho dải cuộn ngang, không phải khoảng cách theo lưới */
   padding: 4px 2px 10px;
   overflow-x: auto;
 }
@@ -754,7 +762,7 @@ input.cny-suggested {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 7px;
+  gap: var(--sp-2);
 }
 .journey-step:not(:first-child)::before {
   content: "";
@@ -812,9 +820,9 @@ input.cny-suggested {
 .journey-actions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-  padding-top: 14px;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
   border-top: 1px solid var(--border);
 }
 .journey-primary {
@@ -824,7 +832,7 @@ input.cny-suggested {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 .journey-secondary-label {
   font-size: 12px;
@@ -832,11 +840,11 @@ input.cny-suggested {
   font-weight: 600;
 }
 .journey-final {
-  margin: 10px 0 0;
+  margin: var(--sp-3) 0 0;
 }
 /* Lỗi đổi trạng thái: server action trả lý do, không còn redirect kèm ?err */
 .journey-error {
-  margin-top: 0.5rem;
+  margin-top: var(--sp-2);
   color: #b3261e;
   font-size: 0.875rem;
 }

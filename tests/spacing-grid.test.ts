@@ -31,8 +31,6 @@ const FILES = [
  * đúng 17 mục còn lại trong file, không phải 20 như lúc mới đo.
  */
 const CHUA_CHUAN_HOA: string[] = [
-  "Cards & detail",
-  "Timeline",
   "Lãi/lỗ",
   "Tồn kho",
   "Ảnh: upload + gallery",
@@ -41,8 +39,6 @@ const CHUA_CHUAN_HOA: string[] = [
   "Đăng nhập",
   "Tổng quan (dashboard)",
   "Responsive",
-  "v3-A: bóc lớp giá theo món & cờ cần bổ sung",
-  "Hành trình đơn hàng (order detail)",
   "Thẻ trạng thái đơn (Tổng quan)",
 ];
 
