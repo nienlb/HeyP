@@ -1,29 +1,3 @@
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  padding: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family:
-    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-
-a {
-  color: var(--brand);
-}
-
-.container {
-  max-width: 920px;
-  margin: 0 auto;
-  padding: 24px 20px;
-}
-
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -207,66 +181,6 @@ a {
   border-color: var(--border);
 }
 
-/* ---------- Order list ---------- */
-.attention,
-.status-group {
-  margin-bottom: 22px;
-}
-.attention h2,
-.status-group h2 {
-  font-size: 15px;
-  margin: 0 0 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.attention h2 {
-  color: var(--danger);
-}
-.status-group .count {
-  color: var(--muted);
-  font-weight: 500;
-  font-size: 13px;
-}
-.order-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.order-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
-  text-decoration: none;
-  color: var(--text);
-}
-.order-row:hover {
-  border-color: #cfd4da;
-  background: #fcfcfd;
-}
-.order-id {
-  font-weight: 700;
-  color: var(--muted);
-  min-width: 46px;
-}
-.order-customer {
-  font-weight: 600;
-  flex: 1;
-}
-.order-due {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-.order-age {
-  color: var(--muted);
-  font-size: 13px;
-  min-width: 70px;
-  text-align: right;
-}
 /* ---------- Cards & detail ---------- */
 .card-title {
   font-size: 16px;
@@ -394,36 +308,9 @@ a {
   width: 100%;
   font-family: inherit;
 }
-.grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.money-preview {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-top: 8px;
-}
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 6px;
-}
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* ---------- Khách hàng / cờ ---------- */
-.flag {
-  cursor: help;
-}
-.flag-reason {
-  font-size: 12px;
-  color: var(--warning);
-  margin-top: 2px;
 }
 
 /* ---------- Lãi/lỗ ---------- */
@@ -434,48 +321,10 @@ a {
   color: var(--danger);
 }
 
-/* ---------- Dòng đã tách ---------- */
-.line-removed td:not(:last-child) {
-  color: var(--muted);
-  text-decoration: line-through;
-}
-
 /* ---------- Tồn kho ---------- */
-.inv-item {
-  padding: 0;
-}
-.inv-item > summary {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-}
-.inv-item > summary::-webkit-details-marker {
-  display: none;
-}
-.inv-name {
-  font-weight: 600;
-  flex: 1;
-}
-.inv-qty {
-  font-size: 14px;
-}
-.inv-cost {
-  font-size: 13px;
-  color: var(--muted);
-  min-width: 130px;
-  text-align: right;
-}
-.inv-sell-hint {
-  color: var(--brand);
-  font-weight: 600;
-  font-size: 13px;
-}
-.inv-item[open] > summary .inv-sell-hint {
-  visibility: hidden;
-}
+/* v9-B: 6 class inv-* (inv-item, inv-name, inv-qty, inv-cost, inv-sell-hint,
+   và các compound dựa trên inv-item) đã xoá — InventoryRow đổi sang ListRow
+   từ v5, không còn dùng <details class="inv-item">. */
 .sell-form {
   border-top: 1px solid var(--border);
   padding: 14px;
@@ -579,74 +428,12 @@ a {
   padding: 8px;
   flex-wrap: wrap;
 }
-.inv-photos {
-  border-top: 1px solid var(--border);
-  padding: 14px;
-}
-
 /* ---------- Tracking / Kiện ---------- */
-.pkg-form .pkg-grid {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 0.8fr 1fr;
-  gap: 12px;
-}
-.pkg-form .pkg-orders {
-  grid-column: 1 / -1;
-}
-.pkg-form input,
-.pkg-form select {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 9px 11px;
-  font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
-  background: #fff;
-  color: var(--text);
-  width: 100%;
-}
-.pkg-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.pkg-item.pkg-flag {
-  border-color: var(--danger-border);
-  background: var(--danger-tint);
-}
-.pkg-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.pkg-code {
-  font-weight: 700;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-}
-.pkg-meta {
-  font-size: 14px;
-}
-.pkg-orders-line {
-  font-size: 14px;
-  color: var(--muted);
-}
-.pkg-order-link {
-  margin-right: 6px;
-  text-decoration: none;
-  font-weight: 600;
-}
-.pkg-update {
-  display: flex;
-  gap: 8px;
-}
-.pkg-update input {
-  flex: 1;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 11px;
-  font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
-  background: #fff;
-  color: var(--text);
-}
+/* v9-B: 11 class khác của mục này (pkg-form, pkg-grid, pkg-orders, pkg-item,
+   pkg-flag, pkg-head, pkg-code, pkg-meta, pkg-orders-line, pkg-order-link,
+   pkg-update) đã bị xoá — Tracking rời khỏi nav từ v8-A và không nơi nào
+   trong TSX còn dùng chúng. Chỉ .pkg-list-mini còn sống
+   (src/app/(app)/orders/[id]/page.tsx). */
 .pkg-list-mini {
   margin: 0;
   padding-left: 18px;
@@ -655,10 +442,6 @@ a {
 }
 
 /* ---------- Đọc ảnh Zalo (AI) ---------- */
-.zalo-reader {
-  border: 1px solid var(--brand-tint-2);
-  background: linear-gradient(180deg, var(--brand-tint) 0%, var(--surface) 100%);
-}
 .zalo-info {
   background: var(--success-tint);
   border: 1px solid var(--success-border);
@@ -745,9 +528,6 @@ a {
     grid-template-columns: 1fr;
   }
   .sell-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .pkg-form .pkg-grid {
     grid-template-columns: 1fr 1fr;
   }
   .search input {
@@ -864,28 +644,6 @@ input.cny-suggested {
   font-weight: 600;
 }
 
-.stack-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-bottom: 16px;
-}
-.stack-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.stack-form label span {
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-.stack-form input {
-  padding: 10px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  font: inherit;
-}
-
 /* Lưới xác nhận nhãn ảnh sau khi AI phân loại. */
 .photo-kinds {
   display: grid;
@@ -944,21 +702,6 @@ input.cny-suggested {
   padding: 10px 14px;
   font-weight: 600;
   margin-bottom: 12px;
-}
-
-/* select bị thiếu style từ đầu — chỉ có input được style trong .stack-form. */
-.stack-form select {
-  padding: 10px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  font: inherit;
-  background: var(--surface);
-  color: var(--text);
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235f6b6a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  padding-right: 34px;
 }
 
 /* ===== Hành trình đơn hàng (order detail) ===== */
