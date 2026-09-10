@@ -449,7 +449,7 @@
   border: 1px solid var(--success-border);
   color: var(--success);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: var(--sp-3);
   font-size: 14px;
 }
 
@@ -460,7 +460,7 @@
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: var(--sp-5);
   background: var(--bg);
 }
 .login-card {
@@ -473,17 +473,18 @@
   font-weight: 700;
   font-size: 34px;
   color: var(--brand);
+  /* spacing-exempt: khối logo trang trí đăng nhập, canh tay cho cân đối hình ảnh */
   margin: 4px 0 2px;
 }
 .login-logo-img {
   height: 72px;
   width: 72px;
   border-radius: 50%;
-  margin: 0 auto 8px;
+  margin: 0 auto var(--sp-2);
   display: block;
 }
 .login-tagline {
-  margin: 0 0 22px;
+  margin: 0 0 var(--sp-5);
   color: var(--muted);
   font-size: 14px;
 }

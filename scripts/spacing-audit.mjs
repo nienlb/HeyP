@@ -40,6 +40,11 @@ for (const file of FILES) {
     // Bắt cả rem/em: đã dính thật với `.more-fields { margin-top: 0.75rem }`
     // — audit không thấy nên bỏ sót, chỉ test khoá (khác regex) mới bắt được.
     if (!/\d*\.?\d+(px|rem|em)/.test(p[3])) continue;
+    // Miễn trừ: comment MỘT DÒNG ngay trên, kèm lý do — cùng luật với
+    // tests/spacing-grid.test.ts. Không đồng bộ hai chỗ này thì audit báo
+    // "còn N dòng cần sửa" mãi mãi dù test đã xanh, gây hiểu lầm.
+    const tren = (lines[i - 1] ?? "").trim();
+    if (/spacing-exempt:\s*\S.{9,}/.test(tren)) continue;
     if (loc && muc !== loc) continue;
     console.log(`${file}:${i + 1}  [${muc}]  ${sel}  →  ${ln.trim()}`);
     tong++;

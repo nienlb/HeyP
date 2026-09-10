@@ -30,11 +30,12 @@ const FILES = [
  * toàn bộ nội dung của chúng chỉ chứa CSS chết. Danh sách dưới đây liệt kê
  * đúng 17 mục còn lại trong file, không phải 20 như lúc mới đo.
  */
-const CHUA_CHUAN_HOA: string[] = [
-  "Đọc ảnh Zalo (AI)",
-  "Đăng nhập",
-  "Responsive",
-];
+/**
+ * RỖNG = toàn bộ legacy.css đã chuẩn hoá và bị khoá (v9-B xong).
+ * Đừng thêm mục vào đây để né test — thêm `spacing-exempt` kèm lý do ở đúng
+ * dòng cần miễn, hoặc sửa cho đúng thang.
+ */
+const CHUA_CHUAN_HOA: string[] = [];
 
 /** Biến KHÔNG thuộc thang --sp-* nhưng hợp lệ trong khoảng cách. */
 const BIEN_RIENG = new Set([
