@@ -39,7 +39,7 @@
 | Giá trị px đúng lưới nhưng gõ cứng | 69 |
 | Giá trị px **lệch** lưới | 86 |
 | **Tổng phải sửa** | **152** |
-| Class không nơi nào dùng | 37 |
+| Class không nơi nào dùng | 35 |
 
 `legacy.css` chia sẵn thành 19 mục có tiêu đề, cộng phần đầu file không tiêu đề — tổng **20 khối**. Năm đợt dưới đây phủ hết cả 20.
 
@@ -87,7 +87,7 @@ print(len(chet)); print("\n".join(chet))
 PY
 ```
 
-Kỳ vọng: **37** tên. Nếu ra khác 37, **DỪNG** — ai đó vừa thêm/bớt class, phải đọc lại chứ không xoá theo danh sách cũ.
+Kỳ vọng: **35** tên (script tính theo từng mục lúc lập kế hoạch báo 37 vì đếm trùng `pkg-form`/`pkg-grid` — chúng xuất hiện cả ở mục `Tracking/Kiện` lẫn selector ghép `.pkg-form .pkg-grid` của mục `Responsive`; đếm theo toàn file không trùng thì đúng 35, khớp danh sách Step 2). Nếu ra khác 35, **DỪNG** — ai đó vừa thêm/bớt class, phải đọc lại chứ không xoá theo danh sách cũ.
 
 - [ ] **Step 2: Xoá các luật chỉ nhắm class chết**
 
