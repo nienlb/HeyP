@@ -92,8 +92,8 @@ hiện là `--tabbar-h` (56) cộng 28px nhô lên của FAB, mà 28 cũng lệc
 rõ ở đây để người thi công không tưởng là phép thay tương đương, và để kiểm
 bằng mắt rằng nội dung cuối trang không bị FAB che.
 
-Đây là cải thiện thật, không phải dọn dẹp hình thức: `84px` hiện là số ma cho
-"tabbar + FAB". Đổi chiều cao tabbar mà quên sửa số đó là **nội dung bị tabbar
+Đổi được như vậy là cải thiện thật chứ không phải dọn dẹp hình thức: `84px`
+hiện là số ma. Đổi chiều cao tabbar mà quên sửa nó là **nội dung bị tabbar
 che**, và không có gì báo.
 
 ### 4.3 Không phải khoảng cách
@@ -102,7 +102,7 @@ che**, và không có gì báo.
 
 ## 5. Cách thi công — năm đợt
 
-Chia theo **mục có sẵn trong `legacy.css`** (file đã tự chia ~26 mục), không
+Chia theo **mục có sẵn trong `legacy.css`** (file đã tự chia 26 khối), không
 chia theo màn. Chia theo màn nghe hợp lý hơn nhưng **không cắt được**:
 `Badges`, `Table`, `Forms` dùng chung ở cả bốn màn — sửa "màn chi tiết đơn" là
 đã đụng ba mục dùng chung, rồi ba màn kia đổi theo mà không ai nhìn.
