@@ -2,7 +2,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 24px;
+  padding: var(--sp-3) var(--sp-4);
   box-shadow: var(--shadow-sm);
 }
 
@@ -10,14 +10,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--sp-2);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--brand);
   color: var(--on-brand);
   font-size: 15px;
   font-weight: 600;
-  padding: 10px 16px;
+  padding: var(--sp-3) var(--sp-4);
   /* Nút chính PHẢI ≥44pt (Apple HIG). .btn-sm (hành động phụ trong bảng
      dày đặc) không kế thừa — nó có min-height riêng, cố ý nhỏ hơn. */
   min-height: var(--tap);
@@ -61,8 +61,8 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-3);
 }
 
 .field label {
@@ -74,7 +74,7 @@
 .field input {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: var(--sp-3);
   /* PHẢI ≥16px — dưới ngưỡng này Safari iOS tự phóng to trang khi chạm vào
      ô. Luật cứng áp cho MỌI ô nhập, kể cả màn chưa di trú sang hệ mới. */
   font-size: var(--fs-3);
@@ -89,9 +89,9 @@
 }
 
 .more-fields {
-  margin-top: 0.75rem;
+  margin-top: var(--sp-3);
   border-top: 1px solid var(--border);
-  padding-top: 0.75rem;
+  padding-top: var(--sp-3);
 }
 
 .more-fields > summary {
@@ -114,13 +114,13 @@
   border: 1px solid var(--danger-border);
   color: var(--danger);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: var(--sp-3);
   font-size: 14px;
-  margin-bottom: 14px;
+  margin-bottom: var(--sp-3);
 }
 
 .btn-sm {
-  padding: 6px 12px;
+  padding: var(--sp-2) var(--sp-3);
   font-size: 13px;
   border-radius: 7px;
   min-height: 32px; /* hành động phụ trong bảng dày đặc, cố ý nhỏ hơn .btn */
@@ -148,7 +148,7 @@
 .search input {
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 9px 12px;
+  padding: var(--sp-3);
   font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
   min-width: 240px;
   background: #fff;
@@ -164,6 +164,7 @@
 /* ---------- Badges ---------- */
 .badge {
   display: inline-block;
+  /* spacing-exempt: viên badge cố ý chật, ép về lưới là đổi hình dạng, không phải sửa khoảng cách */
   padding: 3px 9px;
   border-radius: 999px;
   font-size: 12px;
@@ -275,7 +276,7 @@
 .tbl th,
 .tbl td {
   text-align: left;
-  padding: 9px 10px;
+  padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid #eef0f2;
 }
 .tbl th {
@@ -290,18 +291,18 @@
 .order-note {
   color: var(--muted);
   font-size: 14px;
-  margin: 12px 0 0;
+  margin: var(--sp-3) 0 0;
 }
 
 /* ---------- Forms ---------- */
 .order-form .field {
-  margin-bottom: 12px;
+  margin-bottom: var(--sp-3);
 }
 .order-form select,
 .order-form textarea {
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: var(--sp-3);
   font-size: var(--fs-3); /* ≥16px, chặn Safari iOS tự zoom */
   background: #fff;
   color: var(--text);

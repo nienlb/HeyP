@@ -37,7 +37,9 @@ for (const file of FILES) {
     const p = PROP.exec(ln);
     if (!p) continue;
     if (p[3].includes("var(--sp-")) continue;
-    if (!/\d+px/.test(p[3])) continue;
+    // Bắt cả rem/em: đã dính thật với `.more-fields { margin-top: 0.75rem }`
+    // — audit không thấy nên bỏ sót, chỉ test khoá (khác regex) mới bắt được.
+    if (!/\d*\.?\d+(px|rem|em)/.test(p[3])) continue;
     if (loc && muc !== loc) continue;
     console.log(`${file}:${i + 1}  [${muc}]  ${sel}  →  ${ln.trim()}`);
     tong++;
