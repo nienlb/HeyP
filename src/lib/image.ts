@@ -18,12 +18,17 @@ const AI_JPEG_QUALITY = 82;
 
 // --- Đường lưu trữ ---
 /**
- * 1280 vừa đủ cho iPhone xem toàn màn hình (màn ~390pt × 3x = 1170px thật).
- * Đo trên ảnh thật của shop: 1600 JPEG q82 → 126KB, 1280 WebP q80 → 69KB,
- * giảm ~54% mà mắt thường không thấy khác khi xem trên điện thoại.
+ * v9-C: người dùng chọn "đủ nhìn thấy, không cần nét đẹp" nên hạ mạnh.
+ * Lịch sử: 1600 JPEG q82 → 126KB; v6 hạ xuống 1280 WebP q80 → 69KB.
+ * Đo 21/09/2026 trên 5 ảnh sản phẩm thật của shop lấy từ DB (đã nén 1 lần
+ * nên số tuyệt đối thấp hơn ảnh mới chụp, tỉ lệ thì tương đương):
+ *   1280 q80 → 78KB (mức cũ) | 960 q65 → 41KB | 800 q60 → 29KB |
+ *   720 q55 → 24KB (−69%, mức chọn) | 640 q50 → 19KB.
+ * Chọn bằng mắt trên ảnh ghép cạnh nhau ở cỡ điện thoại, không phải bằng
+ * con số. Chỉ áp cho ảnh tải lên từ v9-C; ảnh cũ không nén lại.
  */
-const PHOTO_MAX_DIMENSION = 1280;
-const PHOTO_QUALITY = 80;
+const PHOTO_MAX_DIMENSION = 720;
+const PHOTO_QUALITY = 55;
 
 /**
  * Ảnh chốt đơn là ẢNH CHỤP MÀN HÌNH CHỮ, và là bằng chứng khách đã chốt —
@@ -34,11 +39,13 @@ const DOC_MAX_DIMENSION = 1600;
 const DOC_QUALITY = 82;
 
 /**
- * 400 phủ được chỗ hiển thị lớn nhất đang dùng bản nhỏ (lưới ảnh 140px ở
- * ~2.9x). Các chỗ khác (thẻ món 40px, ô ảnh trong sheet 64px) dư sức.
+ * v9-C: 320 q60 (trước là 400 q72). Chỗ hiển thị lớn nhất dùng bản nhỏ là
+ * lưới ảnh ~170px, tức ~1.9x — hơi mềm nhưng đủ nhận ra mẫu và màu. Các chỗ
+ * khác (thẻ món 40px, ô ảnh trong sheet 64px) dư sức. Đo cùng 5 ảnh thật:
+ * 400 q72 → 12KB, 320 q60 → 7KB (−42%).
  */
-const THUMB_MAX_DIMENSION = 400;
-const THUMB_QUALITY = 72;
+const THUMB_MAX_DIMENSION = 320;
+const THUMB_QUALITY = 60;
 
 export type EncodedImage = {
   buffer: Buffer;
