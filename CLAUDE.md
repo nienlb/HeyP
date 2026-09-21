@@ -12,6 +12,16 @@ lại bằng `tests/spacing-grid.test.ts`. Thay đổi dễ thấy nhất: `.car
 thật cho tới khi gộp lại. Spec:
 `docs/superpowers/specs/2026-09-10-heyp-v9b-chuan-hoa-khoang-cach-design.md`,
 kế hoạch: `docs/superpowers/plans/2026-09-10-heyp-v9b-chuan-hoa-khoang-cach.md`.
+**v9-C xong** — mẫu lưu từ đơn chép theo ảnh của món (`copyPhotosToProduct`);
+bán hàng tồn kho NHIỀU MÓN ngay ở màn tạo đơn (`sellFromStock` nhận nhiều
+dòng, kiểm tồn trong transaction sau `FOR UPDATE`, cọc qua phiếu thu);
+danh sách đơn có cột Ngày tạo, cột SĐT, bộ lọc kiểu Excel
+(`src/lib/order-filters.ts`, trạng thái lọc trên URL) và ô tìm khớp SĐT;
+chọn khách hiện và tìm theo SĐT (`src/lib/phone.ts`); "Loại đơn" lên đầu form
+tạo đơn; ảnh sản phẩm nén 1280 q80 → 720 q55 (−69%). Vá kèm ba lỗi cũ của
+luồng bán kho (xem gotcha bên dưới). Spec:
+`docs/superpowers/specs/2026-09-21-heyp-v9c-anh-ban-kho-loc-don-design.md`,
+kế hoạch: `docs/superpowers/plans/2026-09-21-heyp-v9c-anh-ban-kho-loc-don.md`.
 
 ## Stack
 
@@ -75,7 +85,8 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
   bản chính là tải nặng gấp ~10 lần. Ảnh chốt đơn (`zalo_confirm`) giữ cạnh
   1600 vì là ảnh chụp CHỮ làm bằng chứng — xem `src/lib/image.ts`.
 - **`prepareForAi` và `prepareForStorage` là hai đường KHÁC NHAU, đừng gộp** —
-  gửi Gemini cần độ nét để đọc chữ (JPEG 1600), bản lưu cần nhẹ (WebP 1280).
+  gửi Gemini cần độ nét để đọc chữ (JPEG 1600), bản lưu cần nhẹ (WebP 720 q55
+  từ v9-C, trước đó 1280 q80; bản nhỏ 320 q60). Ảnh cũ KHÔNG nén lại.
   Nén ảnh gửi AI không tiết kiệm gì (không lưu lại) mà làm giảm độ chính xác OCR.
 - **`ItemPhotos` (`src/app/_components/item-photos.tsx`) dùng chung cho cả màn
   tạo đơn lẫn màn thêm món vào đơn đã tạo.** Đóng sheet mà không lưu thì phải
@@ -377,6 +388,41 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
   thật, không lộ ra khi đọc mã nguồn.
 - **Mọi thanh dính đáy/dính đỉnh phải cộng `env(safe-area-inset-*)`** (biến `--sat`/`--sab` trong `tokens.css`) — thiếu dòng này thì tabbar/StickyBar nằm dưới thanh home indicator của iPhone. `viewport-fit=cover` (`src/app/layout.tsx`, `export const viewport`) là điều kiện để các biến này có giá trị thật; thiếu nó thì mọi safe-area luôn ra 0px kể cả trên máy thật.
 - **`Sheet` (`src/app/_components/sheet.tsx`) chỉ render `<button>` khi có `onClick`** — không `href` và không `onClick` thì `ListRow` (không phải Sheet, class tương tự) trả về `<div>` tĩnh. Đụng tới khi `trailing` chứa một `<form><button>` riêng (vd nút Xoá) — HTML không cho `<button>` lồng `<button>`, lồng vào là vỡ hydration ngay (đã xảy ra thật ở `PaymentsBlock`).
+- **Đơn `ban_tu_kho` PHẢI có `quoted_total_vnd` = Σ giá bán và mọi
+  `order_items.cost_confirmed = true`** (v9-C) — báo cáo lãi đọc doanh thu từ
+  `quoted_total_vnd`, không từ `goods_total_cny`. Trước v9-C `sellFromStock`
+  bỏ trống cột này nên mọi đơn bán kho ra doanh thu 0 và lãi âm bằng giá vốn,
+  không lỗi nào nổ. `drizzle/0010` đã vá 11 đơn cũ trên DB thật (21/09).
+- **Mọi đường bán kho đi qua `sellFromStock`** (v9-C) — cả màn `/inventory`
+  lẫn màn tạo đơn (`createOrderAction` rẽ nhánh khi `orderType = ban_tu_kho`).
+  Trước v9-C chọn "Bán từ kho" ở màn tạo đơn đi qua `createOrder` và tạo đơn
+  mà KHÔNG trừ tồn. Kiểm tồn nằm sau `SELECT … FOR UPDATE ORDER BY id`, luật
+  cộng dòng trùng nằm trong `planStockSale` (thuần, có test). Giá ở form
+  `/inventory` là giá MỖI CÁI, không phải tổng.
+- **Đơn `ban_tu_kho` KHÔNG xoá được** (v9-C, `canDeleteOrder`) — nó trừ tồn
+  ngay lúc tạo, xoá đơn thì hàng không quay lại kho. Muốn đưa hàng về thì
+  dùng Đổi/trả từng món.
+- **Bộ lọc đơn nằm trên URL (`d`, `st`, `type`, `due`) và MỌI link của màn
+  Đơn phải giữ nó** (v9-C) — chip, sắp xếp, ô tìm (input ẩn). Thêm link mới
+  vào màn này thì đi qua `filtersToParams`, nếu không bấm vào là mất lọc.
+- **Bảng nổi lọc đầu cột dùng `position: fixed`** (v9-C) — `.dt-c` có
+  `overflow: hidden`, `absolute` sẽ bị cắt. Thêm `transform`/`filter` lên
+  `.dt` hay tổ tiên của nó là phá cơ chế này.
+- **`DataTable` có hai tầng cột: cột `wide` chỉ hiện từ 1280px** (v9-C) — từ
+  900 đến 1279px bảng hẹp và cột tên bị bóp về 0 nếu nhét đủ cột (đo được: cần
+  838px, có 595px). Cột `wide` bị ẩn ở tầng hẹp; SĐT khi đó hiện thành dòng
+  nhỏ dưới tên (`.dt-sub-phone`). Thêm cột mới vào bảng thì đo lại ở 900, 1024
+  và 1280 bằng `getBoundingClientRect`, đừng tin bằng mắt.
+- **Dải mờ mép phải chip mờ về `--bg`, không phải màu tối** (v9-C) — bản đầu
+  mờ về `rgba(16,32,43,.35)` và người dùng báo "vệt đen". `::after` chiếm chỗ
+  thật ở cuối hàng (không margin âm) để cuộn hết thì không che chip cuối.
+- **`ItemSheet` có chế độ món kho** (v9-C, `row.inventoryId !== null`) — tên,
+  size, màu chỉ đọc, số lượng chặn theo `stockLeft`, không có ảnh/¥/danh mục.
+  Số tồn ở client chỉ để chặn gõ quá; server kiểm lại trong transaction.
+- **Công cụ trình duyệt của harness bấm theo toạ độ khung ảnh chụp**, không
+  theo viewport giả lập — khi `resize_window` khác kích thước khung hiển thị,
+  toạ độ lệch và cú bấm rơi vào `<html>`. Nghi ngờ thì log `e.target` bằng
+  listener capture trước khi kết luận app lỗi.
 - **`.env` gitignored** (chứa `GEMINI_API_KEY`, `SESSION_SECRET`, `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`...). Mọi cấu hình đọc từ env qua `src/lib/config.ts`. Mẫu ở `.env.example`.
 - **`data/app.sqlite` là bản lùi lịch sử** (KHÔNG phải nguồn dữ liệu chính) —
   giữ lại phòng khi cần đối chiếu, đừng xoá. Dữ liệu chạy thử trên Supabase đã
@@ -443,4 +489,5 @@ Test bắt buộc phải xanh cho **công thức tiền** và **luật trạng t
 - Thiết kế v8-B (tốc độ điều hướng): `docs/superpowers/specs/2026-09-02-heyp-v8b-toc-do-dieu-huong-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-02-heyp-v8b-toc-do-dieu-huong.md`
 - Thiết kế v8-C (quyền và nhật ký): `docs/superpowers/specs/2026-09-02-heyp-v8c-quyen-va-nhat-ky-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-02-heyp-v8c-quyen-va-nhat-ky.md`
 - Thiết kế v9-A (danh mục sản phẩm): `docs/superpowers/specs/2026-09-09-heyp-v9a-danh-muc-san-pham-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-09-heyp-v9a-danh-muc-san-pham.md`
+- Thiết kế v9-C (ảnh mẫu, bán kho, lọc đơn, SĐT): `docs/superpowers/specs/2026-09-21-heyp-v9c-anh-ban-kho-loc-don-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-21-heyp-v9c-anh-ban-kho-loc-don.md`
 - Thiết kế v9-B (chuẩn hoá khoảng cách): `docs/superpowers/specs/2026-09-10-heyp-v9b-chuan-hoa-khoang-cach-design.md`, kế hoạch: `docs/superpowers/plans/2026-09-10-heyp-v9b-chuan-hoa-khoang-cach.md`

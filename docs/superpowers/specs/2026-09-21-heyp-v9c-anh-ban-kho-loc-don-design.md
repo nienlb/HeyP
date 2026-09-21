@@ -1,7 +1,7 @@
 # HeyP v9-C — Ảnh mẫu, bán từ kho trong đơn mới, lọc đơn, SĐT khách, ảnh nhẹ
 
 **Ngày:** 21/09/2026
-**Trạng thái:** đã chốt thiết kế, chờ viết kế hoạch triển khai
+**Trạng thái:** đã triển khai (21/09/2026), có mục 9 ghi các bổ sung phát sinh lúc làm
 
 ## 1. Bối cảnh
 
@@ -232,3 +232,24 @@ Hướng thay đổi:
   - dung lượng ảnh tải lên mới (xem trong Supabase Storage);
   - kiểm `font-size` 16px của các ô nhập mới (luật Safari iOS).
 - Khoảng cách trong CSS mới dùng `var(--sp-*)` (`tests/spacing-grid.test.ts`).
+
+## 9. Bổ sung phát sinh lúc triển khai (theo yêu cầu người dùng)
+
+- **SĐT trong danh sách đơn.** `OrderListRow.customerPhone`; ô tìm của màn Đơn
+  khớp cả SĐT (đã chuẩn hoá). Điện thoại và bảng hẹp: SĐT là dòng nhỏ dưới
+  tên. Từ 1280px: cột "SĐT" riêng.
+- **Bảng hai tầng cột.** Thêm hai cột (Ngày tạo, SĐT) làm bảng cần 838px mà
+  ở 900px chỉ có 595px, cột tên bị bóp về 0. `DataTable` có cờ `wide` cho
+  cột chỉ hiện từ 1280px; ở 900–1279px ẩn "Món", "Đã thu" và "SĐT" (SĐT thành
+  dòng dưới tên).
+- **"Loại đơn" lên đầu form tạo đơn** thành ba nút chọn (Order hộ / Nhập kho /
+  Bán từ kho), thay vì một `<select>` giấu trong khối "Tỷ giá · ship · loại đơn".
+- **Chọn khách ở trang chi tiết đơn** dùng chung Sheet nên cũng nhận SĐT: tạo
+  khách từ SĐT thì hỏi tên và lưu SĐT cùng khách mới (`setOrderCustomer`).
+- **Dải mờ chip lọc** đổi từ màu tối sang mờ về `--bg` (người dùng báo "vệt
+  đen"); thêm `margin-bottom` cho thanh công cụ trên desktop (ô tìm dính sát
+  hàng chip).
+- **Thông báo "kèm N ảnh"** của "Lưu vào danh mục" đưa ra ngoài khối có nút,
+  vì khối đó bị gỡ ngay khi lưu xong.
+- **Mức nén ảnh đã chọn:** ảnh chính 720px q55 (78KB → 24KB, −69%), ảnh nhỏ
+  320px q60 (12KB → 7KB, −42%), đo trên ảnh sản phẩm thật và chọn bằng mắt.
