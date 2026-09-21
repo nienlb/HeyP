@@ -266,8 +266,13 @@ export function ItemSheet({
           >
             {saving ? "Đang lưu…" : "★ Lưu vào danh mục"}
           </button>
-          {savedMsg && <div className="muted small">{savedMsg}</div>}
         </div>
+      )}
+      {/* Nằm NGOÀI khối có nút: lưu xong thì productId được gán và khối nút bị
+          gỡ, thông báo đặt trong đó sẽ biến mất ngay — người dùng không bao
+          giờ thấy "kèm N ảnh" (lỗi có sẵn từ trước). */}
+      {!isStock && savedMsg && (
+        <div className="muted small">{savedMsg}</div>
       )}
 
       {!isStock && (
