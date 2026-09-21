@@ -13,6 +13,7 @@ import {
   parseOrderFilters,
 } from "@/lib/order-filters";
 import type { SortDir } from "@/lib/table-sort";
+import { matchesCustomer } from "@/lib/phone";
 import { shortDateVn } from "@/lib/vn-time";
 import { OrdersList } from "./orders-list";
 import { OrderFilterButton } from "./order-filter-sheet";
@@ -74,7 +75,11 @@ export default async function OrdersPage({
   const searched = needle
     ? all.filter(
         (r) =>
-          r.customerName.toLowerCase().includes(needle) ||
+          // v9-C: khớp cả SĐT (đã chuẩn hoá), không chỉ tên khách.
+          matchesCustomer(
+            { name: r.customerName, phone: r.customerPhone },
+            needle,
+          ) ||
           String(r.id).includes(needle) ||
           `#${r.id}`.includes(needle),
       )
@@ -144,7 +149,7 @@ export default async function OrdersPage({
           <input
             type="search"
             name="q"
-            placeholder="Tìm tên khách / mã đơn…"
+            placeholder="Tìm tên khách / SĐT / mã đơn…"
             defaultValue={q ?? ""}
             enterKeyHint="search"
           />
@@ -200,6 +205,7 @@ export default async function OrdersPage({
             goodsTotalCny: o.goodsTotalCny,
             href: `/orders/${o.id}`,
             customerName: o.customerName,
+            customerPhone: o.customerPhone,
             createdAtMs: o.createdAt.getTime(),
             createdText: shortDateVn(o.createdAt, now),
             statusText: STATUS_LABELS[o.status],

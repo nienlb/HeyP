@@ -2004,6 +2004,8 @@ export type OrderListRow = {
   orderType: OrderType;
   status: OrderStatus;
   customerName: string;
+  /** v9-C: hiện ở danh sách đơn và để tìm; null nếu khách chưa có SĐT. */
+  customerPhone: string | null;
   amountDue: number;
   deposit: number;
   /** Cần cho cảnh báo "sẽ trừ …¥" của thao tác hàng loạt (v6). */
@@ -2027,6 +2029,7 @@ export async function listOrders(query?: string): Promise<OrderListRow[]> {
       createdAt: orders.createdAt,
       statusChangedAt: orders.statusChangedAt,
       customerName: customers.name,
+      customerPhone: customers.phone,
     })
     .from(orders)
     // leftJoin, KHÔNG phải innerJoin: đơn chưa gắn khách vẫn phải hiện ra —

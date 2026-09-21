@@ -30,6 +30,11 @@ export type Column<T> = {
   align?: "right";
   /** true = hiện cả trên điện thoại. Mặc định false: chỉ từ 900px. */
   mobile?: boolean;
+  /**
+   * true = chỉ hiện từ 1280px (v9-C). Từ 900 đến 1279px bảng hẹp, cột này
+   * bị ẩn để cột tên khỏi bị bóp về 0. Dùng cho cột phụ, ít quan trọng nhất.
+   */
+  wide?: boolean;
   /** Vắng mặt = cột không sắp xếp được (không có link ở tiêu đề). */
   sortBy?: (row: T) => number | string | null;
   /**
@@ -67,10 +72,16 @@ export function DataTable<T>({
 
   const style = {
     "--dt-cols": columns.map((c) => c.width).join(" "),
+    // Bảng hẹp (900–1279px): bỏ độ rộng của các cột `wide`. Bảng không có
+    // cột wide nào thì biến này bằng --dt-cols, CSS không thấy khác gì.
+    "--dt-cols-narrow": columns
+      .filter((c) => !c.wide)
+      .map((c) => c.width)
+      .join(" "),
   } as CSSProperties;
 
   const cellClass = (c: Column<T>) =>
-    `dt-c${c.mobile ? " dt-m" : ""}${c.align === "right" ? " dt-r" : ""}`;
+    `dt-c${c.mobile ? " dt-m" : ""}${c.align === "right" ? " dt-r" : ""}${c.wide ? " dt-w" : ""}`;
 
   return (
     <div className="dt" style={style}>

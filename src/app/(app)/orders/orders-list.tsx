@@ -15,6 +15,7 @@ import { ColumnFilter } from "./column-filter";
 export type OrderRowItem = BulkOrder & {
   href: string;
   customerName: string;
+  customerPhone: string | null;
   /** v9-C: epoch ms để sắp xếp, và chữ "21/09" đã định dạng ở server. */
   createdAtMs: number;
   createdText: string;
@@ -108,13 +109,13 @@ export function OrdersList({
     {
       key: "id",
       header: "#",
-      width: "56px",
+      width: "48px",
       cell: (r) => <span className="lr-id">{r.id}</span>,
     },
     {
       key: "ngay",
       header: "Ngày tạo",
-      width: "96px",
+      width: "80px",
       sortBy: (r) => r.createdAtMs,
       headerExtra: (
         <ColumnFilter group="date" filters={filters} baseQuery={baseQuery} />
@@ -141,6 +142,11 @@ export function OrdersList({
             {r.customerName}
             {r.hasGap && <span className="gap-dot" title={r.gapTitle} />}
           </span>
+          {/* SĐT dưới tên: hiện ở điện thoại VÀ bảng hẹp (900–1279px, chưa có
+              chỗ cho cột riêng). Từ 1280px cột "SĐT" lo, dòng này tự ẩn. */}
+          {r.customerPhone && (
+            <span className="dt-sub dt-sub-phone">{r.customerPhone}</span>
+          )}
           {/* Chỉ hiện trên điện thoại — desktop có cột riêng cho từng mẩu.
               Mã đơn phải nằm ở đây: trước v8-A nó là `trailing` của ListRow
               nên vẫn thấy được trên điện thoại, bỏ đi là mất thông tin. */}
@@ -153,9 +159,16 @@ export function OrdersList({
       ),
     },
     {
+      key: "sdt",
+      header: "SĐT",
+      width: "112px",
+      wide: true,
+      cell: (r) => r.customerPhone ?? "—",
+    },
+    {
       key: "trang_thai",
       header: "Trạng thái",
-      width: "160px",
+      width: "150px",
       sortBy: (r) => r.statusText,
       headerExtra: (
         <ColumnFilter group="status" filters={filters} baseQuery={baseQuery} />
@@ -172,6 +185,7 @@ export function OrdersList({
       header: "Món",
       width: "64px",
       align: "right",
+      wide: true,
       sortBy: (r) => r.itemCount,
       cell: (r) => r.itemCount,
     },
@@ -180,13 +194,14 @@ export function OrdersList({
       header: "Đã thu",
       width: "120px",
       align: "right",
+      wide: true,
       sortBy: (r) => r.deposit,
       cell: (r) => r.depositText,
     },
     {
       key: "con_thu",
       header: "Còn thu",
-      width: "130px",
+      width: "112px",
       align: "right",
       mobile: true,
       sortBy: (r) => r.amountDue,

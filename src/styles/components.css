@@ -441,7 +441,7 @@
   .dt-head,
   .dt-row {
     display: grid;
-    grid-template-columns: var(--dt-cols);
+    grid-template-columns: var(--dt-cols-narrow, var(--dt-cols));
     gap: var(--sp-3);
     align-items: center;
   }
@@ -477,8 +477,32 @@
   .dt-c:not(.dt-m) {
     display: block;
   }
+  /* Cột `wide` (v9-C): ẩn ở bảng hẹp. Đặt SAU luật display: block bên trên
+     vì cùng độ đặc hiệu — khai báo sau thắng. */
+  .dt-c.dt-w {
+    display: none;
+  }
   /* Desktop: thông tin phụ đã có cột riêng. */
   .dt-sub {
+    display: none;
+  }
+  /* Ngoại lệ (v9-C): SĐT dưới tên vẫn hiện ở bảng hẹp, nơi cột "SĐT" bị ẩn
+     (`wide`). Độ đặc hiệu (0,2,0) cao hơn `.dt-sub` nên thắng dù đứng ở đâu. */
+  .dt-sub.dt-sub-phone {
+    display: block;
+  }
+}
+
+@media (min-width: 1280px) {
+  .dt-head,
+  .dt-row {
+    grid-template-columns: var(--dt-cols);
+  }
+  .dt-c.dt-w {
+    display: block;
+  }
+  /* Bảng đủ rộng: cột "SĐT" riêng đã có, ẩn dòng SĐT dưới tên. */
+  .dt-sub.dt-sub-phone {
     display: none;
   }
 }
