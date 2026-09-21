@@ -32,6 +32,11 @@ export type Column<T> = {
   mobile?: boolean;
   /** Vắng mặt = cột không sắp xếp được (không có link ở tiêu đề). */
   sortBy?: (row: T) => number | string | null;
+  /**
+   * v9-C: phần tử cạnh tiêu đề cột (nút ▾ lọc). ReactNode chứ không phải
+   * hàm, nên bảng vẫn không cần "use client".
+   */
+  headerExtra?: ReactNode;
   cell: (row: T) => ReactNode;
 };
 
@@ -89,6 +94,7 @@ export function DataTable<T>({
           return (
             <span key={c.key} className={cellClass(c)}>
               {label}
+              {c.headerExtra}
             </span>
           );
         })}

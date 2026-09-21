@@ -6,8 +6,16 @@ import { formatVnd } from "@/lib/format";
 import { GAP_CODES, GAP_LABELS, type GapCode } from "@/lib/order-gaps";
 import { STATUS_LABELS } from "@/lib/order-status";
 import { ageBadge } from "@/lib/order-badge";
+import {
+  activeGroupCount,
+  filtersToParams,
+  matchesOrderFilters,
+  parseOrderFilters,
+} from "@/lib/order-filters";
 import type { SortDir } from "@/lib/table-sort";
+import { shortDateVn } from "@/lib/vn-time";
 import { OrdersList } from "./orders-list";
+import { OrderFilterButton } from "./order-filter-sheet";
 
 type RowWithGaps = OrderListRow & { gaps: GapCode[] };
 
@@ -44,10 +52,20 @@ export default async function OrdersPage({
     f?: string;
     sort?: string;
     dir?: string;
+    d?: string;
+    st?: string;
+    type?: string;
+    due?: string;
   }>;
 }) {
-  const [session, { q, gap, f: rawF, sort, dir: rawDir }, all] =
-    await Promise.all([requireAuth(), searchParams, listOrdersWithGaps()]);
+  const [session, sp, all] = await Promise.all([
+    requireAuth(),
+    searchParams,
+    listOrdersWithGaps(),
+  ]);
+  const { q, gap, f: rawF, sort, dir: rawDir } = sp;
+  const filters = parseOrderFilters(sp);
+  const now = new Date();
 
   const dir: SortDir = rawDir === "asc" ? "asc" : "desc";
 
@@ -74,7 +92,9 @@ export default async function OrdersPage({
   const f =
     typeof rawF === "string" ? rawF : attentionCount > 0 ? "chu_y" : "";
 
-  const rows = gapFiltered.filter((r) => matchesFilter(r, f)).sort((a, b) => {
+  const rows = gapFiltered
+    .filter((r) => matchesFilter(r, f) && matchesOrderFilters(r, filters, now))
+    .sort((a, b) => {
     // Sự cố lên trước, rồi tới đơn đứng lâu nhất.
     if (a.status === "su_co" && b.status !== "su_co") return -1;
     if (b.status === "su_co" && a.status !== "su_co") return 1;
@@ -89,7 +109,7 @@ export default async function OrdersPage({
     if (rawDir) p.set("dir", rawDir);
     // Chuỗi rỗng cũng phải ghi để phân biệt "chọn Tất cả" với "chưa chọn gì".
     p.set("f", code);
-    return `/orders?${p.toString()}`;
+    return `/orders?${filtersToParams(filters, p).toString()}`;
   };
 
   // Chuỗi nền cho link sắp xếp. Gửi đi dưới dạng CHUỖI, không phải hàm —
@@ -99,13 +119,28 @@ export default async function OrdersPage({
     if (q) p.set("q", q);
     if (activeGap) p.set("gap", activeGap);
     p.set("f", f);
+    return filtersToParams(filters, p).toString();
+  })();
+
+  // Chuỗi nền cho nút lọc: đủ mọi thứ TRỪ bốn khoá lọc (chúng tự ghi lại).
+  const baseQuery = (() => {
+    const p = new URLSearchParams();
+    if (q) p.set("q", q);
+    if (activeGap) p.set("gap", activeGap);
+    p.set("f", f);
+    if (sort) p.set("sort", sort);
+    if (rawDir) p.set("dir", rawDir);
     return p.toString();
   })();
 
   return (
     <>
-      <div className="list-toolbar">
+      <div className="list-toolbar list-toolbar-filter">
         <form className="search" action="/orders" method="get">
+          {/* Ô tìm là form GET chỉ gửi q — giữ lại bộ lọc bằng input ẩn. */}
+          {[...filtersToParams(filters, new URLSearchParams())].map(([k, v]) => (
+            <input key={k} type="hidden" name={k} value={v} />
+          ))}
           <input
             type="search"
             name="q"
@@ -114,6 +149,7 @@ export default async function OrdersPage({
             enterKeyHint="search"
           />
         </form>
+        <OrderFilterButton filters={filters} baseQuery={baseQuery} />
       </div>
 
       <ChipBar>
@@ -144,12 +180,19 @@ export default async function OrdersPage({
           ) : (
             <p>Không có đơn nào ở mục này.</p>
           )}
+          {activeGroupCount(filters) > 0 && (
+            <Link href={`/orders?${baseQuery}`} className="btn btn-sm btn-outline">
+              Xoá lọc
+            </Link>
+          )}
         </div>
       ) : (
         <OrdersList
           sort={sort}
           dir={dir}
           sortBase={sortBase}
+          filters={filters}
+          baseQuery={baseQuery}
           rows={rows.map((o) => ({
             id: o.id,
             orderType: o.orderType,
@@ -157,6 +200,8 @@ export default async function OrdersPage({
             goodsTotalCny: o.goodsTotalCny,
             href: `/orders/${o.id}`,
             customerName: o.customerName,
+            createdAtMs: o.createdAt.getTime(),
+            createdText: shortDateVn(o.createdAt, now),
             statusText: STATUS_LABELS[o.status],
             ageBadgeText: ageBadge(o),
             itemCount: o.itemCount,

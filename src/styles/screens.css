@@ -265,6 +265,70 @@
   color: var(--brand);
 }
 
+/* ---------- Lọc đơn kiểu Excel (v9-C) ---------- */
+.list-toolbar-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.list-toolbar-filter .search {
+  flex: 1;
+}
+.flt-btn {
+  flex: none;
+}
+.flt-on {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.flt-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.flt-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+}
+.flt-range input {
+  font-size: var(--fs-3);
+}
+.flt-check {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap);
+  font-size: var(--fs-3);
+}
+.col-flt {
+  margin-left: var(--sp-1);
+  padding: 0 var(--sp-1);
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.col-flt-on {
+  color: var(--brand);
+  font-weight: 700;
+}
+.col-flt-panel {
+  position: fixed;
+  z-index: 50;
+  width: 280px;
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+  color: var(--text);
+}
+
 /* ---------- Màn danh sách trên desktop (v8-A) ---------- */
 @media (min-width: 900px) {
   /* Ô tìm và nút hành động về cùng một hàng — desktop không có ô hành động

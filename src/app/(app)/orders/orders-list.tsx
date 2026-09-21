@@ -6,13 +6,18 @@ import { DataTable, type Column } from "@/app/_components/data-table";
 import { StickyBar } from "@/app/_components/sticky-bar";
 import { BULK_LIMIT, planBulkAdvance, type BulkOrder } from "@/lib/bulk-status";
 import type { SortDir } from "@/lib/table-sort";
+import type { OrderFilters } from "@/lib/order-filters";
 import { bulkAdvanceAction } from "./actions";
 import { BulkSheet } from "./bulk-sheet";
+import { ColumnFilter } from "./column-filter";
 
 /** Dữ liệu đã tính sẵn ở server — component này không truy vấn gì thêm. */
 export type OrderRowItem = BulkOrder & {
   href: string;
   customerName: string;
+  /** v9-C: epoch ms để sắp xếp, và chữ "21/09" đã định dạng ở server. */
+  createdAtMs: number;
+  createdText: string;
   statusText: string;
   /** null = đơn bình thường, không hiện badge. */
   ageBadgeText: string | null;
@@ -30,6 +35,8 @@ export function OrdersList({
   sort,
   dir,
   sortBase,
+  filters,
+  baseQuery,
 }: {
   rows: OrderRowItem[];
   sort?: string;
@@ -42,6 +49,9 @@ export function OrdersList({
    * (không tuần tự hoá được). Vì vậy server gửi phần nền, client tự ghép.
    */
   sortBase: string;
+  /** Bộ lọc đang áp (v9-C) và chuỗi query nền KHÔNG gồm 4 khoá lọc. */
+  filters: OrderFilters;
+  baseQuery: string;
 }) {
   const sortHref = (key: string, nextDir: SortDir) => {
     const p = new URLSearchParams(sortBase);
@@ -102,6 +112,16 @@ export function OrdersList({
       cell: (r) => <span className="lr-id">{r.id}</span>,
     },
     {
+      key: "ngay",
+      header: "Ngày tạo",
+      width: "96px",
+      sortBy: (r) => r.createdAtMs,
+      headerExtra: (
+        <ColumnFilter group="date" filters={filters} baseQuery={baseQuery} />
+      ),
+      cell: (r) => r.createdText,
+    },
+    {
       key: "khach",
       header: "Khách hàng",
       width: "minmax(0, 2fr)",
@@ -126,7 +146,8 @@ export function OrdersList({
               nên vẫn thấy được trên điện thoại, bỏ đi là mất thông tin. */}
           <span className="dt-sub">
             #{r.id} · {r.statusText}
-            {r.ageBadgeText ? ` · ${r.ageBadgeText}` : ""} · {r.itemCount} món
+            {r.ageBadgeText ? ` · ${r.ageBadgeText}` : ""} · {r.itemCount} món ·{" "}
+            {r.createdText}
           </span>
         </>
       ),
@@ -136,6 +157,9 @@ export function OrdersList({
       header: "Trạng thái",
       width: "160px",
       sortBy: (r) => r.statusText,
+      headerExtra: (
+        <ColumnFilter group="status" filters={filters} baseQuery={baseQuery} />
+      ),
       cell: (r) => (
         <>
           {r.statusText}
@@ -166,6 +190,9 @@ export function OrdersList({
       align: "right",
       mobile: true,
       sortBy: (r) => r.amountDue,
+      headerExtra: (
+        <ColumnFilter group="due" filters={filters} baseQuery={baseQuery} />
+      ),
       cell: (r) => r.amountText,
     },
   ];
