@@ -135,10 +135,12 @@ Bốn nhóm:
   thì mở một bảng nổi nhỏ có ô tích và hai nút "Xoá lọc" / "Áp dụng", giống lọc
   cột trong Excel. Loại đơn không có cột riêng, nên nằm trong nút "Lọc" chung.
   Cột đang bị lọc thì nút ▾ được tô màu.
-- **Điện thoại:** nút "Lọc" ở header (`.header-action-float`, cạnh "Chọn"), có
-  số nhóm đang lọc: "Lọc (2)". Bấm vào mở Sheet chứa đủ bốn nhóm.
+- **Nút "Lọc" (mọi cỡ màn):** nằm cạnh ô tìm kiếm, có số nhóm đang lọc:
+  "Lọc (2)". Bấm vào mở Sheet chứa đủ bốn nhóm. Không đặt ở header vì ô
+  `.header-action-float` đã thuộc về nút "Chọn". Nút luôn hiện, kể cả khi lọc
+  ra 0 đơn, để luôn còn đường gỡ lọc.
 - **Điều kiện lọc nằm trên URL:** `?d=7d`, `?d=2026-09-01_2026-09-15`,
-  `?st=da_mua_tq,da_giao_khach`, `?type=ban_tu_kho`, `?due=no`. Bấm lùi, tải lại
+  `?st=da_mua_tq,da_giao_khach`, `?type=ban_tu_kho`, `?due=owing` hoặc `?due=paid`. Bấm lùi, tải lại
   hay dán link vẫn giữ được bộ lọc. Giá trị lạ trên URL thì bỏ qua, không lỗi.
 - Hàng chip hiện có ("Cần chú ý", "Tất cả"…) giữ nguyên làm lối tắt và kết hợp
   với bộ lọc mới theo phép VÀ.
