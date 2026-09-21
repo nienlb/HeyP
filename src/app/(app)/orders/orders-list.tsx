@@ -146,8 +146,8 @@ export function OrdersList({
               nên vẫn thấy được trên điện thoại, bỏ đi là mất thông tin. */}
           <span className="dt-sub">
             #{r.id} · {r.statusText}
-            {r.ageBadgeText ? ` · ${r.ageBadgeText}` : ""} · {r.itemCount} món ·{" "}
-            {r.createdText}
+            {r.ageBadgeText ? ` · ${r.ageBadgeText}` : ""} · {r.itemCount}
+            {"\u00a0"}món · {r.createdText}
           </span>
         </>
       ),

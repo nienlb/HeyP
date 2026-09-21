@@ -18,24 +18,21 @@
   display: none;
 }
 /*
- * Lớp phủ dính mép phải, VẼ TRÊN các .chip — thử `mask-image` (làm mờ
- * alpha của chính .chip-bar) trước, loại: trên nền --bg gần-trắng của app,
- * "trắng đặc mờ dần thành be gần-trắng trong suốt" gần như không có tương
- * phản, mắt không nhận ra khác gì so với bị cắt cứng (kiểm bằng cách đổi
- * nền thử sang màu tương phản mạnh — mask CÓ chạy đúng, chỉ là không thấy
- * được trên bảng màu thật). Thử `box-shadow: inset` trên .chip-bar tiếp
- * theo, cũng loại: painting order vẽ box-shadow của cha TRƯỚC content con,
- * nên bị nền trắng đặc của từng .chip che kín, không thấy gì.
+ * Lớp phủ dính mép phải, VẼ TRÊN các .chip, mờ dần về ĐÚNG màu nền --bg.
  *
- * Cách này dùng pseudo-element thật (không phải mask/shadow của chính
- * .chip-bar) nên nó vẽ TRÊN các .chip đứng trước nó trong DOM.
- * `position: sticky` (không phải `absolute`) để nó bám mép phải KHUNG
- * NHÌN khi cuộn ngang, không trôi theo nội dung. Chỉ mờ cạnh PHẢI: cạnh
- * trái luôn bắt đầu bằng chip "Cần chú ý" còn nguyên vẹn, không cần gợi ý
- * cuộn ngược lại. Nhược điểm chấp nhận: lớp phủ vẫn hiện dù đã cuộn hết —
- * đổi lại không cần JS theo dõi vị trí cuộn cho một gợi ý thị giác nhỏ.
- * PHẢI tắt ở breakpoint desktop (screens.css) vì chip-bar hết cuộn ở đó —
- * quên tắt thì nó đè nhầm lên chip nằm gần rìa phải mỗi dòng đã wrap.
+ * Lịch sử: `mask-image` trên .chip-bar bị loại vì chip trắng mờ thành nền
+ * gần-trắng thì mắt không thấy khác gì bị cắt cứng; `box-shadow: inset` bị
+ * loại vì cha vẽ shadow TRƯỚC con nên nền chip che kín. Bản đầu của lớp phủ
+ * này mờ về màu TỐI (rgba(16,32,43,.35)) cho dễ thấy — nhưng người dùng
+ * chụp ảnh production báo "vệt đen" (v9-C): nó trông như lỗi hiển thị chứ
+ * không phải gợi ý cuộn. Mờ về --bg (nền của chính .chip-bar) thì chữ chip
+ * biến mất dần, đủ báo "còn nữa" mà không có mảng màu lạ.
+ *
+ * Là pseudo-element thật nên vẽ TRÊN các .chip đứng trước nó trong DOM.
+ * `position: sticky` để bám mép phải KHUNG NHÌN khi cuộn, không trôi theo
+ * nội dung. KHÔNG dùng margin âm: nó chiếm chỗ thật ở cuối hàng, nên khi
+ * cuộn hết thì nó nằm trên khoảng trống đó chứ không che chip cuối.
+ * PHẢI tắt ở desktop (screens.css) vì chip-bar hết cuộn, wrap nhiều dòng.
  */
 .chip-bar::after {
   content: "";
@@ -45,8 +42,7 @@
   bottom: 0;
   flex: none;
   width: var(--sp-6);
-  margin-left: calc(-1 * var(--sp-6));
-  background: linear-gradient(to right, transparent, rgba(16, 32, 43, 0.35));
+  background: linear-gradient(to right, transparent, var(--bg) 85%);
   pointer-events: none;
 }
 .chip {

@@ -337,6 +337,9 @@
     display: flex;
     align-items: center;
     gap: var(--sp-3);
+    /* chip-bar ở desktop có padding 0 nên không tự tạo khoảng hở với hàng
+       trên nó — thiếu dòng này ô tìm dính sát hàng chip. */
+    margin-bottom: var(--sp-3);
   }
   .list-toolbar .search {
     flex: 1;
