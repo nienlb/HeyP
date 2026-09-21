@@ -27,6 +27,24 @@
   flex: none;
 }
 
+/* v9-C: tên + SĐT trong Sheet chọn khách. */
+.cust-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.cust-phone {
+  font-size: var(--fs-2);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.picker-sub {
+  margin-left: var(--sp-1);
+  font-weight: 400;
+  color: var(--muted);
+}
+
 /* ---------- Màn tạo đơn kiểu POS ---------- */
 .sec-label {
   font-size: var(--fs-2);

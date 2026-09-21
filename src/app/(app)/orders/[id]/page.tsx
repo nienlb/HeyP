@@ -200,6 +200,7 @@ export default async function OrderDetailPage({
                 customers={allCustomers.map((c) => ({
                   id: c.id,
                   name: c.name,
+                  phone: c.phone,
                   warningFlag: c.warningFlag,
                   warningReason: c.warningReason,
                 }))}

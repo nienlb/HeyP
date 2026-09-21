@@ -623,10 +623,13 @@ export async function setOrderCustomerAction(
 
   const customerId = parseVnd(formData.get("customerId")) || null;
   const newName = String(formData.get("newCustomerName") ?? "").trim();
+  const newPhone = String(formData.get("newCustomerPhone") ?? "").trim();
 
   const result = await setOrderCustomer(orderId, {
     customerId,
-    newCustomer: newName ? { name: newName } : null,
+    newCustomer: newName
+      ? { name: newName, phone: newPhone || undefined }
+      : null,
   });
   if (!result.ok) {
     redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);

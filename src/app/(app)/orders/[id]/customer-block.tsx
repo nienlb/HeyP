@@ -149,13 +149,29 @@ export function CustomerBlock({
             {picked.mode === "existing" && (
               <input type="hidden" name="customerId" value={picked.id} />
             )}
-            {picked.mode === "new" && (
+            {picked.mode === "new" && picked.name !== "" && (
               <input type="hidden" name="newCustomerName" value={picked.name} />
             )}
-            <p>
-              Gắn đơn #{orderId} cho khách <strong>{picked.name}</strong>
-              {picked.mode === "new" && " (khách mới)"}.
-            </p>
+            {picked.mode === "new" && picked.phone && (
+              <input type="hidden" name="newCustomerPhone" value={picked.phone} />
+            )}
+            {/* Tạo từ SĐT thì chưa có tên — hỏi ở đây, không gửi tên rỗng. */}
+            {picked.mode === "new" && picked.name === "" ? (
+              <label className="field">
+                <span>Tên khách mới * (SĐT {picked.phone})</span>
+                <input
+                  name="newCustomerName"
+                  required
+                  autoFocus
+                  placeholder="VD: Lan Anh"
+                />
+              </label>
+            ) : (
+              <p>
+                Gắn đơn #{orderId} cho khách <strong>{picked.name}</strong>
+                {picked.mode === "new" && " (khách mới)"}.
+              </p>
+            )}
             <button type="submit" className="btn" style={{ width: "100%" }}>
               Xác nhận
             </button>

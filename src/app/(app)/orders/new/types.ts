@@ -46,6 +46,8 @@ export const emptyItem: ItemRow = {
 export type CustomerOption = {
   id: number;
   name: string;
+  /** v9-C: hiện dưới tên và dùng để tìm — tên không phải định danh duy nhất. */
+  phone: string | null;
   warningFlag: boolean;
   warningReason: string | null;
 };

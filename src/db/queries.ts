@@ -192,7 +192,10 @@ export async function getCustomer(id: number) {
  */
 export async function setOrderCustomer(
   orderId: number,
-  input: { customerId?: number | null; newCustomer?: { name: string } | null },
+  input: {
+    customerId?: number | null;
+    newCustomer?: { name: string; phone?: string } | null;
+  },
 ): Promise<LineActionResult> {
   try {
     return await withTx(async (x) => {
@@ -207,8 +210,8 @@ export async function setOrderCustomer(
         const name = input.newCustomer.name.trim();
         if (name === "") throw new Error("Chưa nhập tên khách mới.");
         const c = await x.get<{ id: number }>(
-          "INSERT INTO customers(name) VALUES(?) RETURNING id",
-          [name],
+          "INSERT INTO customers(name, phone) VALUES(?, ?) RETURNING id",
+          [name, input.newCustomer.phone ?? null],
         );
         customerId = c!.id;
       }

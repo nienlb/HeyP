@@ -17,6 +17,7 @@ export default async function NewOrderPage() {
           customers={customers.map((c) => ({
             id: c.id,
             name: c.name,
+            phone: c.phone,
             warningFlag: c.warningFlag,
             warningReason: c.warningReason,
           }))}

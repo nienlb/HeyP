@@ -75,6 +75,12 @@ export function NewOrderForm({
   const [importOpen, setImportOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  function pickCustomer(p: CustomerPick) {
+    setPicked(p);
+    // Khách mới tạo từ SĐT: điền sẵn số vào ô SĐT.
+    if (p.mode === "new" && p.phone) setNewCustomerPhone(p.phone);
+  }
+
   /** Áp một patch (từ mergeMoneyFields) vào state form — chỉ set trường có mặt. */
   function applyMoneyPatch(patch: ReturnType<typeof mergeMoneyFields>["patch"]) {
     if (patch.newCustomerName !== undefined && patch.newCustomerName !== "")
@@ -321,7 +327,7 @@ export function NewOrderForm({
           {picked?.mode === "existing" && (
             <input type="hidden" name="customerId" value={picked.id} />
           )}
-          {picked?.mode === "new" && (
+          {picked?.mode === "new" && picked.name !== "" && (
             <input type="hidden" name="newCustomerName" value={picked.name} />
           )}
 
@@ -331,11 +337,34 @@ export function NewOrderForm({
             className="picker"
             onClick={() => setCustomerSheet(true)}
           >
-            {picked ? picked.name : "+ Chọn khách"}
+            {picked
+              ? picked.name ||
+                (picked.mode === "new" ? `Khách mới · ${newCustomerPhone}` : "")
+              : "+ Chọn khách"}
+            {picked?.mode === "existing" &&
+              (() => {
+                const p = customers.find((c) => c.id === picked.id)?.phone;
+                return p ? <span className="picker-sub"> · {p}</span> : null;
+              })()}
           </button>
 
+          {/* Ô KHÔNG điều khiển (không value/onChange) có chủ đích: gõ mà đổi
+              picked.name thì điều kiện name === "" sai ngay ký tự đầu và ô
+              biến mất. required chặn gửi khi trống; server vẫn kiểm lại. */}
+          {picked?.mode === "new" && picked.name === "" && (
+            <label className="field">
+              <span>Tên khách *</span>
+              <input
+                name="newCustomerName"
+                autoFocus
+                required
+                placeholder="VD: Lan Anh"
+              />
+            </label>
+          )}
+
           {picked?.mode === "new" && (
-            <details className="more-fields">
+            <details className="more-fields" open={newCustomerPhone !== ""}>
               <summary>Thêm SĐT / địa chỉ</summary>
               <label className="field">
                 <span>SĐT / Zalo</span>
@@ -533,7 +562,7 @@ export function NewOrderForm({
         open={customerSheet}
         onClose={() => setCustomerSheet(false)}
         customers={customers}
-        onPick={setPicked}
+        onPick={pickCustomer}
       />
 
       <ItemSheet
