@@ -10,7 +10,7 @@ import {
   updateProduct,
   type ProductInput,
 } from "@/db/products";
-import { copyProductPhotos } from "@/db/product-photos";
+import { copyPhotosToProduct, copyProductPhotos } from "@/db/product-photos";
 import { parseList } from "@/lib/product-catalog";
 import { parseDecimal, parseVnd } from "@/lib/parse-number";
 import { logActivity } from "@/db/activity";
@@ -131,8 +131,9 @@ export async function pickProductAction(productId: number): Promise<number[]> {
 
 /**
  * "Lưu vào danh mục" từ Sheet thêm món — ghim một món đang gõ thành mẫu.
- * Ảnh của món KHÔNG bị lấy đi: mẫu mới được chép ảnh riêng khi dùng lại.
- * Ở đây chỉ lưu chữ và giá.
+ *
+ * Ảnh của món được CHÉP sang mẫu (v9-C), bản gốc vẫn ở lại với món. Trước
+ * đây hàm này bỏ ảnh nên mẫu tạo từ đơn không bao giờ có ảnh.
  */
 export async function quickSaveProductAction(input: {
   name: string;
@@ -141,7 +142,12 @@ export async function quickSaveProductAction(input: {
   sellPriceVnd: number;
   unitPriceCny: number;
   productUrl: string | null;
-}): Promise<{ productId: number } | { error: string }> {
+  /** Ảnh đang gắn với món trên form (dòng photos mồ côi, chưa thuộc đơn). */
+  photoIds: number[];
+}): Promise<
+  | { productId: number; photosCopied: number; photosTotal: number }
+  | { error: string }
+> {
   const session = await getSession();
   if (!session) return { error: "Phiên đăng nhập đã hết hạn." };
   const name = input.name.trim();
@@ -157,12 +163,19 @@ export async function quickSaveProductAction(input: {
     photoIds: [],
   });
 
+  // Mẫu tạo trước, ảnh chép sau: chép hỏng một ảnh không làm mất cả mẫu.
+  const photos = await copyPhotosToProduct(productId, input.photoIds ?? []);
+
   await logActivity({
     actor: session.username,
     action: "product.create",
     entityId: productId,
-    detail: { ten: name, op: "quick_save" },
+    detail: { ten: name, op: "quick_save", anh: photos.copied },
   });
   revalidatePath("/products");
-  return { productId };
+  return {
+    productId,
+    photosCopied: photos.copied,
+    photosTotal: photos.total,
+  };
 }

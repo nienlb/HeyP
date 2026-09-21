@@ -248,12 +248,19 @@ export function ItemSheet({
                 sellPriceVnd: parseVnd(row.sellPriceVnd),
                 unitPriceCny: parseDecimal(row.unitPriceCny),
                 productUrl: row.productUrl.trim() || null,
+                photoIds: row.photos.map((p) => p.id),
               });
               setSaving(false);
               if ("error" in res) setSavedMsg(res.error);
               else {
                 set({ productId: res.productId });
-                setSavedMsg("Đã lưu vào danh mục.");
+                setSavedMsg(
+                  res.photosTotal === 0
+                    ? "Đã lưu vào danh mục."
+                    : res.photosCopied === res.photosTotal
+                      ? `Đã lưu vào danh mục kèm ${res.photosCopied} ảnh.`
+                      : `Đã lưu vào danh mục (${res.photosCopied}/${res.photosTotal} ảnh).`,
+                );
               }
             }}
           >
