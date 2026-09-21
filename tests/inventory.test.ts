@@ -4,6 +4,7 @@ import {
   applyStockIn,
   applyStockOut,
   bomCostBasis,
+  planStockSale,
   stockKey,
   saleProfit,
   unitGoodsCostVnd,
@@ -134,4 +135,72 @@ test("stockKey: nhánh n: KHÔNG tách theo size — giữ đúng cách gom cũ"
     stockKey({ name: "Giày ABC", size: "38" }),
     stockKey({ name: "Giày ABC", size: "42" }),
   );
+});
+
+const STOCK = [
+  { id: 1, name: "Dép A 38", quantity: 3, avgCost: 150_000 },
+  { id: 2, name: "Giày B 42", quantity: 1, avgCost: 400_000 },
+];
+
+test("planStockSale: đủ hàng — tổng tiền, giá vốn, số tồn sau", () => {
+  const p = planStockSale(
+    [
+      { inventoryId: 1, quantity: 2, sellPriceVnd: 250_000 },
+      { inventoryId: 2, quantity: 1, sellPriceVnd: 650_000 },
+    ],
+    STOCK,
+  );
+  assert.equal(p.ok, true);
+  if (!p.ok) return;
+  assert.equal(p.totalVnd, 1_150_000);
+  assert.equal(p.saleCost, 700_000);
+  assert.deepEqual(p.lines.map((l) => l.lineCost), [300_000, 400_000]);
+  assert.deepEqual(p.deductions, [
+    { inventoryId: 1, after: 1 },
+    { inventoryId: 2, after: 0 },
+  ]);
+});
+
+test("planStockSale: thiếu một dòng thì từ chối CẢ đơn và nói rõ", () => {
+  const p = planStockSale(
+    [
+      { inventoryId: 1, quantity: 1, sellPriceVnd: 250_000 },
+      { inventoryId: 2, quantity: 2, sellPriceVnd: 650_000 },
+    ],
+    STOCK,
+  );
+  assert.deepEqual(p, { ok: false, reason: "Giày B 42: còn 1, muốn bán 2" });
+});
+
+test("planStockSale: cùng một dòng tồn chọn hai lần thì CỘNG số lượng trước khi kiểm", () => {
+  const p = planStockSale(
+    [
+      { inventoryId: 1, quantity: 2, sellPriceVnd: 250_000 },
+      { inventoryId: 1, quantity: 2, sellPriceVnd: 240_000 },
+    ],
+    STOCK,
+  );
+  assert.deepEqual(p, { ok: false, reason: "Dép A 38: còn 3, muốn bán 4" });
+});
+
+test("planStockSale: cùng dòng tồn hai lần mà vẫn đủ thì trừ MỘT lần với số gộp", () => {
+  const p = planStockSale(
+    [
+      { inventoryId: 1, quantity: 1, sellPriceVnd: 250_000 },
+      { inventoryId: 1, quantity: 2, sellPriceVnd: 240_000 },
+    ],
+    STOCK,
+  );
+  assert.equal(p.ok, true);
+  if (!p.ok) return;
+  assert.deepEqual(p.deductions, [{ inventoryId: 1, after: 0 }]);
+  assert.equal(p.totalVnd, 250_000 + 2 * 240_000);
+});
+
+test("planStockSale: dòng tồn không tồn tại, số lượng hoặc giá không hợp lệ", () => {
+  assert.equal(planStockSale([{ inventoryId: 9, quantity: 1, sellPriceVnd: 1 }], STOCK).ok, false);
+  assert.equal(planStockSale([{ inventoryId: 1, quantity: 0, sellPriceVnd: 1 }], STOCK).ok, false);
+  assert.equal(planStockSale([{ inventoryId: 1, quantity: 1.5, sellPriceVnd: 1 }], STOCK).ok, false);
+  assert.equal(planStockSale([{ inventoryId: 1, quantity: 1, sellPriceVnd: 0 }], STOCK).ok, false);
+  assert.equal(planStockSale([], STOCK).ok, false);
 });

@@ -145,3 +145,81 @@ export function stockKey(input: {
 
   return `n:${norm(input.name)}`;
 }
+
+export type StockSaleLine = {
+  inventoryId: number;
+  quantity: number;
+  sellPriceVnd: number;
+};
+export type StockSaleStock = {
+  id: number;
+  name: string;
+  quantity: number;
+  avgCost: number;
+};
+export type StockSalePlan =
+  | {
+      ok: true;
+      /** Cùng thứ tự với đầu vào. lineCost = quantity × avgCost. */
+      lines: (StockSaleLine & { lineCost: number })[];
+      /** Mỗi dòng tồn MỘT lần, số lượng sau khi trừ gộp. */
+      deductions: { inventoryId: number; after: number }[];
+      saleCost: number;
+      totalVnd: number;
+    }
+  | { ok: false; reason: string };
+
+/**
+ * Kế hoạch bán nhiều món từ kho (v9-C). Thuần — DB gọi hàm này SAU khi đã
+ * `SELECT … FOR UPDATE` các dòng tồn, nên số tồn truyền vào là số đã khoá.
+ *
+ * Cùng một dòng tồn có thể nằm ở hai dòng bán (giá khác nhau): số lượng
+ * được CỘNG theo dòng tồn trước khi so với tồn, nếu không mỗi dòng tự thấy
+ * "đủ" và tồn bị âm.
+ */
+export function planStockSale(
+  lines: StockSaleLine[],
+  stock: StockSaleStock[],
+): StockSalePlan {
+  if (lines.length === 0) return { ok: false, reason: "Chưa có món nào" };
+  const byId = new Map(stock.map((s) => [s.id, s]));
+  const wanted = new Map<number, number>();
+
+  for (const l of lines) {
+    const s = byId.get(l.inventoryId);
+    if (!s) return { ok: false, reason: "Không tìm thấy hàng trong kho" };
+    if (!Number.isInteger(l.quantity) || l.quantity <= 0)
+      return { ok: false, reason: `${s.name}: số lượng phải là số nguyên > 0` };
+    if (!(l.sellPriceVnd > 0))
+      return { ok: false, reason: `${s.name}: giá bán phải > 0` };
+    wanted.set(l.inventoryId, (wanted.get(l.inventoryId) ?? 0) + l.quantity);
+  }
+
+  const deductions: { inventoryId: number; after: number }[] = [];
+  for (const [id, qty] of wanted) {
+    const s = byId.get(id)!;
+    if (qty > s.quantity)
+      return {
+        ok: false,
+        reason: `${s.name}: còn ${s.quantity}, muốn bán ${qty}`,
+      };
+    deductions.push({
+      inventoryId: id,
+      after: applyStockOut({ quantity: s.quantity, avgCost: s.avgCost }, qty)
+        .quantity,
+    });
+  }
+
+  const out = lines.map((l) => ({
+    ...l,
+    sellPriceVnd: Math.round(l.sellPriceVnd),
+    lineCost: l.quantity * byId.get(l.inventoryId)!.avgCost,
+  }));
+  return {
+    ok: true,
+    lines: out,
+    deductions,
+    saleCost: out.reduce((s, l) => s + l.lineCost, 0),
+    totalVnd: out.reduce((s, l) => s + l.quantity * l.sellPriceVnd, 0),
+  };
+}
