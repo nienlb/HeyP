@@ -402,6 +402,25 @@ export function NewOrderForm({
             <input type="hidden" name="newCustomerName" value={picked.name} />
           )}
 
+          {/* Loại đơn nằm NGAY ĐẦU form, không giấu trong khối gập: nó quyết
+              định các nút thêm món bên dưới và các ô tiền hiện ra. */}
+          <h2 className="sec-label">Loại đơn</h2>
+          <input type="hidden" name="orderType" value={orderType} />
+          <div className="chip-row" role="radiogroup" aria-label="Loại đơn">
+            {ORDER_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="radio"
+                aria-checked={orderType === t}
+                className={`chip${orderType === t ? " chip-on" : ""}`}
+                onClick={() => handleOrderTypeChange(t)}
+              >
+                {ORDER_TYPE_LABELS[t]}
+              </button>
+            ))}
+          </div>
+
           <h2 className="sec-label">Khách</h2>
           <button
             type="button"
@@ -532,7 +551,7 @@ export function NewOrderForm({
 
           <details className="more-fields">
             <summary>
-              {isStockSale ? "Loại đơn · ghi chú" : "Tỷ giá · ship · loại đơn"}
+              {isStockSale ? "Ghi chú" : "Tỷ giá · ship · ghi chú"}
             </summary>
             {!isStockSale && (
               <>
@@ -574,20 +593,6 @@ export function NewOrderForm({
             </label>
               </>
             )}
-            <label className="field">
-              <span>Loại đơn</span>
-              <select
-                name="orderType"
-                value={orderType}
-                onChange={(e) => handleOrderTypeChange(e.target.value as OrderType)}
-              >
-                {ORDER_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {ORDER_TYPE_LABELS[t]}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label className="field">
               <span>Ghi chú</span>
               <textarea name="note" rows={2} placeholder="Ghi chú nội bộ" />
