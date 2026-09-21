@@ -19,11 +19,11 @@ export function SellForm({
     {},
   );
   const [qty, setQty] = useState("1");
-  const [salePrice, setSalePrice] = useState("");
+  const [sellPrice, setSellPrice] = useState("");
   const [deposit, setDeposit] = useState("");
 
   const cost = parseVnd(qty) * avgCost;
-  const profit = parseVnd(salePrice) - cost;
+  const profit = parseVnd(sellPrice) * parseVnd(qty) - cost;
 
   return (
     <form action={formAction} className="sell-form">
@@ -40,12 +40,12 @@ export function SellForm({
           />
         </label>
         <label>
-          Giá bán (₫)
+          Giá bán mỗi cái (₫)
           <input
-            name="salePrice"
+            name="sellPrice"
             inputMode="numeric"
-            value={salePrice}
-            onChange={(e) => setSalePrice(e.target.value)}
+            value={sellPrice}
+            onChange={(e) => setSellPrice(e.target.value)}
           />
         </label>
         <label>
@@ -74,7 +74,7 @@ export function SellForm({
         <button
           type="submit"
           className="btn btn-sm"
-          disabled={pending || parseVnd(qty) <= 0 || parseVnd(qty) > stock || parseVnd(salePrice) <= 0}
+          disabled={pending || parseVnd(qty) <= 0 || parseVnd(qty) > stock || parseVnd(sellPrice) <= 0}
         >
           {pending ? "Đang bán…" : "Bán"}
         </button>

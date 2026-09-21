@@ -68,8 +68,10 @@ import {
   applyStockIn,
   applyStockOut,
   bomCostBasis,
+  planStockSale,
   unitGoodsCostVnd,
   type InventorySource,
+  type StockSaleLine,
   stockKey,
 } from "@/lib/inventory";
 import { config } from "@/lib/config";
@@ -2246,26 +2248,45 @@ export async function listInventory() {
     .orderBy(inventory.source, inventory.productName);
 }
 
-export async function getInventoryItem(id: number) {
-  return raw.get<{
-    id: number;
-    product_name: string;
-    quantity: number;
-    avg_cost: number;
-    source: string;
-  }>(
-    "SELECT id, product_name, quantity, avg_cost, source FROM inventory WHERE id = ?",
-    [id],
+export type SellableStockRow = {
+  id: number;
+  name: string;
+  size: string;
+  color: string;
+  quantity: number;
+  avgCost: number;
+  source: string;
+  productId: number | null;
+  /** Giá bán gợi ý của mẫu; null nếu dòng tồn không gắn mẫu. */
+  defaultSellVnd: number | null;
+  /** Ảnh đại diện: ảnh của chính dòng tồn, không có thì ảnh đầu của mẫu. */
+  photoId: number | null;
+};
+
+/** Dòng tồn còn hàng cho Sheet chọn hàng lúc tạo đơn bán kho — MỘT câu, không N+1. */
+export async function listSellableStock(): Promise<SellableStockRow[]> {
+  return raw.all<SellableStockRow>(
+    `SELECT i.id, i.product_name AS name, i.size, i.color, i.quantity,
+            i.avg_cost AS "avgCost", i.source, i.product_id AS "productId",
+            p.default_sell_vnd AS "defaultSellVnd",
+            COALESCE(
+              (SELECT ph.id FROM photos ph WHERE ph.inventory_id = i.id ORDER BY ph.id LIMIT 1),
+              (SELECT ph.id FROM photos ph WHERE ph.product_id = i.product_id ORDER BY ph.id LIMIT 1)
+            ) AS "photoId"
+       FROM inventory i
+       LEFT JOIN products p ON p.id = i.product_id
+      WHERE i.quantity > 0
+      ORDER BY i.product_name, i.size, i.color`,
   );
 }
 
 export type SellFromStockInput = {
-  inventoryId: number;
-  quantity: number;
-  salePriceVnd: number; // tổng giá bán (VND) khách trả
+  lines: StockSaleLine[];
   deposit: number;
   customerId?: number | null;
-  newCustomer?: { name: string; phone?: string } | null;
+  newCustomer?: { name: string; phone?: string; address?: string } | null;
+  note?: string | null;
+  orderPhotoIds?: number[];
   changedBy?: string | null;
 };
 
@@ -2273,79 +2294,165 @@ export type SellResult =
   | { ok: true; orderId: number }
   | { ok: false; reason: string };
 
-/** Bán từ kho: trừ tồn, tạo đơn ban_tu_kho (đã giao khách), snapshot giá vốn. */
+/** Lỗi nghiệp vụ ném ra để rollback, bắt lại ngoài withTx thành SellResult. */
+class StockSaleError extends Error {}
+
+/**
+ * Bán từ kho, NHIỀU món một đơn (v9-C): trừ tồn, tạo đơn ban_tu_kho ở
+ * "Đã giao khách", chốt giá vốn bình quân vào sale_cost.
+ *
+ * Kiểm tồn nằm TRONG transaction, sau SELECT … FOR UPDATE — trước v9-C nó
+ * nằm ngoài, hai người bán cùng dòng tồn cùng lúc đều qua được bước kiểm và
+ * tồn bị âm. Cùng luật với xoá đơn (src/db/deletion.ts).
+ *
+ * quoted_total_vnd = Σ giá bán và cost_confirmed = true là BẮT BUỘC: báo cáo
+ * lãi đọc doanh thu từ quoted_total_vnd; trước v9-C cột này bằng 0 nên đơn
+ * bán kho ra doanh thu 0 (drizzle/0010 vá dữ liệu cũ).
+ *
+ * KHÔNG tự hoàn tất ở đây: autoCompleteIfPaid mở transaction riêng qua
+ * changeOrderStatus, phải gọi NGOÀI withTx — nơi gọi hàm này lo việc đó.
+ */
 export async function sellFromStock(
   input: SellFromStockInput,
 ): Promise<SellResult> {
-  const inv = await getInventoryItem(input.inventoryId);
-  if (!inv) return { ok: false, reason: "Không tìm thấy hàng trong kho" };
-  if (input.quantity <= 0) return { ok: false, reason: "Số lượng phải > 0" };
-  if (input.quantity > inv.quantity)
-    return {
-      ok: false,
-      reason: `Không đủ tồn: còn ${inv.quantity}, muốn bán ${input.quantity}`,
-    };
+  const ids = [...new Set(input.lines.map((l) => l.inventoryId))];
+  if (ids.length === 0) return { ok: false, reason: "Chưa có món nào" };
+  if (input.deposit < 0) return { ok: false, reason: "Cọc không được âm" };
 
-  const saleCost = input.quantity * inv.avg_cost;
-  const amountDue = Math.round(input.salePriceVnd) - Math.round(input.deposit);
-  const unitPrice = Math.round(input.salePriceVnd / input.quantity);
+  try {
+    return await withTx(async (x) => {
+      const holes = ids.map(() => "?").join(", ");
+      // ORDER BY id: hai giao dịch khoá cùng tập dòng theo cùng thứ tự thì
+      // không thể khoá chéo nhau (deadlock).
+      const stock = await x.all<{
+        id: number;
+        name: string;
+        quantity: number;
+        avgCost: number;
+        productId: number | null;
+        size: string;
+        color: string;
+      }>(
+        `SELECT id, product_name AS name, quantity, avg_cost AS "avgCost",
+                product_id AS "productId", size, color
+           FROM inventory WHERE id IN (${holes})
+          ORDER BY id FOR UPDATE`,
+        ids,
+      );
 
-  return withTx(async (x) => {
-    // Khách: có sẵn / mới / khách lẻ.
-    let customerId = input.customerId ?? null;
-    if (!customerId && input.newCustomer?.name) {
-      const c = await x.get<{ id: number }>(
-        "INSERT INTO customers(name, phone) VALUES(?, ?) RETURNING id",
-        [input.newCustomer.name, input.newCustomer.phone ?? null],
-      );
-      customerId = c!.id;
-    }
-    if (!customerId) {
-      const walkin = await x.get<{ id: number }>(
-        "SELECT id FROM customers WHERE name = 'Khách lẻ'",
-      );
-      if (walkin) {
-        customerId = walkin.id;
-      } else {
-        const created = await x.get<{ id: number }>(
-          "INSERT INTO customers(name) VALUES('Khách lẻ') RETURNING id",
+      const plan = planStockSale(input.lines, stock);
+      if (!plan.ok) throw new StockSaleError(plan.reason);
+      if (input.deposit > plan.totalVnd)
+        throw new StockSaleError("Cọc lớn hơn tổng tiền đơn");
+
+      // Khách: có sẵn / mới / khách lẻ.
+      let customerId = input.customerId ?? null;
+      if (!customerId && input.newCustomer?.name) {
+        const c = await x.get<{ id: number }>(
+          "INSERT INTO customers(name, phone, address) VALUES(?, ?, ?) RETURNING id",
+          [
+            input.newCustomer.name,
+            input.newCustomer.phone ?? null,
+            input.newCustomer.address ?? null,
+          ],
         );
-        customerId = created!.id;
+        customerId = c!.id;
       }
-    }
+      if (!customerId) {
+        const walkin = await x.get<{ id: number }>(
+          "SELECT id FROM customers WHERE name = 'Khách lẻ'",
+        );
+        customerId =
+          walkin?.id ??
+          (await x.get<{ id: number }>(
+            "INSERT INTO customers(name) VALUES('Khách lẻ') RETURNING id",
+          ))!.id;
+      }
 
-    const after = applyStockOut(
-      { quantity: inv.quantity, avgCost: inv.avg_cost },
-      input.quantity,
-    );
-    await x.run("UPDATE inventory SET quantity = ? WHERE id = ?", [
-      after.quantity,
-      inv.id,
-    ]);
+      for (const d of plan.deductions) {
+        await x.run("UPDATE inventory SET quantity = ? WHERE id = ?", [
+          d.after,
+          d.inventoryId,
+        ]);
+      }
 
-    const o = await x.get<{ id: number }>(
-      `INSERT INTO orders
-         (customer_id, order_type, status, exchange_rate, goods_total_cny,
-          margin_vnd, shipping_fee, deposit, amount_due, sale_cost, status_changed_at)
-       VALUES (?, 'ban_tu_kho', 'da_giao_khach', 1, ?, 0, 0, ?, ?, ?, ${NOW_EPOCH_SQL})
-       RETURNING id`,
-      [customerId, input.salePriceVnd, input.deposit, amountDue, saleCost],
-    );
-    const orderId = o!.id;
+      const deposit = Math.round(input.deposit);
+      const money = computeOrderMoney({
+        goodsTotalCny: plan.totalVnd,
+        exchangeRate: 1,
+        serviceFee: 0,
+        shippingFee: 0,
+        deposit,
+      });
 
-    await x.run(
-      `INSERT INTO order_items(order_id, name, quantity, unit_price_cny)
-       VALUES (?, ?, ?, ?)`,
-      [orderId, inv.product_name, input.quantity, unitPrice],
-    );
-    await x.run(
-      `INSERT INTO order_status_history(order_id, to_status, changed_by, note)
-       VALUES (?, 'da_giao_khach', ?, 'Bán từ kho')`,
-      [orderId, input.changedBy ?? null],
-    );
+      const o = await x.get<{ id: number }>(
+        `INSERT INTO orders
+           (customer_id, order_type, status, exchange_rate, goods_total_cny,
+            margin_vnd, shipping_fee, deposit, amount_due, sale_cost, note,
+            quoted_total_vnd, status_changed_at)
+         VALUES (?, 'ban_tu_kho', 'da_giao_khach', 1, ?, 0, 0, ?, ?, ?, ?, ?, ${NOW_EPOCH_SQL})
+         RETURNING id`,
+        [
+          customerId,
+          plan.totalVnd,
+          deposit,
+          money.amountDue,
+          plan.saleCost,
+          input.note ?? null,
+          plan.totalVnd,
+        ],
+      );
+      const orderId = o!.id;
 
-    return { ok: true, orderId } as SellResult;
-  });
+      const byId = new Map(stock.map((s) => [s.id, s]));
+      for (const l of plan.lines) {
+        const s = byId.get(l.inventoryId)!;
+        await x.run(
+          `INSERT INTO order_items
+             (order_id, name, quantity, unit_price_cny, margin_vnd,
+              cost_confirmed, product_id, size, color)
+           VALUES (?, ?, ?, ?, 0, true, ?, ?, ?)`,
+          [
+            orderId,
+            s.name,
+            l.quantity,
+            l.sellPriceVnd,
+            s.productId,
+            s.size,
+            s.color,
+          ],
+        );
+      }
+
+      for (const photoId of input.orderPhotoIds ?? []) {
+        await x.run(
+          "UPDATE photos SET order_id = ? WHERE id = ? AND order_id IS NULL",
+          [orderId, photoId],
+        );
+      }
+
+      await x.run(
+        `INSERT INTO order_status_history(order_id, to_status, changed_by, note)
+         VALUES (?, 'da_giao_khach', ?, 'Bán từ kho')`,
+        [orderId, input.changedBy ?? null],
+      );
+
+      // Cọc là một phiếu thu, không chỉ là con số trên đơn — cùng lối createOrder
+      // (deposit là số dẫn xuất = Σ payments, spec v3-B).
+      if (deposit > 0) {
+        await x.run(
+          `INSERT INTO payments (order_id, amount_vnd, paid_at, kind, method, note)
+           VALUES (?, ?, ${NOW_EPOCH_SQL}, 'coc', 'chuyen_khoan', NULL)`,
+          [orderId, deposit],
+        );
+      }
+
+      return { ok: true, orderId } as SellResult;
+    });
+  } catch (err) {
+    if (err instanceof StockSaleError) return { ok: false, reason: err.message };
+    throw err;
+  }
 }
 
 /** Danh sách đơn kèm cờ "cần bổ sung" (v3-A). */

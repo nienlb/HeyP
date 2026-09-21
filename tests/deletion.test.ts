@@ -7,6 +7,7 @@ import {
 } from "../src/lib/deletion.ts";
 
 const clean: OrderDeleteFacts = {
+  orderType: "order_ho",
   status: "khach_chot",
   cnySpent: 0,
   paymentCount: 0,
@@ -59,4 +60,14 @@ test("khách còn đơn thì không xoá được, thông báo nói rõ số đ�
   assert.equal(r.ok, false);
   if (!r.ok) assert.match(r.reason, /3/);
   assert.deepEqual(canDeleteCustomer({ orderCount: 0 }), { ok: true });
+});
+
+test("đơn bán từ kho bị chặn dù chưa có phiếu thu — tồn đã bị trừ", () => {
+  const r = canDeleteOrder({
+    ...clean,
+    orderType: "ban_tu_kho",
+    status: "da_giao_khach",
+  });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.reason, /tồn kho/);
 });

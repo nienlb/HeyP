@@ -8,11 +8,16 @@
  *
  * Module thuần, không phụ thuộc DB.
  */
-import { STATUS_LABELS, type OrderStatus } from "./order-status.ts";
+import {
+  STATUS_LABELS,
+  type OrderStatus,
+  type OrderType,
+} from "./order-status.ts";
 
 export type DeleteCheck = { ok: true } | { ok: false; reason: string };
 
 export type OrderDeleteFacts = {
+  orderType: OrderType;
   status: OrderStatus;
   /** Tổng ¥ đã trừ khỏi ví cho đơn này (Σ các dòng 'chi'/'dieu_chinh'). */
   cnySpent: number;
@@ -47,6 +52,15 @@ export function canDeleteOrder(facts: OrderDeleteFacts): DeleteCheck {
     return {
       ok: false,
       reason: `Đơn đã có ${facts.expenseCount} khoản chi ghi vào sổ — xoá khoản chi trước, hoặc dùng Hủy.`,
+    };
+
+  // Đơn bán kho TRỪ tồn ngay lúc tạo (v9-C: sellFromStock). Xoá đơn thì hàng
+  // đã trừ không quay lại kho — tồn hụt âm thầm.
+  if (facts.orderType === "ban_tu_kho")
+    return {
+      ok: false,
+      reason:
+        "Đơn bán từ kho đã trừ tồn kho — dùng Đổi/trả từng món để đưa hàng về kho.",
     };
 
   if (STOCK_TOUCHED.includes(facts.status))

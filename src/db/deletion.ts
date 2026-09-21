@@ -7,7 +7,7 @@ import {
   canDeleteOrder,
   type OrderDeleteFacts,
 } from "@/lib/deletion";
-import type { OrderStatus } from "@/lib/order-status";
+import type { OrderStatus, OrderType } from "@/lib/order-status";
 
 export type DeleteResult = { ok: true } | { ok: false; reason: string };
 
@@ -66,12 +66,14 @@ export async function deleteOrderCascade(
       if (!locked) throw new BlockedError("Không tìm thấy đơn.");
 
       const facts = await x.get<{
+        orderType: OrderType;
         status: OrderStatus;
         cnySpent: number;
         paymentCount: number;
         expenseCount: number;
       }>(
-        `SELECT o.status AS status,
+        `SELECT o.order_type AS "orderType",
+                o.status AS status,
                 COALESCE((SELECT SUM(-l.cny_delta) FROM cny_ledger l
                            WHERE l.order_id = o.id
                              AND l.kind IN ('chi','dieu_chinh')), 0)  AS "cnySpent",

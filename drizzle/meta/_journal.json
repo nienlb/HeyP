@@ -71,6 +71,13 @@
       "when": 1788912060000,
       "tag": "0009_inventory_variants",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790035200000,
+      "tag": "0010_ban_tu_kho_backfill",
+      "breakpoints": true
     }
   ]
 }

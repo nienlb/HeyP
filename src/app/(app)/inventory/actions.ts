@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import {
+  autoCompleteIfPaid,
   changeOrderStatus,
   createOrder,
   getSettings,
@@ -23,30 +24,31 @@ export async function sellFromStockAction(
 
   const inventoryId = parseVnd(formData.get("inventoryId"));
   const quantity = parseVnd(formData.get("quantity"));
-  const salePriceVnd = parseVnd(formData.get("salePrice"));
+  // Giá MỖI CÁI (v9-C) — trước đây là tổng tiền, khác với màn tạo đơn.
+  const sellPriceVnd = parseVnd(formData.get("sellPrice"));
   const deposit = parseVnd(formData.get("deposit"));
   const newName = String(formData.get("customerName") ?? "").trim();
 
   if (!inventoryId) return { error: "Thiếu mã hàng." };
   if (quantity <= 0) return { error: "Số lượng bán phải lớn hơn 0." };
-  if (salePriceVnd <= 0) return { error: "Giá bán phải lớn hơn 0." };
+  if (sellPriceVnd <= 0) return { error: "Giá bán phải lớn hơn 0." };
 
   const result = await sellFromStock({
-    inventoryId,
-    quantity,
-    salePriceVnd,
+    lines: [{ inventoryId, quantity, sellPriceVnd }],
     deposit,
     newCustomer: newName ? { name: newName } : null,
     changedBy: session.username,
   });
 
   if (!result.ok) return { error: result.reason };
+  // Ngoài transaction: changeOrderStatus tự mở transaction riêng.
+  await autoCompleteIfPaid(result.orderId, session.username);
 
   await logActivity({
     actor: session.username,
     action: "inventory.sell",
     entityId: result.orderId,
-    detail: { soLuong: quantity, giaBan: salePriceVnd },
+    detail: { soLuong: quantity, giaBan: sellPriceVnd * quantity },
   });
   revalidatePath("/inventory");
   revalidatePath("/orders");
