@@ -25,6 +25,10 @@ export type ItemRow = {
   /** false = giá ¥ do máy gợi ý, chưa ai xác nhận. */
   costConfirmed: boolean;
   photos: ItemPhoto[];
+  /** v9-C: món lấy từ dòng tồn (đơn Bán từ kho). null = món order hộ. */
+  inventoryId: number | null;
+  /** Số tồn lúc chọn — chặn gõ quá ở client; server kiểm lại trong transaction. */
+  stockLeft: number;
 };
 
 export const emptyItem: ItemRow = {
@@ -41,6 +45,8 @@ export const emptyItem: ItemRow = {
   unitPriceCny: "",
   costConfirmed: true,
   photos: [],
+  inventoryId: null,
+  stockLeft: 0,
 };
 
 export type CustomerOption = {
@@ -57,3 +63,17 @@ export type DroppedPhoto = { id: number; kind: ImageKind; name: string };
 
 /** Ảnh mới thả/chọn, CHƯA gửi lên server — chỉ nằm trong hàng chờ của trình duyệt. */
 export type PendingPhoto = { file: File; url: string };
+
+/** Dòng tồn còn hàng — cùng hình với SellableStockRow của src/db/queries.ts. */
+export type StockOption = {
+  id: number;
+  name: string;
+  size: string;
+  color: string;
+  quantity: number;
+  avgCost: number;
+  source: string;
+  productId: number | null;
+  defaultSellVnd: number | null;
+  photoId: number | null;
+};

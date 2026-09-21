@@ -29,19 +29,28 @@ import { ItemSheet } from "./item-sheet";
 import { ProductPickerSheet } from "./product-picker-sheet";
 import type { ProductPick } from "@/app/(app)/products/product-grid";
 import { QuickImportSheet } from "./quick-import-sheet";
+import { StockPickerSheet } from "./stock-picker-sheet";
 import { photoUrl } from "@/lib/photos";
 import { displayVariant } from "@/lib/product-catalog";
 import { groupVnd, parseDecimal, parseVnd } from "@/lib/parse-number";
-import { emptyItem, type CustomerOption, type ItemRow } from "./types";
+import {
+  emptyItem,
+  type CustomerOption,
+  type ItemRow,
+  type StockOption,
+} from "./types";
 
 export function NewOrderForm({
   customers,
   products,
+  stock,
   defaultExchangeRate,
   defaultMarginVnd,
 }: {
   customers: CustomerOption[];
   products: ProductPick[];
+  /** Dòng tồn còn hàng — chỉ dùng khi loại đơn là "Bán từ kho". */
+  stock: StockOption[];
   defaultExchangeRate: number;
   defaultMarginVnd: number;
 }) {
@@ -51,6 +60,8 @@ export function NewOrderForm({
   >(createOrderAction, {});
 
   const [orderType, setOrderType] = useState<OrderType>("order_ho");
+  // Đơn bán kho: món lấy từ dòng tồn, không có ¥/tỷ giá/ship/lời rải.
+  const isStockSale = orderType === "ban_tu_kho";
   const [exchangeRate, setExchangeRate] = useState(String(defaultExchangeRate));
   // Total giờ là Σ các dòng. Ô này chỉ để GHI ĐÈ khi khách trả số tròn.
   const [totalOverride, setTotalOverride] = useState("");
@@ -74,6 +85,7 @@ export function NewOrderForm({
   >({ open: false });
   const [importOpen, setImportOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [stockOpen, setStockOpen] = useState(false);
 
   function pickCustomer(p: CustomerPick) {
     setPicked(p);
@@ -148,6 +160,8 @@ export function NewOrderForm({
         unitPriceCny: cny > 0 ? String(cny) : "",
         costConfirmed: false,
         photos: [],
+        inventoryId: null,
+        stockLeft: 0,
       };
     });
     setItems((prev) => mergeItems(prev, newRows));
@@ -186,6 +200,7 @@ export function NewOrderForm({
           // v9-A. sizeOptions/colorOptions CỐ Ý không có ở đây: chúng chỉ
           // phục vụ chip trên máy khách, server không có chỗ dùng.
           productId: it.productId,
+          inventoryId: it.inventoryId,
           size: it.size.trim(),
           color: it.color.trim(),
           quantity,
@@ -211,7 +226,9 @@ export function NewOrderForm({
     0,
   );
   const overrideVnd = parseVnd(totalOverride);
-  const totalVnd = totalOverride.trim() !== "" ? overrideVnd : linesTotal;
+  // Đơn bán kho không có ô "chốt số khác" — Total luôn là Σ giá bán.
+  const totalVnd =
+    !isStockSale && totalOverride.trim() !== "" ? overrideVnd : linesTotal;
 
   /**
    * Ghi đè Total → lời từng dòng phải rải lại để Σ giá bán vẫn đúng bằng
@@ -219,7 +236,7 @@ export function NewOrderForm({
    * hasMargins, không tự rải nữa).
    */
   const sentItems = useMemo(() => {
-    if (totalOverride.trim() === "" || validItems.length === 0)
+    if (isStockSale || totalOverride.trim() === "" || validItems.length === 0)
       return parsedItems;
     const margins = allocateMargins(
       overrideVnd,
@@ -242,9 +259,17 @@ export function NewOrderForm({
     overrideVnd,
     exchangeRate,
     defaultMarginVnd,
+    isStockSale,
   ]);
 
-  const marginVnd = totalVnd - goodsVnd;
+  // Lời của đơn bán kho tính bằng giá vốn bình quân trong kho, không phải ¥.
+  const stockCost = isStockSale
+    ? items.reduce((sum, it) => {
+        const opt = stock.find((o) => o.id === it.inventoryId);
+        return sum + (opt ? opt.avgCost * parseVnd(it.quantity) : 0);
+      }, 0)
+    : 0;
+  const marginVnd = isStockSale ? totalVnd - stockCost : totalVnd - goodsVnd;
 
   // Tách ra biến vì cột phải (v8-A) cũng cần hiện cọc — OrderMoneyResult
   // KHÔNG có trường deposit, nó chỉ trả goodsTotalVnd/subtotalVnd/amountDue.
@@ -263,8 +288,54 @@ export function NewOrderForm({
   const canSubmit =
     validItems.length > 0 &&
     validItems.every((it) => it.quantity > 0 && it.sellVnd > 0) &&
-    parseVnd(exchangeRate) > 0 &&
+    (isStockSale || parseVnd(exchangeRate) > 0) &&
+    validItems.every(
+      (it) =>
+        it.inventoryId === null ||
+        it.quantity <=
+          (items.find((r) => r.inventoryId === it.inventoryId)?.stockLeft ?? 0),
+    ) &&
     totalVnd > 0;
+
+  /** Chọn một dòng tồn để bán. Đã có trong đơn thì mở lại dòng đó để sửa. */
+  function pickStock(s: StockOption) {
+    const existing = items.findIndex((it) => it.inventoryId === s.id);
+    if (existing >= 0) {
+      setItemSheet({ open: true, index: existing });
+      return;
+    }
+    const row: ItemRow = {
+      ...emptyItem,
+      name: s.name,
+      size: s.size,
+      color: s.color,
+      productId: s.productId,
+      inventoryId: s.id,
+      stockLeft: s.quantity,
+      quantity: "1",
+      sellPriceVnd: s.defaultSellVnd ? String(s.defaultSellVnd) : "",
+      costConfirmed: true,
+    };
+    setItems((prev) => [...prev, row]);
+    // Mở ngay dòng vừa thêm để nhập giá/số lượng.
+    setItemSheet({ open: true, index: items.length });
+  }
+
+  function handleOrderTypeChange(next: OrderType) {
+    const crossing = (next === "ban_tu_kho") !== isStockSale;
+    if (crossing && items.length > 0) {
+      if (!window.confirm("Đổi loại đơn sẽ xoá các món đã nhập. Tiếp tục?"))
+        return;
+      // Ảnh của món order hộ nằm mồ côi nếu bỏ mà không xoá.
+      for (const it of items)
+        for (const p of it.photos)
+          deletePhotoAction(p.id).catch(() => {
+            // Job dọn ảnh mồ côi lo nốt nếu xoá hỏng.
+          });
+      setItems([]);
+    }
+    setOrderType(next);
+  }
 
   function handleShippingFeeChange(v: string) {
     setShippingFee(v);
@@ -416,22 +487,34 @@ export function NewOrderForm({
               </button>
             ))}
           </div>
-          {products.length > 0 && (
+          {isStockSale ? (
             <button
               type="button"
               className="picker"
-              onClick={() => setPickerOpen(true)}
+              onClick={() => setStockOpen(true)}
             >
-              ★ Chọn từ danh mục
+              + Chọn hàng trong kho
             </button>
+          ) : (
+            <>
+              {products.length > 0 && (
+                <button
+                  type="button"
+                  className="picker"
+                  onClick={() => setPickerOpen(true)}
+                >
+                  ★ Chọn từ danh mục
+                </button>
+              )}
+              <button
+                type="button"
+                className="picker"
+                onClick={() => setItemSheet({ open: true, index: null })}
+              >
+                + Thêm món
+              </button>
+            </>
           )}
-          <button
-            type="button"
-            className="picker"
-            onClick={() => setItemSheet({ open: true, index: null })}
-          >
-            + Thêm món
-          </button>
 
           <h2 className="sec-label">Tiền</h2>
           <label className="field">
@@ -448,7 +531,11 @@ export function NewOrderForm({
           </label>
 
           <details className="more-fields">
-            <summary>Tỷ giá · ship · loại đơn</summary>
+            <summary>
+              {isStockSale ? "Loại đơn · ghi chú" : "Tỷ giá · ship · loại đơn"}
+            </summary>
+            {!isStockSale && (
+              <>
             <label className="field">
               <span>Chốt số khác với tổng món (₫)</span>
               <input
@@ -485,12 +572,14 @@ export function NewOrderForm({
                 placeholder="Chưa biết thì để trống"
               />
             </label>
+              </>
+            )}
             <label className="field">
               <span>Loại đơn</span>
               <select
                 name="orderType"
                 value={orderType}
-                onChange={(e) => setOrderType(e.target.value as OrderType)}
+                onChange={(e) => handleOrderTypeChange(e.target.value as OrderType)}
               >
                 {ORDER_TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -514,16 +603,25 @@ export function NewOrderForm({
             {/* Bốn dòng này chỉ hiện từ 900px — điện thoại vẫn chỉ thấy dòng
                 Tổng như cũ, thanh dính đáy không cao thêm. */}
             <div className="rail-detail">
-              <div className="kv">
-                <span>Tiền hàng</span>
-                <span className="num">
-                  {goodsTotalCny.toLocaleString("vi-VN")}¥
-                </span>
-              </div>
-              <div className="kv">
-                <span>Giá vốn quy đổi</span>
-                <span className="num">{formatVnd(goodsVnd)}</span>
-              </div>
+              {isStockSale ? (
+                <div className="kv">
+                  <span>Giá vốn kho</span>
+                  <span className="num">{formatVnd(stockCost)}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="kv">
+                    <span>Tiền hàng</span>
+                    <span className="num">
+                      {goodsTotalCny.toLocaleString("vi-VN")}¥
+                    </span>
+                  </div>
+                  <div className="kv">
+                    <span>Giá vốn quy đổi</span>
+                    <span className="num">{formatVnd(goodsVnd)}</span>
+                  </div>
+                </>
+              )}
               <div className="kv">
                 <span>Lời</span>
                 <span className={`num${marginVnd < 0 ? " neg" : ""}`}>
@@ -579,6 +677,14 @@ export function NewOrderForm({
         }
         sellRate={parseVnd(exchangeRate)}
         defaultMarginVnd={defaultMarginVnd}
+        mode={isStockSale ? "stock" : "order"}
+      />
+
+      <StockPickerSheet
+        open={stockOpen}
+        onClose={() => setStockOpen(false)}
+        stock={stock}
+        onPick={pickStock}
       />
 
       <ProductPickerSheet

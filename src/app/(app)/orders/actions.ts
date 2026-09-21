@@ -7,12 +7,14 @@ import { getSession } from "@/lib/auth";
 import { deletePhotoFile } from "@/lib/storage";
 import {
   changeOrderStatus,
+  autoCompleteIfPaid,
   createOrder,
   deletePhoto,
   addPayment,
   deletePayment,
   markLineDefect,
   returnLine,
+  sellFromStock,
   setShipFee,
   suggestCnyFromHistory,
   updateLineCost,
@@ -71,15 +73,68 @@ export async function createOrderAction(
     null;
   if (customerMode === "new") {
     const name = String(formData.get("newCustomerName") ?? "").trim();
-    if (!name) return { error: "Chưa nhập tên khách mới." };
-    newCustomer = {
-      name,
-      phone: String(formData.get("newCustomerPhone") ?? "").trim() || undefined,
-      address:
-        String(formData.get("newCustomerAddress") ?? "").trim() || undefined,
-    };
+    // Đơn bán kho được để trống khách — thành "Khách lẻ" trong sellFromStock.
+    if (!name && orderType !== "ban_tu_kho")
+      return { error: "Chưa nhập tên khách mới." };
+    if (name)
+      newCustomer = {
+        name,
+        phone:
+          String(formData.get("newCustomerPhone") ?? "").trim() || undefined,
+        address:
+          String(formData.get("newCustomerAddress") ?? "").trim() || undefined,
+      };
   } else {
     customerId = parseVnd(formData.get("customerId")) || null;
+  }
+
+  // v9-C: đơn Bán từ kho đi đường riêng — trừ tồn, chốt giá vốn kho, không
+  // ¥/tỷ giá/ship. Trước đây nó lọt xuống createOrder và tạo đơn mà KHÔNG trừ tồn.
+  if (orderType === "ban_tu_kho") {
+    let lines: { inventoryId: number; quantity: number; sellPriceVnd: number }[] =
+      [];
+    try {
+      const parsed = JSON.parse(String(formData.get("items") ?? "[]"));
+      if (Array.isArray(parsed))
+        lines = parsed
+          .filter((it) => Number(it.inventoryId) > 0)
+          .map((it) => ({
+            inventoryId: Number(it.inventoryId),
+            quantity: Number(it.quantity) || 0,
+            sellPriceVnd: Number(it.sellVnd) || 0,
+          }));
+    } catch {
+      return { error: "Dữ liệu sản phẩm không hợp lệ." };
+    }
+    if (lines.length === 0) return { error: "Chọn ít nhất 1 món trong kho." };
+
+    const photoIds = String(formData.get("zaloPhotoIds") ?? "")
+      .split(",")
+      .map((v) => Number(v.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0);
+
+    const result = await sellFromStock({
+      lines,
+      deposit,
+      customerId,
+      newCustomer,
+      note,
+      orderPhotoIds: photoIds,
+      changedBy: session.username,
+    });
+    if (!result.ok) return { error: result.reason };
+    // Ngoài transaction: changeOrderStatus tự mở transaction riêng.
+    await autoCompleteIfPaid(result.orderId, session.username);
+
+    await logActivity({
+      actor: session.username,
+      action: "order.create",
+      entityId: result.orderId,
+      detail: { op: "ban_tu_kho", mon: lines.length },
+    });
+    revalidatePath("/orders");
+    revalidatePath("/inventory");
+    redirect(`/orders/${result.orderId}`);
   }
 
   // Sản phẩm.

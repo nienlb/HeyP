@@ -1,14 +1,15 @@
 import { requireAuth } from "@/lib/auth";
-import { getSettings, listCustomers } from "@/db/queries";
+import { getSettings, listCustomers, listSellableStock } from "@/db/queries";
 import { listProducts } from "@/db/products";
 import { NewOrderForm } from "./new-order-form";
 
 export default async function NewOrderPage() {
-  const [, customers, settings, products] = await Promise.all([
+  const [, customers, settings, products, stock] = await Promise.all([
     requireAuth(),
     listCustomers(),
     getSettings(),
     listProducts(),
+    listSellableStock(),
   ]);
 
   return (
@@ -31,6 +32,7 @@ export default async function NewOrderPage() {
             productUrl: p.productUrl,
             photoIds: p.photoIds,
           }))}
+          stock={stock}
           defaultExchangeRate={settings.sellRate}
           defaultMarginVnd={settings.defaultMarginVnd}
         />

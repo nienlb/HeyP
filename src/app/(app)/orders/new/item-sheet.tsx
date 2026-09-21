@@ -17,6 +17,7 @@ export function ItemSheet({
   onDelete,
   sellRate,
   defaultMarginVnd,
+  mode = "order",
 }: {
   open: boolean;
   onClose: () => void;
@@ -25,6 +26,8 @@ export function ItemSheet({
   onDelete?: () => void;
   sellRate: number;
   defaultMarginVnd: number;
+  /** "stock": đơn Bán từ kho — món khoá theo dòng tồn, không có ¥/ảnh/danh mục. */
+  mode?: "order" | "stock";
 }) {
   const [row, setRow] = useState<ItemRow>(initial ?? { ...emptyItem });
   const [saving, setSaving] = useState(false);
@@ -42,7 +45,13 @@ export function ItemSheet({
   const set = (patch: Partial<ItemRow>) => setRow((r) => ({ ...r, ...patch }));
 
   const sell = parseVnd(row.sellPriceVnd);
-  const valid = row.name.trim() !== "" && Number(row.quantity) > 0 && sell > 0;
+  // Món kho: tên/size/màu lấy theo dòng tồn nên chỉ sửa được SL và giá bán.
+  const isStock = row.inventoryId !== null;
+  const valid =
+    row.name.trim() !== "" &&
+    Number(row.quantity) > 0 &&
+    sell > 0 &&
+    (!isStock || Number(row.quantity) <= row.stockLeft);
 
   /**
    * Gõ giá thu → suy ngược ¥ và đánh dấu là số máy đoán. Không ghi đè nếu
@@ -51,6 +60,11 @@ export function ItemSheet({
    */
   function setSell(v: string) {
     const nextSell = parseVnd(v);
+    // Hàng kho có giá vốn riêng ở kho, không suy ngược ¥.
+    if (isStock) {
+      set({ sellPriceVnd: v });
+      return;
+    }
     if (row.costConfirmed && row.unitPriceCny.trim() !== "") {
       set({ sellPriceVnd: v });
       return;
@@ -82,7 +96,7 @@ export function ItemSheet({
               Xoá món
             </button>
           )}
-          {!initial && (
+          {!initial && mode === "order" && (
             <button
               type="button"
               className="btn btn-outline"
@@ -108,7 +122,8 @@ export function ItemSheet({
       <label className="field">
         <span>Tên hàng *</span>
         <input
-          autoFocus
+          autoFocus={!isStock}
+          readOnly={isStock}
           value={row.name}
           onChange={(e) => set({ name: e.target.value })}
           placeholder="VD: Giày Nike AF1"
@@ -135,6 +150,7 @@ export function ItemSheet({
           </div>
         )}
         <input
+          readOnly={isStock}
           value={row.size}
           onChange={(e) => set({ size: e.target.value })}
           placeholder="VD: 42"
@@ -159,6 +175,7 @@ export function ItemSheet({
           </div>
         )}
         <input
+          readOnly={isStock}
           value={row.color}
           onChange={(e) => set({ color: e.target.value })}
           placeholder="VD: trắng"
@@ -169,7 +186,7 @@ export function ItemSheet({
       {/* Món cũ có chữ trong `attributes` mà chưa có size/màu: GỢI Ý tách,
           chờ bấm xác nhận. Không tự ghi — máy đoán sai thì người sửa, chứ
           máy không lặng lẽ đổi dữ liệu thật. */}
-      {row.attributes.trim() !== "" && row.size === "" && row.color === "" && (
+      {!isStock && row.attributes.trim() !== "" && row.size === "" && row.color === "" && (
         <div className="notice">
           <p>Món này đang ghi “{row.attributes}”. Tách thành size và màu?</p>
           <button
@@ -183,8 +200,11 @@ export function ItemSheet({
       )}
 
       <label className="field">
-        <span>Số lượng *</span>
+        <span>
+          Số lượng *{isStock && ` (còn ${row.stockLeft})`}
+        </span>
         <input
+          autoFocus={isStock}
           inputMode="numeric"
           value={row.quantity}
           onChange={(e) => set({ quantity: e.target.value })}
@@ -203,14 +223,16 @@ export function ItemSheet({
         />
       </label>
 
-      <ItemPhotos
-        value={row.photos}
-        onChange={(photos: ItemPhoto[]) => set({ photos })}
-      />
+      {!isStock && (
+        <ItemPhotos
+          value={row.photos}
+          onChange={(photos: ItemPhoto[]) => set({ photos })}
+        />
+      )}
 
       {/* Đường "ghim": món chủ lực lên danh mục bằng một lần chạm; hàng lẻ
           không làm bẩn gì vì phải bấm mới lưu. */}
-      {row.productId === null && (
+      {!isStock && row.productId === null && (
         <div className="field">
           <button
             type="button"
@@ -241,6 +263,7 @@ export function ItemSheet({
         </div>
       )}
 
+      {!isStock && (
       <details className="more-fields">
         <summary>Giá vốn &amp; link</summary>
         <label className="field">
@@ -274,6 +297,7 @@ export function ItemSheet({
           />
         </label>
       </details>
+      )}
     </Sheet>
   );
 }

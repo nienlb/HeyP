@@ -45,6 +45,22 @@
   color: var(--muted);
 }
 
+/* v9-C: dòng tồn trong Sheet chọn hàng kho. */
+.stock-item .ic-thumb {
+  flex: none;
+}
+.stock-item .cust-text {
+  flex: 1;
+}
+.stock-left {
+  flex: none;
+  font-size: var(--fs-2);
+  color: var(--muted);
+}
+.stock-nophoto {
+  background: var(--border);
+}
+
 /* ---------- Màn tạo đơn kiểu POS ---------- */
 .sec-label {
   font-size: var(--fs-2);
