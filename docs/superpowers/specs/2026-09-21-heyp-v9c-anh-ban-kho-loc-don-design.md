@@ -91,16 +91,22 @@ thái theo từng dòng.
 - **Vá lỗ hổng:** bản hiện tại kiểm tồn NGOÀI transaction. Hai người bán cùng
   một dòng tồn cùng lúc thì cả hai qua được bước kiểm và tồn bị âm. Cách chữa
   giống luật xoá đơn: kiểm trong transaction, sau `FOR UPDATE`.
-- **Cọc đi qua phiếu thu:** bản hiện tại ghi thẳng `orders.deposit`, trái với luật
-  v3-B (`deposit` là số dẫn xuất bằng Σ `payments`). Bản mới tạo phiếu thu rồi
-  gọi `syncOrderDeposit`. Nếu đã thu đủ thì gọi `autoCompleteIfPaid` **ngoài**
+- **Cọc đi qua phiếu thu:** bản hiện tại chỉ ghi `orders.deposit`, không có dòng
+  `payments` nào, trái với luật v3-B (`deposit` là số dẫn xuất bằng Σ
+  `payments`). Bản mới tạo phiếu thu cọc trong cùng transaction, giống
+  `createOrder`. Nếu đã thu đủ thì gọi `autoCompleteIfPaid` **ngoài**
   transaction, vì `changeOrderStatus` tự mở transaction riêng.
+- **Chặn xoá đơn bán kho:** đơn `ban_tu_kho` trừ tồn ngay lúc tạo, nhưng
+  `canDeleteOrder` chỉ chặn đơn đã CỘNG tồn. Đơn bán kho chưa có phiếu thu
+  hiện xoá được và hàng đã trừ không quay lại kho. Bản mới chặn hẳn và gợi ý
+  dùng Đổi/trả từng món.
+- **Lỗi cũ ở màn tạo đơn:** chọn loại "Bán từ kho" hiện đi qua `createOrder`,
+  tạo đơn mà không trừ tồn. Bản mới rẽ nhánh sang `sellFromStock`.
+- **Doanh thu 0 trong báo cáo lãi:** `sellFromStock` hiện không ghi
+  `quoted_total_vnd` (mặc định 0) và `cost_confirmed` (mặc định false).
+  Bản mới ghi đủ; migration `0010` vá các đơn bán kho cũ.
 - Không đụng ví ¥ (`shouldDeductCny` đã trả false cho `ban_tu_kho`) và không đổi
   trục trạng thái.
-- Báo cáo lãi (`src/lib/pnl.ts`) đã đọc `sale_cost` cho `ban_tu_kho`. Kế hoạch
-  triển khai phải đối chiếu doanh thu của loại đơn này đọc từ cột nào
-  (`quoted_total_vnd` hay `goods_total_cny`) để hai cột khớp nhau, tránh doanh
-  thu bằng 0.
 - Ghi nhật ký `order.create` với `detail.op = "ban_tu_kho"` (ngoài transaction,
   nuốt lỗi, như `logActivity` đang làm).
 
