@@ -423,6 +423,14 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
   theo viewport giả lập — khi `resize_window` khác kích thước khung hiển thị,
   toạ độ lệch và cú bấm rơi vào `<html>`. Nghi ngờ thì log `e.target` bằng
   listener capture trước khi kết luận app lỗi.
+- **Xoá mẫu sản phẩm phải dọn file ảnh trên Storage** (v9-C) —
+  `photos.product_id` là ON DELETE CASCADE nên xoá mẫu là mất luôn các dòng
+  ảnh, và sau đó không còn dòng nào để biết file nào cần dọn (job ảnh mồ côi
+  chỉ quét dòng `photos`). `deleteProduct` gom `file_path` TRONG transaction,
+  sau khi đã khoá dòng mẫu và trước lúc xoá, rồi trả về `photoFiles`;
+  `deleteProductAction` xoá file SAU khi commit, bọc try/catch (file hỏng
+  không được chặn việc xoá mẫu). `src/db/products.ts` vẫn KHÔNG được import
+  `@/lib/storage`. `tests/product-delete-files.test.ts` khoá thứ tự đó.
 - **`.env` gitignored** (chứa `GEMINI_API_KEY`, `SESSION_SECRET`, `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`...). Mọi cấu hình đọc từ env qua `src/lib/config.ts`. Mẫu ở `.env.example`.
 - **`data/app.sqlite` là bản lùi lịch sử** (KHÔNG phải nguồn dữ liệu chính) —
   giữ lại phòng khi cần đối chiếu, đừng xoá. Dữ liệu chạy thử trên Supabase đã

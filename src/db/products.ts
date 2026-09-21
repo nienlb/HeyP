@@ -189,7 +189,10 @@ export async function updateProduct(
  */
 export async function deleteProduct(
   id: number,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<
+  | { ok: true; photoFiles: string[] }
+  | { ok: false; reason: string }
+> {
   return withTx(async (x) => {
     const p = await x.get<{ id: number }>(
       "SELECT id FROM products WHERE id = ? FOR UPDATE",
@@ -210,8 +213,19 @@ export async function deleteProduct(
         reason: `Còn ${stock!.n} món trong kho gắn với mẫu này — bán hết trước, hoặc bỏ cờ "còn dùng" thay vì xoá.`,
       };
 
+    // Gom tên file ảnh TRƯỚC khi xoá: photos.product_id là ON DELETE CASCADE
+    // nên xoá mẫu là xoá luôn các dòng ảnh, sau đó không còn dòng nào để biết
+    // file nào cần dọn — chúng sẽ nằm trên Storage vĩnh viễn. Gom ở đây (trong
+    // transaction, sau khi đã khoá dòng mẫu) thì không có ảnh nào chen vào
+    // giữa được. Người gọi xoá file SAU khi commit; file thì không rollback
+    // được, nên chỉ xoá khi việc xoá mẫu đã thật sự thành công.
+    const files = await x.all<{ filePath: string }>(
+      `SELECT file_path AS "filePath" FROM photos WHERE product_id = ?`,
+      [id],
+    );
+
     await x.run("DELETE FROM products WHERE id = ?", [id]);
-    return { ok: true as const };
+    return { ok: true as const, photoFiles: files.map((f) => f.filePath) };
   });
 }
 

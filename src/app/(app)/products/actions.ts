@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getSession, requireAdmin } from "@/lib/auth";
+import { deletePhotoFile } from "@/lib/storage";
 import {
   createProduct,
   deleteProduct,
@@ -105,10 +106,26 @@ export async function deleteProductAction(
   const res = await deleteProduct(id);
   if (!res.ok) return { error: res.reason };
 
+  // Dọn file ảnh trên Storage SAU khi mẫu đã xoá thành công (xem deleteProduct).
+  // Xoá file hỏng thì KHÔNG được làm hỏng việc xoá mẫu: mẫu đã mất rồi, chỉ
+  // còn file mồ côi — chấp nhận, nhưng ghi vào nhật ký để còn biết mà dọn.
+  const orphaned: string[] = [];
+  for (const file of res.photoFiles) {
+    try {
+      await deletePhotoFile(file);
+    } catch {
+      orphaned.push(file);
+    }
+  }
+
   await logActivity({
     actor: session.username,
     action: "product.delete",
     entityId: id,
+    detail:
+      res.photoFiles.length > 0
+        ? { anh: res.photoFiles.length, fileLoi: orphaned }
+        : undefined,
   });
   revalidatePath("/products");
   return { ok: true };
