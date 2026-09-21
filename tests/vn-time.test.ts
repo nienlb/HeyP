@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { yearInVn, yearsFromDates } from "../src/lib/vn-time.ts";
+import {
+  shortDateVn,
+  vnMidnightMs,
+  vnYmd,
+  yearInVn,
+  yearsFromDates,
+} from "../src/lib/vn-time.ts";
 
 test("đúng năm cho một thời điểm giữa năm", () => {
   assert.equal(yearInVn(new Date("2026-06-15T03:00:00Z")), 2026);
@@ -29,4 +35,22 @@ test("danh sách năm: giảm dần, không trùng", () => {
 
 test("mảng rỗng trả mảng rỗng", () => {
   assert.deepEqual(yearsFromDates([]), []);
+});
+
+test("vnYmd: 23:30 UTC là sáng hôm sau ở VN", () => {
+  assert.deepEqual(vnYmd(new Date("2026-09-20T23:30:00Z")), { y: 2026, m: 9, d: 21 });
+  assert.deepEqual(vnYmd(new Date("2026-09-20T16:59:59Z")), { y: 2026, m: 9, d: 20 });
+});
+
+test("vnMidnightMs: 00:00 giờ VN = 17:00 UTC hôm trước, tràn tháng tự xử lý", () => {
+  assert.equal(vnMidnightMs(2026, 9, 21), Date.parse("2026-09-20T17:00:00Z"));
+  assert.equal(vnMidnightMs(2026, 13, 1), Date.parse("2026-12-31T17:00:00Z"));
+  assert.equal(vnMidnightMs(2026, 0, 1), Date.parse("2025-11-30T17:00:00Z"));
+});
+
+test("shortDateVn: cùng năm dd/mm, khác năm dd/mm/yy", () => {
+  const now = new Date("2026-09-21T05:00:00Z");
+  assert.equal(shortDateVn(new Date("2026-09-20T23:30:00Z"), now), "21/09");
+  assert.equal(shortDateVn(new Date("2025-12-31T18:00:00Z"), now), "01/01");
+  assert.equal(shortDateVn(new Date("2025-12-31T10:00:00Z"), now), "31/12/25");
 });
