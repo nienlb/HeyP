@@ -281,6 +281,17 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
   không có thì `npm run db:migrate` báo "migrations applied successfully" mà
   **bỏ qua file**, DB y nguyên. `when` phải lớn hơn mục cuối, `tag` khớp đúng
   tên file không kể đuôi `.sql`. Đã dính thật khi làm v8-C.
+- **Mọi bảng public bật RLS, KHÔNG có policy nào — cố ý** (`drizzle/0011`,
+  28/10) — Supabase mở schema public qua REST API cho `anon`/`authenticated`
+  và mặc định cấp toàn quyền; trước 0011 ai cầm anon key là đọc được
+  `users.password_hash`. App không dùng hai vai trò đó (DB đi bằng `postgres`,
+  Storage bằng `service_role`, cả hai BYPASSRLS) nên "RLS bật, không policy" =
+  chặn hẳn họ. Advisor sẽ báo INFO "RLS Enabled No Policy" — đúng ý, đừng
+  "sửa" bằng cách thêm policy mở. **Bảng MỚI phải tự
+  `ALTER TABLE … ENABLE ROW LEVEL SECURITY` trong migration** — 0011 đã thu
+  hồi default privileges của role `postgres` nên anon không có quyền, nhưng
+  bảng tạo từ dashboard Supabase (chủ là `supabase_admin`) vẫn cấp quyền cho
+  anon theo mặc định. Chạy `get_advisors` sau mỗi migration tạo bảng.
 - **Khung app nằm ở `src/app/(app)/layout.tsx`, KHÔNG ở từng trang** (v8-B) —
   layout nằm TRÊN ranh giới Suspense của `(app)/loading.tsx` nên React không
   tháo sidebar/header/tabbar khi chuyển màn. Đã đo bằng dấu vân tay đặt trên
