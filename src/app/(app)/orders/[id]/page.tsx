@@ -41,6 +41,7 @@ import { OrderJourney } from "./order-journey";
 import { OrderTabs, type TabCode } from "./order-tabs";
 import { atLeast } from "@/lib/roles";
 import { DangerZone } from "./danger-zone";
+import { CancelStockIn } from "./cancel-stock-in";
 import { ItemSheetButton } from "./item-editor";
 import { CustomerBlock } from "./customer-block";
 import { OrderMetaBlock } from "./order-meta-block";
@@ -235,6 +236,20 @@ export default async function OrderDetailPage({
                   </ul>
                 )}
               </section>
+
+              {order.orderType === "nhap_kho" &&
+                order.status === "ve_kho_vn" &&
+                atLeast(session.role, "admin") && (
+                  <CancelStockIn
+                    orderId={order.id}
+                    summary={`${items
+                      .map((it) => {
+                        const v = displayVariant(it);
+                        return `${it.name}${v ? ` · ${v}` : ""} × ${it.quantity}`;
+                      })
+                      .join(", ")} · ${order.goodsTotalCny}¥`}
+                  />
+                )}
 
               <section className="card">
                 <h2 className="card-title">Lịch sử trạng thái</h2>

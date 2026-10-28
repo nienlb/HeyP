@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth";
 import { getSettings, listInventory, listPhotosForInventory } from "@/db/queries";
 import { listProducts } from "@/db/products";
+import { listStockInsByKey } from "@/db/stock-in";
 import {
   INVENTORY_SOURCES,
   INVENTORY_SOURCE_LABELS,
@@ -10,11 +11,12 @@ import { InventoryRow } from "./inventory-row";
 import { StockInSheet } from "./stock-in-sheet";
 
 export default async function InventoryPage() {
-  const [session, rows, settings, products] = await Promise.all([
+  const [, rows, settings, products, stockIns] = await Promise.all([
     requireAuth(),
     listInventory(),
     getSettings(),
     listProducts(),
+    listStockInsByKey(),
   ]);
   const inStock = rows.filter((r) => r.quantity > 0);
   const photosByItem = new Map(
@@ -74,6 +76,16 @@ export default async function InventoryPage() {
                   size={it.size}
                   color={it.color}
                   hasProduct={it.productId !== null}
+                  // Chỉ nguồn 'active' mới đến từ phiếu nhập kho.
+                  stockIns={
+                    it.source === "active"
+                      ? (stockIns.get(it.stockKey) ?? []).map((r) => ({
+                          orderId: r.orderId,
+                          quantity: r.quantity,
+                          createdAt: Math.floor(r.createdAt.getTime() / 1000),
+                        }))
+                      : []
+                  }
                 />
               ))}
             </section>

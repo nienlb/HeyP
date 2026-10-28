@@ -61,6 +61,17 @@
   background: var(--border);
 }
 
+/* Danh sách phiếu nhập trong Sheet của một dòng tồn. */
+.stock-in-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.stock-in-list li {
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
 /* ---------- Màn tạo đơn kiểu POS ---------- */
 .sec-label {
   font-size: var(--fs-2);

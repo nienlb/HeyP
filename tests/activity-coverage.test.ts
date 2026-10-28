@@ -38,7 +38,11 @@ const PHAI_GHI: Record<string, string[]> = {
     "addExpenseAction",
     "deleteExpenseAction",
   ],
-  "src/app/(app)/inventory/actions.ts": ["stockInAction", "sellFromStockAction"],
+  "src/app/(app)/inventory/actions.ts": [
+    "stockInAction",
+    "sellFromStockAction",
+    "cancelStockInAction",
+  ],
   // pickProductAction CỐ Ý không có ở đây: nó chỉ chép ảnh cho form nháp,
   // chưa đụng dữ liệu nghiệp vụ. Nhật ký ghi ở order.create khi đơn được tạo.
   "src/app/(app)/products/actions.ts": [

@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getSession, requireAdmin } from "@/lib/auth";
+import { cancelStockIn } from "@/db/stock-in";
 import {
   autoCompleteIfPaid,
   changeOrderStatus,
@@ -121,4 +122,30 @@ export async function stockInAction(
   revalidatePath("/inventory");
   revalidatePath("/orders");
   return {};
+}
+
+/**
+ * Huỷ một phiếu nhập kho nhập sai — Admin trở lên. Rút hàng khỏi kho, hoàn ¥
+ * về ví, đơn sang Hủy (xem cancelStockIn). Ẩn nút ở trang đơn KHÔNG phải là
+ * chặn quyền; chặn thật là `requireAdmin()` ở đây.
+ */
+export async function cancelStockInAction(formData: FormData): Promise<void> {
+  const session = await requireAdmin();
+  const orderId = parseVnd(formData.get("orderId"));
+  if (!orderId) redirect("/inventory");
+
+  const result = await cancelStockIn(orderId, session.username);
+  if (!result.ok) {
+    redirect(`/orders/${orderId}?err=${encodeURIComponent(result.reason)}`);
+  }
+
+  await logActivity({
+    actor: session.username,
+    action: "inventory.cancel_stock_in",
+    entityId: orderId,
+  });
+  revalidatePath("/inventory");
+  revalidatePath("/orders");
+  revalidatePath("/finance");
+  redirect(`/orders/${orderId}`);
 }

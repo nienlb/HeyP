@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ListRow } from "@/app/_components/list-row";
 import { Sheet } from "@/app/_components/sheet";
 import { PhotoUpload } from "@/app/_components/photo-upload";
 import { PhotoGallery } from "@/app/_components/photo-gallery";
-import { formatVnd } from "@/lib/format";
+import { formatDateTime, formatVnd } from "@/lib/format";
 import { displayVariant } from "@/lib/product-catalog";
 import type { PhotoLabel } from "@/lib/photos";
 import { SellForm } from "./sell-form";
@@ -19,6 +20,7 @@ export function InventoryRow({
   size,
   color,
   hasProduct,
+  stockIns,
 }: {
   id: number;
   productName: string;
@@ -28,6 +30,8 @@ export function InventoryRow({
   size: string;
   color: string;
   hasProduct: boolean;
+  /** Các phiếu nhập còn hiệu lực đã cộng vào dòng này — để tìm phiếu nhập sai. */
+  stockIns: { orderId: number; quantity: number; createdAt: number }[]; // epoch giây
 }) {
   const [open, setOpen] = useState(false);
   // ListRow chỉ nhận title/meta/amount — không có chỗ chèn markup riêng cho
@@ -50,6 +54,24 @@ export function InventoryRow({
 
       <Sheet open={open} title={label} onClose={() => setOpen(false)}>
         <SellForm inventoryId={id} quantity={quantity} avgCost={avgCost} />
+        {stockIns.length > 0 && (
+          <div>
+            <h3 className="sec-label">Các lần nhập</h3>
+            <ul className="stock-in-list">
+              {stockIns.map((s) => (
+                <li key={s.orderId}>
+                  <Link href={`/orders/${s.orderId}`}>
+                    Phiếu #{s.orderId} · {s.quantity} cái ·{" "}
+                    {formatDateTime(s.createdAt)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p className="muted small">
+              Nhập sai thì mở phiếu, Admin bấm “Huỷ phiếu nhập”.
+            </p>
+          </div>
+        )}
         <div style={{ marginTop: 16 }}>
           <PhotoUpload inventoryId={id} defaultLabel="listing" />
           <div style={{ marginTop: 12 }}>

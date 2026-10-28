@@ -413,6 +413,14 @@ Chạy dev **không** dùng lệnh shell trực tiếp — dùng công cụ prev
 - **Đơn `ban_tu_kho` KHÔNG xoá được** (v9-C, `canDeleteOrder`) — nó trừ tồn
   ngay lúc tạo, xoá đơn thì hàng không quay lại kho. Muốn đưa hàng về thì
   dùng Đổi/trả từng món.
+- **Nhập kho sai thì HUỶ PHIẾU NHẬP, không sửa** (28/10, Admin trở lên,
+  `cancelStockIn` trong `src/db/stock-in.ts`) — rút hàng khỏi dòng tồn
+  (nghịch đảo bình quân, `reverseStockIn`), hoàn ¥ bằng dòng `dieu_chinh` ở
+  đúng `rate_snapshot` của dòng `chi`, đơn `ve_kho_vn` → `huy` (ghi lịch sử
+  trong cùng transaction, KHÔNG qua `changeOrderStatus` vì trục `nhap_kho`
+  không có nhánh huỷ). Chặn khi hàng đã bán bớt, có món tách lỗi NCC, hoặc ¥
+  đã sửa sau khi nhập. Vì vậy `ve_kho_vn` nằm trong `ITEMS_LOCKED`: sửa số
+  lượng sau khi đã cộng tồn là phiếu và kho lệch nhau.
 - **Bộ lọc đơn nằm trên URL (`d`, `st`, `type`, `due`) và MỌI link của màn
   Đơn phải giữ nó** (v9-C) — chip, sắp xếp, ô tìm (input ẩn). Thêm link mới
   vào màn này thì đi qua `filtersToParams`, nếu không bấm vào là mất lọc.

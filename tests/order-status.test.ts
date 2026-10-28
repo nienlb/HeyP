@@ -157,7 +157,8 @@ test("đi hết trục order_ho từ đầu tới cuối", () => {
 });
 
 test("đơn đã chốt sổ thì không sửa danh sách món được", () => {
-  for (const s of ["hoan_tat", "huy", "khach_bom"] as const) {
+  // ve_kho_vn: phiếu nhập đã cộng tồn — sửa món là lệch với kho.
+  for (const s of ["ve_kho_vn", "hoan_tat", "huy", "khach_bom"] as const) {
     assert.equal(canEditOrderItems(s), false, `phải khoá ${s}`);
   }
 });

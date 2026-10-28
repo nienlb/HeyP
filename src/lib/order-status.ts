@@ -121,8 +121,18 @@ export function isTerminalFor(
 /**
  * Đơn đã chốt sổ thì danh sách món khoá lại — sửa món của đơn đã hoàn tất
  * sẽ làm lệch báo cáo lãi của tháng đã chốt.
+ *
+ * `ve_kho_vn` cũng khoá: đó là lúc phiếu nhập kho đã cộng tồn, sửa số lượng
+ * sau đó thì món trên phiếu và số trong kho lệch nhau, và Huỷ phiếu nhập
+ * (src/lib/stock-in-cancel.ts) rút sai số. Nhập sai thì huỷ rồi nhập lại.
+ * Mã này chỉ nằm trên trục `nhap_kho`, không ảnh hưởng đơn order hộ.
  */
-const ITEMS_LOCKED: readonly OrderStatus[] = ["hoan_tat", "huy", "khach_bom"];
+const ITEMS_LOCKED: readonly OrderStatus[] = [
+  "ve_kho_vn",
+  "hoan_tat",
+  "huy",
+  "khach_bom",
+];
 
 export function canEditOrderItems(status: OrderStatus): boolean {
   return !ITEMS_LOCKED.includes(status);

@@ -39,6 +39,7 @@ export const ACTION_LABELS: Record<string, string> = {
   "cny.delete": "Xoá dòng ví ¥",
   "inventory.stock_in": "Nhập kho",
   "inventory.sell": "Bán từ kho",
+  "inventory.cancel_stock_in": "Huỷ phiếu nhập kho",
   "product.create": "Thêm sản phẩm",
   "product.update": "Sửa sản phẩm",
   "product.delete": "Xoá sản phẩm",
